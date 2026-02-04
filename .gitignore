@@ -1,0 +1,11 @@
+# clangd
+.cache/
+index/
+*.idx
+
+
+
+
+# Build / Tooling
+build/
+compile_commands.json
