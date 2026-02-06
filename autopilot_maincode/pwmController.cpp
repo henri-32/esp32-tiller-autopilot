@@ -1,5 +1,5 @@
 #include "pwmController.h"
 
-void PWMController::setImpulse(Direction dir, Force frc) {
+void PWMController::setImpulse(SteeringDirection dir, Force frc) {
   // TODO HardwareImpulse ausegeben
 }

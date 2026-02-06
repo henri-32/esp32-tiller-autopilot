@@ -1,4 +1,5 @@
 #pragma once
+#include "globalTypes.h"
 #include "coreSteeringController.h"
 #include "pwmController.h"
 #include <Arduino.h>
@@ -14,20 +15,15 @@ void CoreSteeringController::setCurrentCourse(uint16_t current) {
   m_courses.currentCourse = current;
 }
 
-void CoreSteeringController::computeSteeringAction() {
+void CoreSteeringController::computeSteeringDecision() {
   const int8_t correction =
       getCorrectionInDegrees(static_cast<uint16_t>(m_courses.currentCourse),
                              static_cast<uint16_t>(m_courses.targetCourse));
 
   if (correction > 0) {
-    m_pwm.setImpulse(PWMController::Direction::Right,
-                     PWMController::Force::Medium);
+m_steeringDecision.steeringDirection = SteeringDirection::Right;
   } else if (correction < 0) {
-    m_pwm.setImpulse(PWMController::Direction::Left,
-                     PWMController::Force::Medium);
-  } else {
-    m_pwm.setImpulse(PWMController::Direction::Neutral,
-                     PWMController::Force::Low);
+m_steeringDecision.steeringDirection = SteeringDirection::Left;
   }
 }
 

@@ -9,7 +9,7 @@ void SystemController::tick() {
   const auto intent = m_controlPanel.readIntent();
 
   // 2. Quelle wählen und Ziel setzen
-  m_navigationSensors.setActiveSource(mapSource(intent.source));
+  m_navigationSensors.setActiveSource(m_controlPanel.m_activeSource);
   m_coreSteeringController.setTargetCourse(intent.targetCourse);
 
   // 3. Datenfluss von Istwert zur Regelung
@@ -17,25 +17,8 @@ void SystemController::tick() {
   m_coreSteeringController.setCurrentCourse(current);
 
   // 4. Logik ausführen und Hardware betätigen
-  m_coreSteeringController.computeSteeringAction();
+  m_coreSteeringController.computeSteeringDecision();
 
   // 5. Display updaten
   m_display.update();
-}
-
-NavigationSensors::ActiveSource
-SystemController::mapSource(ControlPanel::Source src) {
-  switch (src) {
-  case ControlPanel::Source::Compass:
-    return NavigationSensors::ActiveSource::Compass;
-
-  case ControlPanel::Source::Gps:
-    return NavigationSensors::ActiveSource::Gps;
-
-  case ControlPanel::Source::Wind:
-    return NavigationSensors::ActiveSource::Wind;
-
-  default:
-    return NavigationSensors::ActiveSource::Compass;
-  }
 }

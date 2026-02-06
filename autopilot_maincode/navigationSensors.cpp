@@ -1,17 +1,17 @@
 #include "navigationSensors.h"
-#include <cstdint>
 
-void NavigationSensors::setActiveSource(ActiveSource src) {
+
+void NavigationSensors::setActiveSource(NavigationSource src) {
   m_activeSource = src;
 };
 
 std::optional<uint16_t> NavigationSensors::getCurrentReading() const {
   switch (m_activeSource) {
-  case ActiveSource::Compass:
+  case NavigationSource::Compass:
     return m_compass.readHeading();
-  case ActiveSource::Wind:
+  case NavigationSource::Wind:
     return m_wind.readHeading();
-  case ActiveSource::Gps:
+  case NavigationSource::Gps:
     return m_gps.readHeading();
   }
 };

@@ -1,4 +1,6 @@
+#pragma once
 #include <Arduino.h>
+#include "globalTypes.h"
 class ControlPanel {
 public:
   enum class Mode { engaged, Disengaged };
@@ -11,4 +13,5 @@ public:
   };
 
   Intent readIntent() const;
+  NavigationSource m_activeSource;
 };

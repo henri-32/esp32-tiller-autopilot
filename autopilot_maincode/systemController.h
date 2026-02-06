@@ -4,6 +4,7 @@
 #include "pwmController.h"
 #include "controlPanel.h"
 #include "coreSteeringController.h"
+
 class SystemController {
     public: 
     SystemController();
@@ -11,7 +12,6 @@ class SystemController {
     void tick();
 
     private:
-    static NavigationSensors::ActiveSource mapSource(ControlPanel::Source src);
 
     ControlPanel m_controlPanel{};
     CompassModule m_compassModule{};
@@ -21,5 +21,6 @@ class SystemController {
     PWMController m_pwmController{};
     CoreSteeringController m_coreSteeringController;
     Display m_display;
+    SystemConfig m_systemConfig;
 
 };
