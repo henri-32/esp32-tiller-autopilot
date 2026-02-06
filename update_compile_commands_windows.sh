@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+n#!/usr/bin/env bash
 set -euo pipefail
 
 PROJECT_ROOT="$(pwd)"

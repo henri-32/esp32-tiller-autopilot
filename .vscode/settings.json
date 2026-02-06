@@ -1,19 +1,25 @@
 {
   "editor.defaultFormatter": "xaver.clang-format",
 
+"editor.autoSurround": "never",
+"editor.autoClosingBrackets": "never",
+"editor.autoClosingQuotes": "never",
+
   "files.associations": {
     "*.ino": "cpp"
   },
 
   "[cpp]": {
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
   },
 
   "clangd.arguments": [
     "--background-index",
     "--compile-commands-dir=.",
     "--query-driver=/home/henri-32/.arduino15/packages/arduino/tools/avr-gcc/*/bin/avr-g++",
-    "--log=verbose"
+    "--log=verbose",
+    "--header-insertion=never"
   ],
   
   "C_Cpp.intelliSenseEngine": "disabled",
