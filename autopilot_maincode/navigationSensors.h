@@ -4,6 +4,7 @@
 #include "gpsModule.h"
 #include "windModule.h"
 #include <Arduino.h>
+#include <optional>
 
 
 class NavigationSensors {
@@ -13,8 +14,9 @@ public:
       : m_compass(compass), m_gps(gps), m_wind(wind) {};
 
   void setActiveSource(NavigationSource src);
+  NavigationSource getActiveSource();
 
-  uint16_t getCurrentReading() const;
+  std::optional<uint16_t> getCurrentReading() const;
 
 private:
   NavigationSource m_activeSource = NavigationSource::Compass;

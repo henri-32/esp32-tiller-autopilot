@@ -1,11 +1,12 @@
-#pragma once
-#include "globalTypes.h"
+
 #include "coreSteeringController.h"
+#include "globalTypes.h"
 #include "pwmController.h"
 #include <Arduino.h>
 
-CoreSteeringController::CoreSteeringController(PWMController &pwm)
-    : m_pwm(pwm) {}
+CoreSteeringController::CoreSteeringController(PWMController &pwm,
+                                               NavigationSensors &navsens)
+    : m_pwm(pwm), m_navigationSensors(navsens) {}
 
 void CoreSteeringController::setTargetCourse(uint16_t target) {
   m_courses.targetCourse = target;
@@ -16,14 +17,22 @@ void CoreSteeringController::setCurrentCourse(uint16_t current) {
 }
 
 void CoreSteeringController::computeSteeringDecision() {
-  const int8_t correction =
+  // TimeStamp
+  m_steeringDecision.timestamp_ms = millis();
+
+  // Active Source
+  m_steeringDecision.m_activeSource = m_navigationSensors.getActiveSource();
+  
+  // headingError
+  m_steeringDecision.headingError_deg =
       getCorrectionInDegrees(static_cast<uint16_t>(m_courses.currentCourse),
                              static_cast<uint16_t>(m_courses.targetCourse));
 
-  if (correction > 0) {
-m_steeringDecision.steeringDirection = SteeringDirection::Right;
-  } else if (correction < 0) {
-m_steeringDecision.steeringDirection = SteeringDirection::Left;
+  // Compute Direction
+  if (m_steeringDecision.headingError_deg > 0) {
+    m_steeringDecision.steeringDirection = SteeringDirection::Right;
+  } else if (m_steeringDecision.headingError_deg < 0) {
+    m_steeringDecision.steeringDirection = SteeringDirection::Left;
   }
 }
 

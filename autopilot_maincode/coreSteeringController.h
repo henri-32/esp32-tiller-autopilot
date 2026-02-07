@@ -1,5 +1,6 @@
 #pragma once
 #include "globalTypes.h"
+#include "navigationSensors.h"
 #include <Arduino.h>
 
 class PWMController;
@@ -23,7 +24,7 @@ public:
     uint16_t currentCourse = 0;
   };
 
-  explicit CoreSteeringController(PWMController &pwm);
+  explicit CoreSteeringController(PWMController &pwm, NavigationSensors & navsens);
 
   void setTargetCourse(uint16_t target);
   void setCurrentCourse(uint16_t current);
@@ -32,6 +33,7 @@ public:
 private:
   int8_t getCorrectionInDegrees(uint16_t current, uint16_t target);
   PWMController &m_pwm;
+  NavigationSensors &m_navigationSensors;
   Courses m_courses{};
   SteeringDecision m_steeringDecision;
 };

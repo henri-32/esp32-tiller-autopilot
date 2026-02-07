@@ -1,2 +1,7 @@
+
 CompileFlags:
-  Add: [-x, c++, -std=gnu++11]
+  Add:
+    - -x
+    - c++
+    - -I/home/henri-32/.arduino15/packages/esp32/hardware/esp32/3.3.6/cores/esp32
+    - -I/home/henri-32/.arduino15/packages/esp32/hardware/esp32/3.3.6/variants/esp32

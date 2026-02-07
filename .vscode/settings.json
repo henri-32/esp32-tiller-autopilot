@@ -13,16 +13,16 @@
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
   },
-
+  
   "clangd.arguments": [
-    "--background-index",
     "--compile-commands-dir=.",
-    "--query-driver=/home/henri-32/.arduino15/packages/arduino/tools/avr-gcc/*/bin/avr-g++",
-    "--log=verbose",
+    "--query-driver=/home/henri-32/.arduino15/packages/esp32/tools/**/bin/*",
     "--header-insertion=never"
   ],
-  
+
+
   "C_Cpp.intelliSenseEngine": "disabled",
   "C_Cpp.autocomplete": "disabled",
   "C_Cpp.errorSquiggles": "disabled"
 }
+

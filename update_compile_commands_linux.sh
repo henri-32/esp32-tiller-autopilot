@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ROOT="$(pwd)"
-TARGET="$PROJECT_ROOT/compile_commands.json"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_TARGET="$PROJECT_ROOT/compile_commands.json"
+SKETCH_TARGET="$PROJECT_ROOT/autopilot_maincode/compile_commands.json"
 
 # mögliche Cache-Pfade
 CANDIDATES=(
@@ -43,5 +44,9 @@ if [[ ! -f "$SRC" ]]; then
   exit 1
 fi
 
-cp "$SRC" "$TARGET"
-echo "compile_commands.json aktualisiert."
+cp "$SRC" "$ROOT_TARGET"
+cp "$SRC" "$SKETCH_TARGET"
+echo "compile_commands.json aktualisiert:"
+echo "  Quelle: $SRC"
+echo "  Ziel 1: $ROOT_TARGET"
+echo "  Ziel 2: $SKETCH_TARGET"
