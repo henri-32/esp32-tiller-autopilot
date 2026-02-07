@@ -1,7 +1,5 @@
-
 CompileFlags:
   Add:
-    - -x
-    - c++
-    - -I/home/henri-32/.arduino15/packages/esp32/hardware/esp32/3.3.6/cores/esp32
-    - -I/home/henri-32/.arduino15/packages/esp32/hardware/esp32/3.3.6/variants/esp32
+    - -D__GNUC__=12
+    - -D__GNUC_MINOR__=3
+    - -D__GNUC_PATCHLEVEL__=0

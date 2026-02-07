@@ -1,0 +1,18 @@
+# Autopilot Headers
+
+Dieses Verzeichnis enthaelt die Projekt-Header fuer die Autopilot-Module.
+Sie werden aus dem Code in `src` eingebunden.
+
+Aktuell vorhanden:
+- compassModule.h
+- controlPanel.h
+- coreSteeringController.h
+- display.h
+- globalTypes.h
+- gpsModule.h
+- navigationSensors.h
+- pwmController.h
+- systemController.h
+- windModule.h
+
+Hinweis: Public/Private ist hier nicht getrennt; alle Header liegen gemeinsam in `include`.

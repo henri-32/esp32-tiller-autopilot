@@ -1,0 +1,5 @@
+# Autopilot Private Libs
+
+Dieses Verzeichnis ist fuer projektinterne Libraries gedacht.
+Derzeit wird es nicht genutzt. Falls spaeter ausgelagert wird, bitte jede
+Library in einen eigenen Unterordner legen, z. B. `lib/Name/src`.

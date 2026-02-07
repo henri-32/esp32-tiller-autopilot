@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "Autopilot",
+			"path": "../Autopilot"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.ino": "cpp"
+		}
+	}
+}
