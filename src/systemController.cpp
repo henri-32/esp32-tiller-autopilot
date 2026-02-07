@@ -2,7 +2,7 @@
 
 SystemController::SystemController()
     : m_navigationSensors(m_compassModule, m_gpsModule, m_windModule),
-      m_coreSteeringController(m_pwmController, m_navigationSensors) {}
+      m_coreSteeringController(m_pwmController, m_navigationSensors, m_systemConfig) {}
 
 void SystemController::tick() {
   // 1. Intent lesen
@@ -18,7 +18,7 @@ void SystemController::tick() {
   m_coreSteeringController.setCurrentCourse(current.value());
 
   // 4. Logik ausführen und Hardware betätigen
-  m_coreSteeringController.computeSteeringDecision();
+  m_coreSteeringController.tick(millis());
 
   // 5. Display updaten
   m_display.update();

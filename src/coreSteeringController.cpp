@@ -1,50 +1,105 @@
-
 #include "coreSteeringController.h"
 #include "globalTypes.h"
 #include "pwmController.h"
+
 #include <Arduino.h>
+#include <algorithm>
+#include <array>
+#include <cstdint>
 
 CoreSteeringController::CoreSteeringController(PWMController &pwm,
-                                               NavigationSensors &navsens)
-    : m_pwm(pwm), m_navigationSensors(navsens) {}
+                                               NavigationSensors &navsens,
+                                               SystemConfig &config)
+    : m_pwm(pwm), m_navigationSensors(navsens), m_systemConfig(config) {}
 
 void CoreSteeringController::setTargetCourse(uint16_t target) {
-  m_courses.targetCourse = target;
+  m_targetCourse = target;
 }
 
 void CoreSteeringController::setCurrentCourse(uint16_t current) {
-  m_courses.currentCourse = current;
+  m_currentCourse = current;
 }
 
-void CoreSteeringController::computeSteeringDecision() {
-  // TimeStamp
-  m_steeringDecision.timestamp_ms = millis();
+void CoreSteeringController::tick(unsigned long now) {
+  if (now - m_lastImpulse > m_systemConfig.pauseForValidObsAfterImpulse) {
+    updateObservationBuffers(now);
+  }
 
-  // Active Source
-  m_steeringDecision.m_activeSource = m_navigationSensors.getActiveSource();
-  
-  // headingError
-  m_steeringDecision.headingError_deg =
-      getCorrectionInDegrees(static_cast<uint16_t>(m_courses.currentCourse),
-                             static_cast<uint16_t>(m_courses.targetCourse));
-
-  // Compute Direction
-  if (m_steeringDecision.headingError_deg > 0) {
-    m_steeringDecision.steeringDirection = SteeringDirection::Right;
-  } else if (m_steeringDecision.headingError_deg < 0) {
-    m_steeringDecision.steeringDirection = SteeringDirection::Left;
+  if (now - m_lastImpulse < m_systemConfig.SteeringCooldown_ms)
+    return;
+  else {
+    if (observationBufferValidForImpulse()) {
+      m_pwm.command(calculateSteeringDirectionFromObservation());
+    }
   }
 }
 
-int8_t CoreSteeringController::getCorrectionInDegrees(uint16_t current,
+void CoreSteeringController::updateObservationBuffers(unsigned long now) {
+  if (now - m_lastObservation < m_systemConfig.minimumTimeBtwObs)
+    return;
+
+  uint16_t currentError =
+      calculateHeadingError(m_currentCourse, m_targetCourse);
+  if (currentError > 0) {
+    m_leftErrors[m_observationCount] = 0;
+    m_rightErrors[m_observationCount] = currentError;
+  } else if (currentError < 0) {
+    m_rightErrors[m_observationCount] = 0;
+    m_leftErrors[m_observationCount] = currentError;
+  }
+
+  m_mergedError[m_observationCount] =
+      m_rightErrors[m_observationCount] + m_leftErrors[m_observationCount];
+  m_observationCount++;
+  m_lastObservation = now;
+
+  if (m_observationCount >= OBSERVATION_BUFFER_SIZE) {
+    resetObservations();
+  }
+};
+
+bool CoreSteeringController::observationBufferValidForImpulse() {
+  auto medianArray = m_mergedError;
+  std::sort(medianArray.begin(), medianArray.end());
+
+  constexpr size_t kMedianIndex =
+      OBSERVATION_BUFFER_SIZE /
+      2; // hier nur der upper median bei geraden Mengen von Werten
+  m_medianOfMergedErrors = medianArray[kMedianIndex];
+
+  if (abs(m_medianOfMergedErrors) >= m_systemConfig.steeringTolerance_deg) {
+    return true;
+  }
+  return false;
+};
+
+SteeringDirection
+CoreSteeringController::calculateSteeringDirectionFromObservation() {
+  if (m_medianOfMergedErrors <= 0) {
+    return SteeringDirection::Left;
+  } else if (m_medianOfMergedErrors > 0) {
+    return SteeringDirection::Right;
+  }
+  return SteeringDirection::Left;
+};
+
+void CoreSteeringController::resetObservations() {
+  m_observationCount = 0;
+  for (int i = 0; i <= 99; i++) {
+    m_leftErrors[i] = 0;
+    m_rightErrors[i] = 0;
+    m_mergedError[i] = 0;
+  }
+};
+
+int16_t CoreSteeringController::calculateHeadingError(uint16_t current,
                                                       uint16_t target) {
-  int8_t diff = target - current;
+  int16_t diff = static_cast<int16_t>(target) - static_cast<int16_t>(current);
 
-  diff += 360; // Sicher positiv
-  diff += 180; // Mittelpunkt vorbereiten
-
-  diff %= 360; // Normalisieren
-  diff -= 180; // zurück in lage schieben
+  diff += 360;
+  diff += 180;
+  diff %= 360;
+  diff -= 180;
 
   return diff;
-};
+}

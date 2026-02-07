@@ -2,14 +2,13 @@
 #include "globalTypes.h"
 class PWMController {
 public:
-
   enum class Force { Low, Medium, High };
 
   PWMController() = default;
   PWMController(const PWMController &) = delete;
   PWMController &operator=(const PWMController &) = delete;
 
-  void setImpulse( SteeringDirection dir, Force frc);
+  void command(SteeringDirection dir);
 
 private:
   SteeringDirection m_lastDir;
