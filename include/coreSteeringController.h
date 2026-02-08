@@ -13,7 +13,7 @@ public:
                                   NavigationSensors &navsens,
                                   SystemConfig &config);
 
-  void setTargetCourse(uint16_t target);
+  void computeInternalTargetCourseFrom(uint16_t target);
   void setCurrentCourse(uint16_t current);
 
   void tick(unsigned long now);
@@ -21,7 +21,7 @@ public:
 private:
   PWMController &m_pwm;
   NavigationSensors &m_navigationSensors;
-  SystemConfig &m_systemConfig;
+  const SystemConfig &m_systemConfig;
   static constexpr uint8_t OBSERVATION_BUFFER_SIZE = 100;
 
   int16_t calculateHeadingError(uint16_t current, uint16_t target);
@@ -30,7 +30,7 @@ private:
   SteeringDirection calculateSteeringDirectionFromObservation();
   void resetObservations();
 
-  uint16_t m_targetCourse = 0;
+  uint16_t m_internalTargetCourse = 0;
   uint16_t m_currentCourse = 0;
   std::array<int16_t, OBSERVATION_BUFFER_SIZE> m_leftErrors;
   std::array<int16_t, OBSERVATION_BUFFER_SIZE> m_rightErrors;

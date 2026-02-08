@@ -12,10 +12,26 @@ CoreSteeringController::CoreSteeringController(PWMController &pwm,
                                                SystemConfig &config)
     : m_pwm(pwm), m_navigationSensors(navsens), m_systemConfig(config) {}
 
-void CoreSteeringController::setTargetCourse(uint16_t target) {
-  /*Hier soll noch Filterlogik rein, wenn zum beispiel GPS Langzeitkorrekturen
-  vornehmen soll, während primär auf HDG geregelt wird*/
-  m_targetCourse = target;
+void CoreSteeringController::computeInternalTargetCourseFrom(
+    uint16_t externalTarget) {
+
+  switch (m_navigationSensors.getActiveSource()) {
+  case NavigationSource::Compass:
+    m_internalTargetCourse = externalTarget;
+    break;
+
+  case NavigationSource::Gps:
+    /*externelTarget wird über Gps Logik bewertet, damit internalTarget dann COG
+    abfangen kann mit gleicher regellogik auf HDG*/
+    break;
+
+  case NavigationSource::Wind:
+    /* Windwinkel hier verarbeiten*/
+    break;
+
+  default:
+    m_internalTargetCourse = externalTarget;
+  }
 }
 
 void CoreSteeringController::setCurrentCourse(uint16_t current) {
@@ -41,7 +57,7 @@ void CoreSteeringController::updateObservationBuffers(unsigned long now) {
     return;
 
   uint16_t currentError =
-      calculateHeadingError(m_currentCourse, m_targetCourse);
+      calculateHeadingError(m_currentCourse, m_internalTargetCourse);
   if (currentError > 0) {
     m_leftErrors[m_observationCount] = 0;
     m_rightErrors[m_observationCount] = currentError;

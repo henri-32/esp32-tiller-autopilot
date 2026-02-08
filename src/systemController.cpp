@@ -3,7 +3,8 @@
 
 SystemController::SystemController()
     : m_navigationSensors(m_compassModule, m_gpsModule, m_windModule),
-      m_coreSteeringController(m_pwmController, m_navigationSensors, m_systemConfig) {}
+      m_coreSteeringController(m_pwmController, m_navigationSensors,
+                               m_systemConfig) {}
 
 void SystemController::tick() {
   // 1. Intent lesen
@@ -11,11 +12,11 @@ void SystemController::tick() {
 
   // 2. Quelle wählen und Ziel setzen
   m_navigationSensors.setActiveSource(m_controlPanel.m_activeSource);
-  m_coreSteeringController.setTargetCourse(intent.targetCourse);
+  m_coreSteeringController.computeFinalTargetCourse(intent.targetCourse);
 
   // 3. Datenfluss von Istwert zur Regelung
   const auto current = m_navigationSensors.getCurrentReading();
-  
+
   m_coreSteeringController.setCurrentCourse(current.value());
 
   // 4. Logik ausführen und Hardware betätigen
