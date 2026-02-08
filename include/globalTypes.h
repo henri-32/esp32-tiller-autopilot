@@ -1,5 +1,4 @@
 #pragma once
-#include <Arduino.h>
 #include <cstdint>
 
 enum class NavigationSource { Compass, Gps, Wind };

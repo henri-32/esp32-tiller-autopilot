@@ -1,5 +1,6 @@
 #pragma once
 #include "globalTypes.h"
+
 class PWMController {
 public:
   enum class Force { Low, Medium, High };

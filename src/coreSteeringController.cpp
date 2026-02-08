@@ -13,6 +13,8 @@ CoreSteeringController::CoreSteeringController(PWMController &pwm,
     : m_pwm(pwm), m_navigationSensors(navsens), m_systemConfig(config) {}
 
 void CoreSteeringController::setTargetCourse(uint16_t target) {
+  /*Hier soll noch Filterlogik rein, wenn zum beispiel GPS Langzeitkorrekturen
+  vornehmen soll, während primär auf HDG geregelt wird*/
   m_targetCourse = target;
 }
 
@@ -28,7 +30,7 @@ void CoreSteeringController::tick(unsigned long now) {
   if (now - m_lastImpulse < m_systemConfig.SteeringCooldown_ms)
     return;
   else {
-    if (observationBufferValidForImpulse()) {
+    if (isSteeringCorrectionRequired()) {
       m_pwm.command(calculateSteeringDirectionFromObservation());
     }
   }
@@ -58,7 +60,7 @@ void CoreSteeringController::updateObservationBuffers(unsigned long now) {
   }
 };
 
-bool CoreSteeringController::observationBufferValidForImpulse() {
+bool CoreSteeringController::isSteeringCorrectionRequired() {
   auto medianArray = m_mergedError;
   std::sort(medianArray.begin(), medianArray.end());
 

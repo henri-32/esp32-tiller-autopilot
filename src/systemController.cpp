@@ -1,4 +1,5 @@
 #include "systemController.h"
+#include <Arduino.h>
 
 SystemController::SystemController()
     : m_navigationSensors(m_compassModule, m_gpsModule, m_windModule),

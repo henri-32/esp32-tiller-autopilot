@@ -26,7 +26,7 @@ private:
 
   int16_t calculateHeadingError(uint16_t current, uint16_t target);
   void updateObservationBuffers(unsigned long now);
-  bool observationBufferValidForImpulse();
+  bool isSteeringCorrectionRequired();
   SteeringDirection calculateSteeringDirectionFromObservation();
   void resetObservations();
 

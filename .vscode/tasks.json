@@ -4,11 +4,13 @@
     {
       "label": "PlatformIO: Generate compile_commands.json",
       "type": "shell",
-      "command": "C:\\Users\\henri\\.platformio\\penv\\Scripts\\pio.exe",
+      "command": "pio",
       "args": [
         "run",
         "-t",
-        "compiledb"
+        "compiledb",
+        "-e",
+        "genericSTM32F411RE"
       ],
       "group": "build",
       "presentation": {

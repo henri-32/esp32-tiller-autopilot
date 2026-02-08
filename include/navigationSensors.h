@@ -3,7 +3,7 @@
 #include "globalTypes.h"
 #include "gpsModule.h"
 #include "windModule.h"
-#include <Arduino.h>
+#include <cstdint>
 #include <optional>
 
 

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "globalTypes.h"
 class ControlPanel {
 public:
