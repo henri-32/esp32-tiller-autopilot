@@ -5,4 +5,5 @@
 class CompassModule {
 public:
   uint16_t readHeading() const;
+  bool isValue_valid() const;
 };

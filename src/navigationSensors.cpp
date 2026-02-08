@@ -1,13 +1,15 @@
 #include "navigationSensors.h"
-#include <optional>
+#include "globalTypes.h"
 #include <Arduino.h>
 #include <cstdlib>
-
+#include <optional>
 
 void NavigationSensors::setActiveSource(NavigationSource src) {
   m_activeSource = src;
 };
-NavigationSource NavigationSensors::getActiveSource(){return m_activeSource;}
+NavigationSource NavigationSensors::getActiveSource() const {
+  return m_activeSource;
+}
 
 std::optional<uint16_t> NavigationSensors::getCurrentReading() const {
   switch (m_activeSource) {
@@ -18,6 +20,24 @@ std::optional<uint16_t> NavigationSensors::getCurrentReading() const {
   case NavigationSource::Gps:
     return m_gps.readHeading();
   default:
-  return std::nullopt;
+    return std::nullopt;
+  }
+};
+
+std::optional<float> NavigationSensors::getSOG() const {
+  return m_gps.readSOG();
+};
+
+bool NavigationSensors::sensorValue_valid() const{
+  switch (m_activeSource) {
+  case NavigationSource::Gps:
+    return m_gps.isValue_valid();
+  case NavigationSource::Compass:
+    return m_compass.isValue_valid(); // In dem Fall muss an irgendeiner Stelle
+                                      // definitiv Error Handling erfolgen
+  case NavigationSource::Wind:
+    return m_wind.isValue_valid();
+  default:
+    return false;
   }
 };
