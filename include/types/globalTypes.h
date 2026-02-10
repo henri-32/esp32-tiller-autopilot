@@ -4,8 +4,8 @@
 enum class NavigationSource { Compass, Gps, Wind };
 enum class SteeringDirection { Left, Right };
 
-// Siehe README CSC_Config !!!
-struct CSC_Config {
+// Siehe README SteeringController_Config !!!
+struct SteeringController_Config {
 
   //HDG steering mechanics
   uint8_t steeringTolerance_deg = 10;

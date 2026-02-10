@@ -1,6 +1,6 @@
-#include "navigationSensors.h"
-#include "globalTypes.h"
-#include <Arduino.h>
+#include "sensors/navigationSensors.h"
+#include "types/globalTypes.h"
+#include <cstdint>
 #include <cstdlib>
 #include <optional>
 
@@ -28,7 +28,7 @@ std::optional<float> NavigationSensors::getSOG() const {
   return m_gps.readSOG();
 };
 
-bool NavigationSensors::sensorValue_valid() const{
+bool NavigationSensors::sensorValueIsvalid() const{
   switch (m_activeSource) {
   case NavigationSource::Gps:
     return m_gps.isValue_valid();

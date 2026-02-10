@@ -1,20 +1,29 @@
 {
   "editor.defaultFormatter": "xaver.clang-format",
+
+  // --- Brackets & Quotes: stabil, aber nicht bevormundend ---
+  "editor.autoClosingBrackets": "languageDefined",
+  "editor.autoClosingQuotes": "languageDefined",
   "editor.autoSurround": "never",
-  "editor.autoClosingBrackets": "never",
-  "editor.autoClosingQuotes": "never",
+
+  // --- Dateizuordnungen ---
   "files.associations": {
     "*.ino": "cpp"
   },
+
+  // --- C++ / clangd ---
   "[cpp]": {
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
   },
+
   "clangd.arguments": [
     "--compile-commands-dir=.",
     "--query-driver=**/arm-none-eabi-*",
     "--background-index"
   ],
+
+  // --- Microsoft C/C++ Extension vollständig deaktiviert ---
   "C_Cpp.intelliSenseEngine": "disabled",
   "C_Cpp.autocomplete": "disabled",
   "C_Cpp.errorSquiggles": "disabled"

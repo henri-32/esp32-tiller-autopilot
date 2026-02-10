@@ -1,4 +1,4 @@
-#include "controlPanel.h"
+#include "ui/controlPanel.h"
 #include <unity.h>
 
 void test_example() { TEST_ASSERT_EQUAL(1, 1); }

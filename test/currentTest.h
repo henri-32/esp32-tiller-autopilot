@@ -1,6 +1,6 @@
 #pragma once
 
-#include "globalTypes.h"
+#include "types/globalTypes.h"
 class ControlPanel {
 public:
   enum class Mode { engaged, Disengaged };

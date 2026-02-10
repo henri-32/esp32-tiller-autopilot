@@ -1,5 +1,5 @@
 #pragma once
-#include "globalTypes.h"
+#include "types/globalTypes.h"
 
 class PWMController {
 public:
