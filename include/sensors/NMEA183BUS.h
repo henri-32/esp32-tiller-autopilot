@@ -5,9 +5,10 @@
 NMEA183 Protokoll
 Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
 
+#include "types/globalTypes.h"
 class NMEA183BUS {
     public:
 NMEA183BUS() = default; 
 
-float getHullSpeed() const;
+SensorSample<float> readSTW() const;
 };

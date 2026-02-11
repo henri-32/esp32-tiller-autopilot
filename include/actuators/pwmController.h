@@ -3,13 +3,13 @@
 
 class PWMController {
 public:
-  enum class Force { Low, Medium, High };
+  enum class Force { Low, Medium, High }; // gerade noch Platzhalter, das wird der duty cycle. 
 
   PWMController() = default;
   PWMController(const PWMController &) = delete;
   PWMController &operator=(const PWMController &) = delete;
 
-  void command(SteeringDirection dir);
+  void command(PWMCommand command);
 
 private:
   SteeringDirection m_lastDir;

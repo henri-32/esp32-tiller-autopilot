@@ -1,4 +1,4 @@
-#include "stm32f4xx_hal.h" // IWYU pragma: keep
+﻿#include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
 #include "core/systemController.h"
 #include <sys/_intsup.h>
@@ -29,7 +29,7 @@ int main()
     // --------------------------------------------------------
     while (true)
     {
-      unsigned long loopTimestamp = HAL_GetTick();
+      uint32_t loopTimestamp = HAL_GetTick();
         systemController.tick(loopTimestamp);
     }
 }

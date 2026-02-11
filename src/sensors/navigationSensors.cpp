@@ -1,43 +1,38 @@
 #include "sensors/navigationSensors.h"
-#include "types/globalTypes.h"
-#include <cstdint>
-#include <cstdlib>
-#include <optional>
 
-void NavigationSensors::setActiveSource(NavigationSource src) {
-  m_activeSource = src;
+#include "sensors/NMEA183BUS.h"
+#include "types/globalTypes.h"
+#include <cstdlib>
+
+void NavigationSensors::setSensorActivations(NavigationSource source,
+                                             bool setTo) {
+  switch (source) {
+  case NavigationSource::Compass:
+    m_sensorActivation.compass = setTo;
+    break;
+
+  case NavigationSource::Gps:
+    m_sensorActivation.gps = setTo;
+    break;
+
+  case NavigationSource::Wind:
+    m_sensorActivation.wind = setTo;
+  }
 };
-NavigationSource NavigationSensors::getActiveSource() const {
-  return m_activeSource;
+
+void NavigationSensors::setLeadSource(NavigationSource src) {
+  m_leadSource = src;
+};
+NavigationSource NavigationSensors::getLeadSource() const {
+  return m_leadSource;
 }
 
-std::optional<uint16_t> NavigationSensors::getCurrentReading() const {
-  switch (m_activeSource) {
-  case NavigationSource::Compass:
-    return m_compass.readHeading();
-  case NavigationSource::Wind:
-    return m_wind.readHeading();
-  case NavigationSource::Gps:
-    return m_gps.readHeading();
-  default:
-    return std::nullopt;
-  }
-};
+NavigationSensors::NavigationSnapshot NavigationSensors::createSnapshot() {
+  NavigationSnapshot snapshot;
+  snapshot.compass_hdg_dg = m_compass.read();
+  snapshot.gps_cog_dg = m_gps.read();
+  snapshot.wind_angle_dg = m_wind.read();
+  snapshot.stw_kts = m_nmea183Bus.readSTW();
 
-std::optional<float> NavigationSensors::getSOG() const {
-  return m_gps.readSOG();
-};
-
-bool NavigationSensors::sensorValueIsvalid() const{
-  switch (m_activeSource) {
-  case NavigationSource::Gps:
-    return m_gps.isValue_valid();
-  case NavigationSource::Compass:
-    return m_compass.isValue_valid(); // In dem Fall muss an irgendeiner Stelle
-                                      // definitiv Error Handling erfolgen
-  case NavigationSource::Wind:
-    return m_wind.isValue_valid();
-  default:
-    return false;
-  }
+  return snapshot;
 };

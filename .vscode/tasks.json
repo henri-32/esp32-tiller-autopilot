@@ -18,6 +18,23 @@
         "panel": "shared"
       },
       "problemMatcher": []
+    },
+    {
+      "label": "export complete code to allsources.txt",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Get-ChildItem -Recurse -Path .\\src, .\\include -Include *.h,*.hpp,*.c,*.cpp | Sort-Object FullName | ForEach-Object { \"`n/* ===== FILE: $($_.FullName) ===== */`n\"; Get-Content -Raw $_.FullName } | Set-Content -NoNewline -Encoding UTF8 .\\all_sources.txt"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
     }
   ]
 }

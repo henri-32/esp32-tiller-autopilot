@@ -1,13 +1,14 @@
 #include "sensors/compassModule.h"
+#include "types/globalTypes.h"
+#include <cstdint>
+#include <sys/types.h>
+SensorSample<uint16_t> CompassModule::read()const{
+    SensorSample<uint16_t> sample; 
 
-uint16_t CompassModule::readHeading() const
-{
-    // TODO: implement compass heading readout
-    return 0;
-}
-
-bool CompassModule::isValue_valid() const
-{
-    // TODO: implement validity check
-    return false;
-}
+    const uint16_t raw = 0; /*Hardware lesen*/ 
+    if (true /*Plausibilitätscheck*/) {
+        sample.value = raw;
+        sample.valid = true;
+    };
+    return sample;
+};

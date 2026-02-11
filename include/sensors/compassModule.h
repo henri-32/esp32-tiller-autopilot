@@ -1,9 +1,9 @@
-
 #pragma once
-#include<cstdint>
+#include "types/globalTypes.h"
+#include <cstdint>
+#include <cstdlib>
 
 class CompassModule {
 public:
-  uint16_t readHeading() const;
-  bool isValue_valid() const;
+  SensorSample<uint16_t> read() const;
 };

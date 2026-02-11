@@ -1,19 +1,16 @@
 #include "sensors/gpsModule.h"
+#include "types/globalTypes.h"
+#include <cstdint>
+#include <sys/types.h>
+SensorSample<uint16_t> GPSModule::read()const{
+    SensorSample<uint16_t> sample; 
 
-uint16_t GPSModule::readHeading() const
-{
-    // TODO: implement GPS heading readout
-    return 0;
-}
+    const uint16_t raw = 0; /*Hardware lesen*/ 
+    if (true /*Plausibilitätscheck*/) {
+        sample.value = raw;
+        sample.valid = true;
+    };
+    return sample;
+};
 
-float GPSModule::readSOG() const
-{
-    // TODO: implement GPS speed over ground readout
-    return 0.0f;
-}
 
-bool GPSModule::isValue_valid() const
-{
-    // TODO: implement validity check
-    return false;
-}
