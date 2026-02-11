@@ -1,5 +1,4 @@
 ﻿#include "core/steering/csc.h"
-#include "types/globalTypes.h"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -7,7 +6,7 @@
 
 CoreSteeringController::CoreSteeringController(
     SteeringController_Config &config)
-    : m_SteeringController_Config(config){}
+    : m_SteeringController_Config(config) {}
 
 std::optional<SteeringIntent>
 CoreSteeringController::tick(uint32_t loopTimestamp) {
@@ -16,8 +15,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   }
 
   SteeringIntent intent;
-  intent.abstractImpulse_0_100 =
-      m_SteeringController_Config.abstractImpulseDefault;
+  intent.abstractImpulse_0_100 = 100;
   intent.dir = calculateSteeringDirectionFromObservation();
 
   if (!actionAllowed(loopTimestamp)) {
@@ -30,16 +28,19 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   m_lastImpulse = loopTimestamp;
   resetObservations();
   return intent;
-
 }
 
 void CoreSteeringController::currentHDG(uint16_t current) {
   m_currentCourse = current;
 }
 
+void CoreSteeringController::setInternalTarget(uint16_t target) {
+  m_internalTargetCourse = target;
+};
+
 bool CoreSteeringController::observationAllowed(uint32_t loopTimestamp) const {
   if (loopTimestamp - m_lastImpulse >
-      m_SteeringController_Config.pauseForValidObsAfterImpulse_ms) {
+      m_SteeringController_Config.regulations.pauseForValidObsAfterImpulse_ms) {
     return true;
   } else
     return false;
@@ -47,7 +48,7 @@ bool CoreSteeringController::observationAllowed(uint32_t loopTimestamp) const {
 
 void CoreSteeringController::updateObservationBuffers(uint32_t loopTimestamp) {
   if (loopTimestamp - m_lastObservation <
-      m_SteeringController_Config.minimumTimeBtwObs_ms)
+      m_SteeringController_Config.regulations.minimumTimeBtwObs_ms)
     return;
 
   uint16_t currentError =
@@ -65,14 +66,15 @@ void CoreSteeringController::updateObservationBuffers(uint32_t loopTimestamp) {
   m_observationCount++;
   m_lastObservation = loopTimestamp;
 
-  if (m_observationCount >= m_SteeringController_Config.observationBufferSize) {
+  if (m_observationCount >=
+      m_SteeringController_Config.regulations.observationBufferSize) {
     resetObservations();
   }
 };
 
 bool CoreSteeringController::actionAllowed(uint32_t loopTimestamp) const {
   if (loopTimestamp - m_lastImpulse >
-      m_SteeringController_Config.SteeringCooldown_ms) {
+      m_SteeringController_Config.regulations.SteeringCooldown_ms) {
     return true;
   } else
     return false;
@@ -83,12 +85,12 @@ bool CoreSteeringController::steeringCorrectionIsRequired() {
   std::sort(medianArray.begin(), medianArray.end());
 
   uint8_t medianIndex =
-      m_SteeringController_Config.observationBufferSize /
+      m_SteeringController_Config.regulations.observationBufferSize /
       2; // hier nur der upper median bei geraden Mengen von Werten
   m_medianOfMergedErrors = medianArray[medianIndex];
 
   if (abs(m_medianOfMergedErrors) >=
-      m_SteeringController_Config.steeringTolerance_deg) {
+      m_SteeringController_Config.regulations.steeringTolerance_deg) {
     return true;
   }
   return false;

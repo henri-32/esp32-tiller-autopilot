@@ -1,4 +1,5 @@
 #pragma once
+#include "core/config.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 

@@ -30,7 +30,8 @@ NavigationSource NavigationSensors::getLeadSource() const {
 NavigationSensors::NavigationSnapshot NavigationSensors::createSnapshot() {
   NavigationSnapshot snapshot;
   snapshot.compass_hdg_dg = m_compass.read();
-  snapshot.gps_cog_dg = m_gps.read();
+  snapshot.gps_cog_dg = m_gps.readCOG();
+  snapshot.gps_sog_kts = m_gps.readSOG();
   snapshot.wind_angle_dg = m_wind.read();
   snapshot.stw_kts = m_nmea183Bus.readSTW();
 

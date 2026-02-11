@@ -17,6 +17,7 @@ public:
   struct NavigationSnapshot {
     SensorSample<uint16_t> compass_hdg_dg;
     SensorSample<uint16_t> gps_cog_dg;
+    SensorSample<float> gps_sog_kts;
     SensorSample<uint16_t> wind_angle_dg;
     SensorSample<float> stw_kts;
   };

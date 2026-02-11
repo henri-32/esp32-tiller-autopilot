@@ -1,4 +1,5 @@
 #include "core/steering/steeringOrchestrator.h"
+#include "core/steering/csc.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -12,7 +13,7 @@ SteeringOrchestrator::SteeringOrchestrator(SourceEvaluator &eval,
 
 void SteeringOrchestrator::tick(NavigationSensors::NavigationSnapshot snapshot,
                                 uint32_t loopTimestamp) {
-  m_sourceEvaluator.tick(snapshot, loopTimestamp);
+  m_sourceEvaluator.tick(snapshot, m_csc, loopTimestamp);
 
   auto intentOpt = m_csc.tick(loopTimestamp);
   if (intentOpt) {

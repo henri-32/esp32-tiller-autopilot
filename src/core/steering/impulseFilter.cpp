@@ -17,26 +17,36 @@ ImpulseFilter::apply(SteeringIntent intent,
   if (!snapshot.stw_kts.valid) {
     return {
         .dir = intent.dir,
-        .pulse_ms = m_config.SteeringImpulseDefault_ms,
-        .dutyCycle = m_config.dutyCycleDefault,
+        .pulse_ms = m_config.mechanics.SteeringMaxImpulse_ms,
+        .dutyCycle = m_config.mechanics.dutyCycleDefault,
     };
   };
 
   const float v = snapshot.stw_kts.value;
 
   float damping =
-      1.0f / (1.0f + m_config.stwDampingRegulator * v * v); // Physik Bruder
+      1.0f / (1.0f + m_config.physics.stwDampingRegulator * v * v); // Physik Bruder
 
-  damping = std::clamp(damping, m_config.stwDampingMinFactor,
-                       m_config.stwDampingMaxFactor);
+  damping = std::clamp(damping, m_config.physics.stwDampingMinFactor,
+                       m_config.physics.stwDampingMaxFactor);
 
-  float basepulse = m_config.SteeringImpulseDefault_ms *
-                    (intent.abstractImpulse_0_100 / 100.0f);
+  float abstract =
+      intent.abstractImpulse_0_100; // Ist bei Aufruf von CSC immer 100
+  float effective = abstract * damping;
+  float normalized = effective / 100;
+
+  // pulse is mapped into [min, max].
+  // Zero pulse is not a valid hardware state.
+  // "No action" is modeled via std::nullopt at CSC level.
+
+  uint32_t pulse_ms = m_config.mechanics.SteeringMinImpulse_ms +
+                      normalized * (m_config.mechanics.SteeringMaxImpulse_ms -
+                                    m_config.mechanics.SteeringMinImpulse_ms);
 
   return {
       .dir = intent.dir,
-      .pulse_ms = static_cast<uint32_t>(basepulse * damping),
-      .dutyCycle = m_config.dutyCycleDefault,
+      .pulse_ms = pulse_ms,
+      .dutyCycle = m_config.mechanics.dutyCycleDefault,
 
   };
 }

@@ -1,12 +1,12 @@
 ﻿#pragma once
 #include "actuators/pwmController.h"
+#include "core/config.h"
 #include "core/steering/csc.h"
 #include "sensors/NMEA183BUS.h"
 #include "sensors/navigationSensors.h"
 #include "steering/impulseFilter.h"
 #include "steering/sourceEvaluator.h"
 #include "steering/steeringOrchestrator.h"
-#include "types/globalTypes.h"
 #include "ui/controlPanel.h"
 #include "ui/display.h"
 #include "diagnostics/diagnostics.h"

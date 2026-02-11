@@ -5,7 +5,8 @@
 
 class GPSModule {
 public:
-SensorSample<uint16_t> read() const;
+SensorSample<uint16_t> readCOG() const;
+SensorSample<float> readSOG() const;
 
 
 };

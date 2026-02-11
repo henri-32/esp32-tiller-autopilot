@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "core/config.h"
 #include "types/globalTypes.h"
 #include <array>
 #include <cstdint>
@@ -12,12 +13,13 @@ public:
 
   std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
   void currentHDG(uint16_t currentCourse);
+  void setInternalTarget (uint16_t target);
 
 private:
   const SteeringController_Config &m_SteeringController_Config;
 
   static constexpr uint8_t OBSERVATION_BUFFER_SIZE =
-      SteeringController_Config::observationBufferSize;
+      SteeringRegulationConfig::observationBufferSize;
 
   uint16_t m_internalTargetCourse = 0;
   uint16_t m_currentCourse = 0;
