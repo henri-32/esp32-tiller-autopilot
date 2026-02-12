@@ -1,63 +1,103 @@
-#include <unity.h>
-#include "core/steering/csc.h"
 #include "core/config.h"
+#include "core/steering/csc.h"
+#include "types/globalTypes.h"
 #include <cstdint>
-
-SteeringController_Config config;
-CoreSteeringController csc(config);
+#include <unity.h>
 
 void setUp() {}
 void tearDown() {}
 
-void test_no_correction_inside_tolerance()
-{
-    csc.setInternalTarget(100);
+void test_no_correction_inside_tolerance() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
 
-    for (int i = 0; i < 100; i++)
-    {
-        csc.currentHDG(105);  // +5°, default tolerance = 10°
-        auto intent = csc.tick(i * 1000);
-        TEST_ASSERT_FALSE(intent.has_value());
-    }
+  csc.setInternalTarget(100);
+
+  for (int i = 0; i < 100; i++) {
+    csc.currentHDG(105); // +5°, default tolerance = 10°
+    auto intent = csc.tick(i * 1000);
+    TEST_ASSERT_FALSE(intent.has_value());
+  }
 }
 
-void test_correction_outside_tolerance()
-{
-    SteeringController_Config config;
-    CoreSteeringController csc(config);
+void test_correction_steady_20dg_to_far_left() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
 
-    csc.setInternalTarget(340);
+  csc.setInternalTarget(300);
+  bool intentOccurred = false;
+  uint32_t time = 0;
 
-    bool intentOccurred = false;
-    uint32_t time = 0;
+  for (int i = 0; i < 120; i++) // 120 Sekunden Simulation
+  {
+    time += 1000; // 1 Hz Takt
 
-    for (int i = 0; i < 120; i++)  // 120 Sekunden Simulation
-    {
-        time += 1000;              // 1 Hz Takt
+    csc.currentHDG(280); // -20° Fehler konstant
 
-        csc.currentHDG(5);       // +20° Fehler konstant
+    auto intent = csc.tick(time);
 
-        auto intent = csc.tick(time);
+    if (intent.has_value()) {
+      intentOccurred = true;
 
-        if (intent.has_value())
-        {
-            intentOccurred = true;
+      TEST_ASSERT_EQUAL(SteeringDirection::Right, intent->dir);
 
-            // Optional: Richtung prüfen
-            TEST_ASSERT_EQUAL(SteeringDirection::Left, intent->dir);
-
-            break; // wir brauchen nur einen erfolgreichen Intent
-        }
+      break;
     }
-
-    TEST_ASSERT_TRUE(intentOccurred);
+  }
 }
 
+void test_correction_steady_20dg_to_far_right() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
 
-int main()
-{
-    UNITY_BEGIN();
-    RUN_TEST(test_no_correction_inside_tolerance);
-    RUN_TEST(test_correction_outside_tolerance);
-    return UNITY_END();
+  csc.setInternalTarget(300);
+  bool intentOccurred = false;
+  uint32_t time = 0;
+
+  for (int i = 0; i < 120; i++) // 120 Sekunden Simulation
+  {
+    time += 1000; // 1 Hz Takt
+
+    csc.currentHDG(320); // +20° Fehler konstant
+
+    auto intent = csc.tick(time);
+
+    if (intent.has_value()) {
+      intentOccurred = true;
+
+      TEST_ASSERT_EQUAL(SteeringDirection::Left, intent->dir);
+
+      break;
+    }
+  }
+
+  TEST_ASSERT_TRUE(intentOccurred);
+}
+
+void test_correction_over360_steady_20dg_to_far_left() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  csc.setInternalTarget(300);
+  bool intentOccurred = false;
+  uint32_t time = 0;
+
+  for (int i =0; i < 100; i++) {
+    time += 1000; 
+    csc.currentHDG(350);
+
+    auto intent = csc.tick(time); 
+    if (intent.has_value()){
+        TEST_ASSERT_EQUAL(SteeringDirection::Right, intent->dir);
+        break;
+    }
+  }
+};
+int main() {
+  UNITY_BEGIN();
+  RUN_TEST(test_no_correction_inside_tolerance);
+  RUN_TEST(test_correction_steady_20dg_to_far_left);
+  RUN_TEST(test_correction_steady_20dg_to_far_right);
+  RUN_TEST(test_correction_over360_steady_20dg_to_far_left);
+  return UNITY_END();
 }

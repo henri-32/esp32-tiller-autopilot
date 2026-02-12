@@ -30,6 +30,12 @@
         "-File",
         ".vscode/scripts/refresh-clangd-db.ps1"
       ],
+      "linux": {
+        "command": "bash",
+        "args": [
+          ".vscode/scripts/refresh-clangd-db.sh"
+        ]
+      },
       "group": "build",
       "presentation": {
         "reveal": "always",
@@ -48,7 +54,37 @@
         "-File",
         ".vscode/scripts/refresh-clangd-db.ps1"
       ],
+      "linux": {
+        "command": "bash",
+        "args": [
+          ".vscode/scripts/refresh-clangd-db.sh"
+        ]
+      },
       "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "PlatformIO: Run native_csc tests",
+      "type": "shell",
+      "command": "C:\\Users\\henri\\.platformio\\penv\\Scripts\\pio.exe",
+      "args": [
+        "test",
+        "-e",
+        "native_csc"
+      ],
+      "linux": {
+        "command": "pio",
+        "args": [
+          "test",
+          "-e",
+          "native_csc"
+        ]
+      },
+      "group": "test",
       "presentation": {
         "reveal": "always",
         "panel": "shared"

@@ -9,6 +9,16 @@ This project is built with PlatformIO. The repository contains a clangd setup so
 pio run
 ```
 
+**Build and Test Matrix**
+| Command | Purpose | Expected result |
+|---|---|---|
+| `pio run -e genericSTM32F411RE` | Build firmware for STM32 target | Build succeeds |
+| `pio run -e native` | Build native host executable (`src/native_main.cpp`) | Build succeeds |
+| `pio test -e native_csc` | Run CSC unit tests (Unity) | Tests build and run |
+| `pio run -e native_csc` | Not a valid workflow (test-only env) | Fails with missing `main` (expected) |
+
+`env:native_csc` is intentionally test-only and should always be used with `pio test`.
+
 **clangd (code intelligence)**
 clangd uses `compile_commands.json`. Generate it after changing `platformio.ini`, board, or `build_flags`.
 

@@ -5,7 +5,6 @@
 #include "types/globalTypes.h"
 #include "ui/controlPanel.h"
 #include <cstdint>
-#include <cstdlib>
 
 SourceEvaluator::SourceEvaluator(const ControlPanel &panel,
                                  NavigationSensors &navsens,
@@ -90,7 +89,8 @@ void SourceEvaluator::evaluateWind(
       m_steeringController_Config.regulations.minimumTimeBtwObs_ms) {
     return;
   };
-
+ 
+  // Hier ist noch ein kernfehler drin, weil generalTarget nicht genutzt wird.
   uint16_t generalTarget =
       m_panel.readIntent()
           .generalTarget; // Wird bei Windmodus zu einem Windwinkel
