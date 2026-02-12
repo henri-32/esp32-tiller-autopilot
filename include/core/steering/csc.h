@@ -14,6 +14,7 @@ public:
   std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
   void currentHDG(uint16_t currentCourse);
   void setInternalTarget (uint16_t target);
+  uint16_t getInternalTarget ();
 
 private:
   const SteeringController_Config &m_SteeringController_Config;

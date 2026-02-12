@@ -12,7 +12,7 @@ SourceEvaluator::SourceEvaluator(const ControlPanel &panel,
                                  SteeringController_Config &config,
                                  Diagnostics &diagnostics)
     : m_panel(panel), m_navigationSensors(navsens),
-      m_steeringController_Config(config), m_diagnostics(diagnostics){};
+      m_steeringController_Config(config), m_diagnostics(diagnostics) {};
 
 void SourceEvaluator::tick(NavigationSensors::NavigationSnapshot snapshot,
                            CoreSteeringController &csc,
@@ -31,7 +31,9 @@ void SourceEvaluator::tick(NavigationSensors::NavigationSnapshot snapshot,
       m_navigationSensors.setLeadSource(NavigationSource::Compass);
       m_diagnostics.emit(DiagnosticEvent::LostWithFallback,
                          FunctionalCapability::WIND, loopTimestamp);
+      return;
     }
+    evaluateWind(snapshot, csc, loopTimestamp);
     break;
 
   default:
@@ -77,32 +79,53 @@ void SourceEvaluator::evaluateWind(
     NavigationSensors::NavigationSnapshot snapshot, CoreSteeringController &csc,
     uint32_t loopTimestamp) {
 
-  // Benötigt valid GPS
-  if (!snapshot.wind_angle_dg.valid || !snapshot.gps_cog_dg.valid ||
-      snapshot.gps_sog_kts.valid) {
+  if (!snapshot.wind_angle_dg.valid) {
     m_navigationSensors.setLeadSource(NavigationSource::Gps);
     m_diagnostics.emit(DiagnosticEvent::Degraded, FunctionalCapability::WIND,
                        loopTimestamp);
     return;
   }
 
+  if (loopTimestamp - m_lastObservation <
+      m_steeringController_Config.regulations.minimumTimeBtwObs_ms) {
+    return;
+  };
+
   uint16_t generalTarget =
       m_panel.readIntent()
           .generalTarget; // Wird bei Windmodus zu einem Windwinkel
-  uint16_t currentCOG = snapshot.gps_cog_dg.value;
-  uint16_t windAngle = snapshot.wind_angle_dg.value;
-  uint16_t diff = currentCOG - windAngle;
+  uint16_t currentHDG = snapshot.compass_hdg_dg.value;
+  uint16_t rawWindAngle = snapshot.wind_angle_dg.value;
+  uint16_t diff = currentHDG - rawWindAngle;
 
   diff += 360;
   diff += 180;
   diff %= 360;
   diff -= 180;
+  int16_t normalizedDiff = diff; 
 
-  if (diff < 0) {
-    csc.setInternalTarget(generalTarget + 0.5 * std::abs(diff - 0));
+  m_observationBuffer[m_observationCounter] = normalizedDiff;
+  m_lastObservation = loopTimestamp;
+  m_observationCounter++;
 
-  } else if (diff > 0) {
-    csc.setInternalTarget(generalTarget - 0.5 * std::abs(diff - 0));
+  uint16_t sum = 0;
+  for (int i = 0; i < OBSERVATION_BUFFER_SIZE; i++) {
+    sum += m_observationBuffer[i];
+  };
+
+  int16_t mean = sum / OBSERVATION_BUFFER_SIZE;
+
+  if (loopTimestamp - m_lastCorrection <
+      m_steeringController_Config.source.minimumTimeBeweenCorrection_ms) {
+    return;
   }
 
+  if (mean < 0) {
+    csc.setInternalTarget(csc.getInternalTarget() + mean);
+  }
+
+  else if (mean > 0) {
+    csc.setInternalTarget(csc.getInternalTarget() - mean);
+  }
 };
+

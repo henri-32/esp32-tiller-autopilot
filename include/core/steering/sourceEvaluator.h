@@ -4,6 +4,7 @@
 #include "sensors/navigationSensors.h"
 #include "diagnostics/diagnostics.h"
 #include "ui/controlPanel.h"
+#include <array>
 #include <cstdint>
 
 class SourceEvaluator {
@@ -23,4 +24,9 @@ private:
   NavigationSensors &m_navigationSensors;
   SteeringController_Config &m_steeringController_Config;
   Diagnostics &m_diagnostics;
+  static constexpr uint8_t OBSERVATION_BUFFER_SIZE = SteeringSourceEVConfig::observationBufferSize;
+  std::array<uint16_t, OBSERVATION_BUFFER_SIZE> m_observationBuffer;
+  uint32_t m_lastObservation; 
+  uint32_t m_lastCorrection;
+  uint16_t m_observationCounter; 
 };

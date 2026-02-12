@@ -38,6 +38,10 @@ void CoreSteeringController::setInternalTarget(uint16_t target) {
   m_internalTargetCourse = target;
 };
 
+uint16_t CoreSteeringController::getInternalTarget(){
+  return m_internalTargetCourse;
+};
+
 bool CoreSteeringController::observationAllowed(uint32_t loopTimestamp) const {
   if (loopTimestamp - m_lastImpulse >
       m_SteeringController_Config.regulations.pauseForValidObsAfterImpulse_ms) {

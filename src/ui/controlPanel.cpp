@@ -1,6 +1,7 @@
 #include "ui/controlPanel.h"
+#include "ui/controlPanelTypes.h"
 
-ControlPanel::Intent ControlPanel::readIntent() const {
+PanelIntent ControlPanel::readIntent() const {
   // TODO Inputs lesen und Intent befüllen
   return {};
 }

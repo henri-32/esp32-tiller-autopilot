@@ -18,6 +18,8 @@ struct SteeringRegulationConfig {
 
 struct SteeringSourceEVConfig {
   float minimumGPS_SpeedForGPS_Use = 1.0;
+  static constexpr uint8_t observationBufferSize = 70;
+  uint32_t minimumTimeBeweenCorrection_ms = 20000;
 };
 struct SteeringPhysicsConfig {
   float stwDampingRegulator = 0.4f;

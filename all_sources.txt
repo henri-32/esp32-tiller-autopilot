@@ -1,7 +1,11 @@
+﻿#pragma once
+#include "types/globalTypes.h"
 
 class PWMController {
 public:
-  enum clntroller() = default;
+  enum class Force { Low, Medium, High }; // gerade noch Platzhalter, das wird der duty cycle. 
+
+  PWMController() = default;
   PWMController(const PWMController &) = delete;
   PWMController &operator=(const PWMController &) = delete;
 
@@ -11,9 +15,6 @@ private:
   SteeringDirection m_lastDir;
   Force m_lastFrc = Force::Low;
 };
-
-
-===== FILE: include/core/config.h =====
 #pragma once 
 #include <cstdint>
 
@@ -34,6 +35,8 @@ struct SteeringRegulationConfig {
 
 struct SteeringSourceEVConfig {
   float minimumGPS_SpeedForGPS_Use = 1.0;
+  static constexpr uint8_t observationBufferSize = 70;
+  uint32_t minimumTimeBeweenCorrection_ms = 20000;
 };
 struct SteeringPhysicsConfig {
   float stwDampingRegulator = 0.4f;
@@ -46,10 +49,7 @@ struct SteeringController_Config {
   SteeringPhysicsConfig physics;
   SteeringSourceEVConfig source;
 };
-
-
-===== FILE: include/core/steering/csc.h =====
-﻿#pragma once
+#pragma once
 
 #include "core/config.h"
 #include "types/globalTypes.h"
@@ -65,6 +65,7 @@ public:
   std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
   void currentHDG(uint16_t currentCourse);
   void setInternalTarget (uint16_t target);
+  uint16_t getInternalTarget ();
 
 private:
   const SteeringController_Config &m_SteeringController_Config;
@@ -94,9 +95,6 @@ private:
 
   uint8_t m_observationCount = 0;
 };
-
-
-===== FILE: include/core/steering/impulseFilter.h =====
 #pragma once
 #include "core/config.h"
 #include "sensors/navigationSensors.h"
@@ -113,15 +111,13 @@ public:
 private:
   SteeringController_Config &m_config;
 };
-
-
-===== FILE: include/core/steering/sourceEvaluator.h =====
 #pragma once
 #include "core/config.h"
 #include "core/steering/csc.h"
 #include "sensors/navigationSensors.h"
 #include "diagnostics/diagnostics.h"
 #include "ui/controlPanel.h"
+#include <array>
 #include <cstdint>
 
 class SourceEvaluator {
@@ -141,10 +137,12 @@ private:
   NavigationSensors &m_navigationSensors;
   SteeringController_Config &m_steeringController_Config;
   Diagnostics &m_diagnostics;
+  static constexpr uint8_t OBSERVATION_BUFFER_SIZE = SteeringSourceEVConfig::observationBufferSize;
+  std::array<uint16_t, OBSERVATION_BUFFER_SIZE> m_observationBuffer;
+  uint32_t m_lastObservation; 
+  uint32_t m_lastCorrection;
+  uint16_t m_observationCounter; 
 };
-
-
-===== FILE: include/core/steering/steeringOrchestrator.h =====
 #pragma once 
 
 #include "csc.h"
@@ -169,10 +167,7 @@ class SteeringOrchestrator {
     PWMController& m_pwm;
     SteeringIntent m_steeringIntent;
 
-};
-
-===== FILE: include/core/systemController.h =====
-﻿#pragma once
+};#pragma once
 #include "actuators/pwmController.h"
 #include "core/config.h"
 #include "core/steering/csc.h"
@@ -207,9 +202,6 @@ private:
   SteeringOrchestrator m_steeringOrchestrator;
   Display m_display;
 };
-
-
-===== FILE: include/diagnostics/diagnostic_types.h =====
 #pragma once
 #include <cstdint>
 
@@ -234,9 +226,6 @@ enum class CapabilityState : uint8_t {
     Degraded,
     Lost
 };
-
-
-===== FILE: include/diagnostics/diagnostics.h =====
 #pragma once
 #include <cstdint>
 #include "diagnostic_types.h"
@@ -258,7 +247,7 @@ public:
     // vom SystemController im Tick aufgerufen
     void tick(uint32_t loopTimestamp);
 
-    // für spätere Auswertung (noch minimal)
+    // fÃ¼r spÃ¤tere Auswertung (noch minimal)
     CapabilityState capabilityState(FunctionalCapability cap) const;
 
 private:
@@ -267,7 +256,7 @@ private:
     uint8_t m_writeIndex = 0;
     uint8_t m_count = 0;
 
-    // --- Capability-Zustände (latched) ---
+    // --- Capability-ZustÃ¤nde (latched) ---
     CapabilityState m_states[
         static_cast<uint8_t>(FunctionalCapability::COUNT)
     ];
@@ -279,25 +268,6 @@ private:
     void updateCapabilityState(DiagnosticEvent event,
                                FunctionalCapability capability);
 };
-
-
-===== FILE: include/sensors/NMEA183BUS.h =====
-#pragma once 
-
-
-/* Holt sich Geschwindigkeit durchs Wasser von NASA Clipper über 
-NMEA183 Protokoll
-Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
-
-#include "types/globalTypes.h"
-class NMEA183BUS {
-    public:
-NMEA183BUS() = default; 
-
-SensorSample<float> readSTW() const;
-};
-
-===== FILE: include/sensors/compassModule.h =====
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -307,9 +277,6 @@ class CompassModule {
 public:
   SensorSample<uint16_t> read() const;
 };
-
-
-===== FILE: include/sensors/gpsModule.h =====
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -321,10 +288,7 @@ SensorSample<uint16_t> readCOG() const;
 SensorSample<float> readSOG() const;
 
 
-};
-
-===== FILE: include/sensors/navigationSensors.h =====
-#pragma once
+};#pragma once
 #include "sensors/NMEA183BUS.h"
 #include "sensors/compassModule.h"
 #include "sensors/gpsModule.h"
@@ -371,10 +335,20 @@ private:
   const NMEA183BUS &m_nmea183Bus;
   SensorActivation m_sensorActivation;
 };
+#pragma once 
 
 
-===== FILE: include/sensors/windModule.h =====
-#pragma once
+/* Holt sich Geschwindigkeit durchs Wasser von NASA Clipper Ã¼ber 
+NMEA183 Protokoll
+Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
+
+#include "types/globalTypes.h"
+class NMEA183BUS {
+    public:
+NMEA183BUS() = default; 
+
+SensorSample<float> readSTW() const;
+};#pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
 #include <cstdlib>
@@ -383,10 +357,7 @@ class WindModule {
 public:
   SensorSample<uint16_t> read() const;
 };
-
-
-===== FILE: include/types/globalTypes.h =====
-﻿#pragma once
+#pragma once
 #include <cstdint>
 
 enum class NavigationSource { Compass, Gps, Wind };
@@ -406,10 +377,7 @@ struct PWMCommand {
 template <typename T> struct SensorSample {
   T value{};
   bool valid{false};
-};
-
-===== FILE: include/ui/controlPanel.h =====
-#pragma once
+};#pragma once
 
 #include "ui/controlPanelTypes.h"
 class ControlPanel {
@@ -418,9 +386,6 @@ public:
   PanelIntent readIntent() const;
 
 };
-
-
-===== FILE: include/ui/controlPanelTypes.h =====
 #pragma once 
 
 #include "types/globalTypes.h"
@@ -436,26 +401,17 @@ struct PanelIntent {
         Safe, 
     };
     NavigationSource activeSource;
-};
-
-===== FILE: include/ui/display.h =====
-#pragma once
+};#pragma once
 class Display {
 public:
     void update();
-};
-
-===== FILE: src/actuators/pwmController.cpp =====
-#include "actuators/pwmController.h"
+};#include "actuators/pwmController.h"
 #include "types/globalTypes.h"
 
 void PWMController::command(PWMCommand command) {
   // TODO HardwareImpulse ausegeben
 }
-
-
-===== FILE: src/core/main.cpp =====
-﻿#include "stm32f4xx_hal.h" // IWYU pragma: keep
+#include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
 #include "core/systemController.h"
 #include <sys/_intsup.h>
@@ -490,10 +446,7 @@ int main()
         systemController.tick(loopTimestamp);
     }
 }
-
-
-===== FILE: src/core/steering/csc.cpp =====
-﻿#include "core/steering/csc.h"
+#include "core/steering/csc.h"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -531,6 +484,10 @@ void CoreSteeringController::currentHDG(uint16_t current) {
 
 void CoreSteeringController::setInternalTarget(uint16_t target) {
   m_internalTargetCourse = target;
+};
+
+uint16_t CoreSteeringController::getInternalTarget(){
+  return m_internalTargetCourse;
 };
 
 bool CoreSteeringController::observationAllowed(uint32_t loopTimestamp) const {
@@ -621,17 +578,14 @@ int16_t CoreSteeringController::normalizeHDGDelta(uint16_t current,
 
   return diff;
 }
-
-
-===== FILE: src/core/steering/impulseFilter.cpp =====
 #include "core/steering/impulseFilter.h"
 #include "types/globalTypes.h"
 #include <algorithm>
 #include <cstdint>
 
-/*Für mein zukünftiges Ich. Die Syntax mit return .x ist ziemlich cool, weil ich
-damit keine lokale Variable des Rückgabewerts zwischenspeichern muss, sondern
-direkt auf die Argumente des Rückgabewerts schreibe */
+/*FÃ¼r mein zukÃ¼nftiges Ich. Die Syntax mit return .x ist ziemlich cool, weil ich
+damit keine lokale Variable des RÃ¼ckgabewerts zwischenspeichern muss, sondern
+direkt auf die Argumente des RÃ¼ckgabewerts schreibe */
 
 ImpulseFilter::ImpulseFilter(SteeringController_Config &config)
     : m_config(config) {};
@@ -676,9 +630,6 @@ ImpulseFilter::apply(SteeringIntent intent,
 
   };
 }
-
-
-===== FILE: src/core/steering/sourceEvaluator.cpp =====
 #include "core/steering/sourceEvaluator.h"
 #include "core/steering/csc.h"
 #include "diagnostics/diagnostic_types.h"
@@ -693,7 +644,7 @@ SourceEvaluator::SourceEvaluator(const ControlPanel &panel,
                                  SteeringController_Config &config,
                                  Diagnostics &diagnostics)
     : m_panel(panel), m_navigationSensors(navsens),
-      m_steeringController_Config(config), m_diagnostics(diagnostics){};
+      m_steeringController_Config(config), m_diagnostics(diagnostics) {};
 
 void SourceEvaluator::tick(NavigationSensors::NavigationSnapshot snapshot,
                            CoreSteeringController &csc,
@@ -712,7 +663,9 @@ void SourceEvaluator::tick(NavigationSensors::NavigationSnapshot snapshot,
       m_navigationSensors.setLeadSource(NavigationSource::Compass);
       m_diagnostics.emit(DiagnosticEvent::LostWithFallback,
                          FunctionalCapability::WIND, loopTimestamp);
+      return;
     }
+    evaluateWind(snapshot, csc, loopTimestamp);
     break;
 
   default:
@@ -748,7 +701,7 @@ void SourceEvaluator::evaluateCompass(
     NavigationSensors::NavigationSnapshot snapshot, CoreSteeringController &csc,
     uint32_t loopTimestamp) {
   if (!snapshot.compass_hdg_dg.valid) {
-    // entweder direkt Critical Error, oder hier übergangsregelung auf cog bauen
+    // entweder direkt Critical Error, oder hier Ã¼bergangsregelung auf cog bauen
   };
 
   csc.setInternalTarget(m_panel.readIntent().generalTarget);
@@ -758,38 +711,56 @@ void SourceEvaluator::evaluateWind(
     NavigationSensors::NavigationSnapshot snapshot, CoreSteeringController &csc,
     uint32_t loopTimestamp) {
 
-  // Benötigt valid GPS
-  if (!snapshot.wind_angle_dg.valid || !snapshot.gps_cog_dg.valid ||
-      snapshot.gps_sog_kts.valid) {
+  if (!snapshot.wind_angle_dg.valid) {
     m_navigationSensors.setLeadSource(NavigationSource::Gps);
     m_diagnostics.emit(DiagnosticEvent::Degraded, FunctionalCapability::WIND,
                        loopTimestamp);
     return;
   }
 
+  if (loopTimestamp - m_lastObservation <
+      m_steeringController_Config.regulations.minimumTimeBtwObs_ms) {
+    return;
+  };
+
   uint16_t generalTarget =
       m_panel.readIntent()
           .generalTarget; // Wird bei Windmodus zu einem Windwinkel
-  uint16_t currentCOG = snapshot.gps_cog_dg.value;
-  uint16_t windAngle = snapshot.wind_angle_dg.value;
-  uint16_t diff = currentCOG - windAngle;
+  uint16_t currentHDG = snapshot.compass_hdg_dg.value;
+  uint16_t rawWindAngle = snapshot.wind_angle_dg.value;
+  uint16_t diff = currentHDG - rawWindAngle;
 
   diff += 360;
   diff += 180;
   diff %= 360;
   diff -= 180;
+  int16_t normalizedDiff = diff; 
 
-  if (diff < 0) {
-    csc.setInternalTarget(generalTarget + 0.5 * std::abs(diff - 0));
+  m_observationBuffer[m_observationCounter] = normalizedDiff;
+  m_lastObservation = loopTimestamp;
+  m_observationCounter++;
 
-  } else if (diff > 0) {
-    csc.setInternalTarget(generalTarget - 0.5 * std::abs(diff - 0));
+  uint16_t sum = 0;
+  for (int i = 0; i < OBSERVATION_BUFFER_SIZE; i++) {
+    sum += m_observationBuffer[i];
+  };
+
+  int16_t mean = sum / OBSERVATION_BUFFER_SIZE;
+
+  if (loopTimestamp - m_lastCorrection <
+      m_steeringController_Config.source.minimumTimeBeweenCorrection_ms) {
+    return;
   }
 
+  if (mean < 0) {
+    csc.setInternalTarget(csc.getInternalTarget() + mean);
+  }
+
+  else if (mean > 0) {
+    csc.setInternalTarget(csc.getInternalTarget() - mean);
+  }
 };
 
-
-===== FILE: src/core/steering/steeringOrchestrator.cpp =====
 #include "core/steering/steeringOrchestrator.h"
 #include "core/steering/csc.h"
 #include "sensors/navigationSensors.h"
@@ -814,10 +785,7 @@ void SteeringOrchestrator::tick(NavigationSensors::NavigationSnapshot snapshot,
     m_pwm.command(cmd);
   }
 };
-
-
-===== FILE: src/core/systemController.cpp =====
-﻿#include "core/systemController.h"
+#include "core/systemController.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 #include "ui/controlPanelTypes.h"
@@ -862,9 +830,6 @@ void SystemController::tick(uint32_t loopTimestamp) {
   // 6. Display updaten
   m_display.update();
 }
-
-
-===== FILE: src/diagnostics/diagnostics.cpp =====
 #include "diagnostics/diagnostics.h"
 #include "diagnostics/diagnostic_types.h"
 
@@ -878,8 +843,8 @@ void Diagnostics::emit(DiagnosticEvent event,
 
 void Diagnostics::tick(uint32_t /*loopTimestamp*/)
 {
-    // bewusst leer für jetzt
-    // später: Zeitfenster, Snapshot-Vorbereitung, etc.
+    // bewusst leer fÃ¼r jetzt
+    // spÃ¤ter: Zeitfenster, Snapshot-Vorbereitung, etc.
 }
 
 CapabilityState Diagnostics::capabilityState(FunctionalCapability cap) const
@@ -913,13 +878,10 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
             break;
 
         default:
-            // andere Events verändern den Zustand nicht
+            // andere Events verÃ¤ndern den Zustand nicht
             break;
     }
 }
-
-
-===== FILE: src/platform/fatal.cpp =====
 #include "platform/platform.h"
 #include "stm32f4xx_hal.h" // IWYU pragma: keep
 
@@ -927,9 +889,9 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
 {
     __disable_irq();
 
-    // Hier später möglich:
+    // Hier spÃ¤ter mÃ¶glich:
     // - Breakpoint
-    // - Watchdog absichtlich auslösen
+    // - Watchdog absichtlich auslÃ¶sen
     // - LED-Blink-Code
     // - Backup-Register beschreiben
 
@@ -938,9 +900,6 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
         // System bewusst eingefroren
     }
 }
-
-
-===== FILE: src/platform/platform.h =====
 #pragma once
 
 
@@ -959,9 +918,6 @@ void Platform_Init();
 
 // Configures system clocks. Must be called after HAL_Init().
 void SystemClock_Config();
-
-
-===== FILE: src/platform/system_clock.cpp =====
 
 #include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
@@ -1005,12 +961,6 @@ void SystemClock_Config()
         FatalError("Clock config failed");
     }
 }
-
-
-===== FILE: src/platform/system_gpio.cpp =====
-
-
-===== FILE: src/platform/system_init.cpp =====
 #include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
 
@@ -1023,20 +973,6 @@ void Platform_Init()
 
     SystemClock_Config();
 }
-
-
-===== FILE: src/sensors/NMEA183BUS.cpp =====
-#include "sensors/NMEA183BUS.h"
-
-SensorSample<float> NMEA183BUS::readSTW() const {
-  SensorSample<float> sample;
-  sample.value = 0.0f;
-  sample.valid = false;
-  return sample;
-}
-
-
-===== FILE: src/sensors/compassModule.cpp =====
 #include "sensors/compassModule.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -1045,15 +981,12 @@ SensorSample<uint16_t> CompassModule::read()const{
     SensorSample<uint16_t> sample; 
 
     const uint16_t raw = 0; /*Hardware lesen*/ 
-    if (true /*Plausibilitätscheck*/) {
+    if (true /*PlausibilitÃ¤tscheck*/) {
         sample.value = raw;
         sample.valid = true;
     };
     return sample;
 };
-
-
-===== FILE: src/sensors/gpsModule.cpp =====
 #include "sensors/gpsModule.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -1063,7 +996,7 @@ SensorSample<uint16_t> GPSModule::readCOG() const {
   SensorSample<uint16_t> sample;
 
   const uint16_t raw = 0; /*Hardware lesen*/
-  if (true /*Plausibilitätscheck*/) {
+  if (true /*PlausibilitÃ¤tscheck*/) {
     sample.value = raw;
     sample.valid = true;
   } else if (false /*Plausi falsch*/) {
@@ -1087,9 +1020,6 @@ SensorSample<float> GPSModule::readSOG() const {
 
   return sample;
 };
-
-
-===== FILE: src/sensors/navigationSensors.cpp =====
 #include "sensors/navigationSensors.h"
 
 #include "sensors/NMEA183BUS.h"
@@ -1129,9 +1059,14 @@ NavigationSensors::NavigationSnapshot NavigationSensors::createSnapshot() {
 
   return snapshot;
 };
+#include "sensors/NMEA183BUS.h"
 
-
-===== FILE: src/sensors/windModule.cpp =====
+SensorSample<float> NMEA183BUS::readSTW() const {
+  SensorSample<float> sample;
+  sample.value = 0.0f;
+  sample.valid = false;
+  return sample;
+}
 #include "sensors/windModule.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -1140,67 +1075,22 @@ SensorSample<uint16_t> WindModule::read()const{
     SensorSample<uint16_t> sample; 
 
     const uint16_t raw = 0; /*Hardware lesen*/ 
-    if (true /*Plausibilitätscheck*/) {
+    if (true /*PlausibilitÃ¤tscheck*/) {
         sample.value = raw;
         sample.valid = true;
     };
     return sample;
 };
-
-
-===== FILE: src/ui/controlPanel.cpp =====
 #include "ui/controlPanel.h"
+#include "ui/controlPanelTypes.h"
 
-ControlPanel::Intent ControlPanel::readIntent() const {
-  // TODO Inputs lesen und Intent befüllen
+PanelIntent ControlPanel::readIntent() const {
+  // TODO Inputs lesen und Intent befÃ¼llen
   return {};
 }
-
-
-===== FILE: src/ui/display.cpp =====
 #include "ui/display.h"
 
 void Display::update()
 {
     // TODO: implement display update
 }
-
-
-===== FILE: test/currentTest.cpp =====
-#include "ui/controlPanel.h"
-#include <unity.h>
-
-void test_example() { TEST_ASSERT_EQUAL(1, 1); }
-
-int main() {
-  UNITY_BEGIN();
-  RUN_TEST(test_example);
-  return UNITY_END();
-}
-
-ControlPanel::Intent ControlPanel::readIntent() const {
-  // TODO Inputs lesen und Intent befüllen
-  return {};
-}
-
-
-===== FILE: test/currentTest.h =====
-#pragma once
-
-#include "types/globalTypes.h"
-class ControlPanel {
-public:
-  enum class Mode { engaged, Disengaged };
-  enum class Source { Compass, Wind, Gps };
-
-  struct Intent {
-    Mode mode = Mode::Disengaged;
-    Source source = Source::Compass;
-    uint16_t targetCourse = 0;
-  };
-
-  Intent readIntent() const;
-  NavigationSource m_activeSource;
-};
-
-
