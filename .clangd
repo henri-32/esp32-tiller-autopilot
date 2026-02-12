@@ -1,5 +1,14 @@
 CompileFlags:
+  CompilationDatabase: .pio/build/genericSTM32F411RE
   Add:
     - -D__GNUC__=12
     - -D__GNUC_MINOR__=3
     - -D__GNUC_PATCHLEVEL__=0
+
+---
+If:
+  PathMatch:
+    - .*test/test_csc/.*
+    - .*test\\test_csc\\.*
+CompileFlags:
+  CompilationDatabase: .pio/build/native_csc

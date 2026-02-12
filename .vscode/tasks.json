@@ -4,13 +4,49 @@
     {
       "label": "PlatformIO: Generate compile_commands.json",
       "type": "shell",
-      "command": "pio",
+      "command": "C:\\Users\\henri\\.platformio\\penv\\Scripts\\pio.exe",
       "args": [
         "run",
         "-t",
         "compiledb",
         "-e",
         "genericSTM32F411RE"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "PlatformIO: Refresh clangd databases (full, includes native_csc test)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".vscode/scripts/refresh-clangd-db.ps1"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "PlatformIO: Refresh clangd databases (main + test)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".vscode/scripts/refresh-clangd-db.ps1"
       ],
       "group": "build",
       "presentation": {

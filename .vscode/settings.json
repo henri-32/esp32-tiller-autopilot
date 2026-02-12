@@ -18,7 +18,6 @@
   },
 
   "clangd.arguments": [
-    "--compile-commands-dir=.",
     "--query-driver=**/arm-none-eabi-*",
     "--background-index"
   ],
