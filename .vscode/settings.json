@@ -1,4 +1,4 @@
-{
+﻿{
   "editor.defaultFormatter": "xaver.clang-format",
 
   // --- Brackets & Quotes: stabil, aber nicht bevormundend ---
@@ -18,11 +18,18 @@
   },
 
   "clangd.arguments": [
-    "--query-driver=**/arm-none-eabi-*",
-    "--background-index"
+    "--query-driver=C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@*/bin/arm-none-eabi-*",
+    "--query-driver=C:/msys64/mingw64/bin/g++*",
+    "--background-index",
+    "--header-insertion=never",
+    "--header-insertion-decorators=0"
   ],
 
-  // --- Microsoft C/C++ Extension vollständig deaktiviert ---
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": false
+  },
+
+  // --- Microsoft C/C++ Extension vollstaendig deaktiviert ---
   "C_Cpp.intelliSenseEngine": "disabled",
   "C_Cpp.autocomplete": "disabled",
   "C_Cpp.errorSquiggles": "disabled"

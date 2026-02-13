@@ -1,9 +1,29 @@
 CompileFlags:
   CompilationDatabase: .pio/build/genericSTM32F411RE
   Add:
-    - -D__GNUC__=12
-    - -D__GNUC_MINOR__=3
-    - -D__GNUC_PATCHLEVEL__=0
+    - -isystem
+    - C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@1.70201.0/arm-none-eabi/include/c++/7.2.1
+    - -isystem
+    - C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@1.70201.0/arm-none-eabi/include/c++/7.2.1/arm-none-eabi
+    - -isystem
+    - C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@1.70201.0/arm-none-eabi/include/c++/7.2.1/backward
+    - -isystem
+    - C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@1.70201.0/lib/gcc/arm-none-eabi/7.2.1/include
+    - -isystem
+    - C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@1.70201.0/lib/gcc/arm-none-eabi/7.2.1/include-fixed
+    - -isystem
+    - C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@1.70201.0/arm-none-eabi/include
+
+Completion:
+  HeaderInsertion: Never
+
+---
+If:
+  PathMatch:
+    - .*src/native_main\.cpp
+    - .*src\\native_main\.cpp
+CompileFlags:
+  CompilationDatabase: .pio/build/native
 
 ---
 If:
