@@ -15,9 +15,6 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   }
 
   SteeringIntent intent;
-  intent.abstractImpulse_0_100 = 100;
-  intent.dir = calculateSteeringDirectionFromObservation();
-
   if (!actionAllowed(loopTimestamp)) {
     return std::nullopt;
   }
@@ -25,6 +22,8 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
     return std::nullopt;
   }
 
+  intent.abstractImpulse_0_100 = 100;
+  intent.dir = calculateSteeringDirectionFromObservation();
   m_lastImpulse = loopTimestamp;
   resetObservations();
   return intent;
@@ -38,7 +37,7 @@ void CoreSteeringController::setInternalTarget(uint16_t target) {
   m_internalTargetCourse = target;
 };
 
-uint16_t CoreSteeringController::getInternalTarget(){
+uint16_t CoreSteeringController::getInternalTarget() {
   return m_internalTargetCourse;
 };
 
@@ -55,7 +54,7 @@ void CoreSteeringController::updateObservationBuffers(uint32_t loopTimestamp) {
       m_SteeringController_Config.regulations.minimumTimeBtwObs_ms)
     return;
 
-  uint16_t currentError =
+  int16_t currentError =
       normalizeHDGDelta(m_currentCourse, m_internalTargetCourse);
   if (currentError > 0) {
     m_leftErrors[m_observationCount] = 0;
@@ -93,8 +92,18 @@ bool CoreSteeringController::steeringCorrectionIsRequired() {
       2; // hier nur der upper median bei geraden Mengen von Werten
   m_medianOfMergedErrors = medianArray[medianIndex];
 
+  int16_t sum = 0;
+  for (int i = 0;
+       i < m_SteeringController_Config.regulations.observationBufferSize; i++) {
+    sum += medianArray[i];
+  }
+  int16_t mean =
+      sum / m_SteeringController_Config.regulations.observationBufferSize;
+
+  /*Das muss geändert werden. Toleranz auf Median ist semantisch falsch*/
   if (abs(m_medianOfMergedErrors) >=
-      m_SteeringController_Config.regulations.steeringTolerance_deg) {
+          m_SteeringController_Config.regulations.steeringTolerance_deg &&
+      mean != 0) {
     return true;
   }
   return false;

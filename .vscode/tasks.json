@@ -12,6 +12,16 @@
         "-e",
         "genericSTM32F411RE"
       ],
+      "linux": {
+        "command": "pio",
+        "args": [
+          "run",
+          "-t",
+          "compiledb",
+          "-e",
+          "genericSTM32F411RE"
+        ]
+      },
       "group": "build",
       "presentation": {
         "reveal": "always",

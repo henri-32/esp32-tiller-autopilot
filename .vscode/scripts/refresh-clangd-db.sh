@@ -4,6 +4,15 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
+# If ~/.platformio is not writable (common after user migration), fall back to
+# a repo-local PlatformIO core dir so DB refresh can still run.
+if [[ -z "${PLATFORMIO_CORE_DIR:-}" && ! -w "${HOME:-}/.platformio" ]]; then
+  export PLATFORMIO_CORE_DIR="$repo_root/.pio-core"
+fi
+if [[ -n "${PLATFORMIO_CORE_DIR:-}" ]]; then
+  mkdir -p "$PLATFORMIO_CORE_DIR"
+fi
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Missing required command: $1" >&2
@@ -13,7 +22,7 @@ require_cmd() {
 
 require_cmd pio
 require_cmd jq
-require_cmd rg
+require_cmd grep
 
 build_compiledb() {
   local env="$1"
@@ -29,8 +38,8 @@ capture_test_compile_commands() {
   pio test -e native_csc -vvv --without-testing >"$log_file" 2>&1
 
   local csc_cmd test_cmd
-  csc_cmd="$(rg -m1 '^g\+\+ .*src/core/steering/csc\.cpp$' "$log_file" || true)"
-  test_cmd="$(rg -m1 '^g\+\+ .*test/test_csc/test_csc\.cpp$' "$log_file" || true)"
+  csc_cmd="$(grep -m1 -E '^g\+\+ .*src/core/steering/csc\.cpp$' "$log_file" || true)"
+  test_cmd="$(grep -m1 -E '^g\+\+ .*test/test_csc/test_csc\.cpp$' "$log_file" || true)"
 
   if [[ -z "$csc_cmd" || -z "$test_cmd" ]]; then
     local base_cmd

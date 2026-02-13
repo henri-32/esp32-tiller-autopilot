@@ -1,4 +1,4 @@
-﻿{
+{
   "editor.defaultFormatter": "xaver.clang-format",
 
   // --- Brackets & Quotes: stabil, aber nicht bevormundend ---
@@ -20,13 +20,15 @@
   "clangd.arguments": [
     "--query-driver=C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@*/bin/arm-none-eabi-*",
     "--query-driver=C:/msys64/mingw64/bin/g++*",
+    "--query-driver=/home/*/.platformio/packages/toolchain-gccarmnoneeabi@*/bin/arm-none-eabi-*",
+    "--query-driver=/usr/bin/g++*",
     "--background-index",
     "--header-insertion=never",
     "--header-insertion-decorators=0"
   ],
 
   "editor.codeActionsOnSave": {
-    "source.organizeImports": false
+    "source.organizeImports": "never"
   },
 
   // --- Microsoft C/C++ Extension vollstaendig deaktiviert ---
