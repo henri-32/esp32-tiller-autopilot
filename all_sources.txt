@@ -1,10 +1,12 @@
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/actuators/pwmController.h ===== */
-#pragma once
+﻿#pragma once
 #include "types/globalTypes.h"
 
 class PWMController {
 public:
+  // Contract:
+  // Purpose: Drive the steering actuator via PWM commands.
+  // Inputs: PWMCommand with direction and pulse info.
+  // Outputs/Side-effects: updates actuator state (hardware output).
   enum class Force { Low, Medium, High }; // gerade noch Platzhalter, das wird der duty cycle. 
 
   PWMController() = default;
@@ -17,20 +19,19 @@ private:
   SteeringDirection m_lastDir;
   Force m_lastFrc = Force::Low;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/config.h ===== */
 #pragma once
 #include <cstdint>
 
 struct SteeringMechanicsConfig {
   uint8_t dutyCycleDefault = 40;
-  uint32_t SteeringMinImpulse_ms = 100;
-  uint32_t SteeringMaxImpulse_ms = 3000;
+  uint32_t steeringMinImpulse_ms = 100;
+  uint32_t steeringMaxImpulse_ms = 3000;
 };
 
 struct SteeringRegulationConfig {
+  // Regulation thresholds and timing gates used by CSC.
   uint8_t steeringTolerance_deg = 10;
-  uint32_t SteeringCooldown_ms = 2000;
+  uint32_t steeringCooldown_ms = 2000;
   uint32_t minimumTimeBtwObs_ms = 1000;
   uint32_t pauseForValidObsAfterImpulse_ms = 3000;
 
@@ -38,24 +39,25 @@ struct SteeringRegulationConfig {
   uint8_t minimumSampleSize = 10;
 };
 
-struct SteeringSourceEVConfig {
-  float minimumGPS_SpeedForGPS_Use = 1.0;
+struct SteeringSourceHandlingConfig {
+  // Policy thresholds for selecting and validating sources.
+  float minGpsSpeedForUse = 1.0;
   static constexpr uint8_t observationBufferSize = 70;
-  uint32_t minimumTimeBeweenCorrection_ms = 20000;
+  uint32_t minTimeBetweenCorrection_ms = 20000;
 };
 struct SteeringPhysicsConfig {
-  float stwDampingRegulator = 0.4f;
-  const float stwDampingMinFactor = 0.35f;
-  const float stwDampingMaxFactor = 1.0f;
+  // Damping model for impulse shaping based on STW.
+  float STWDampingRegulator = 0.4f;
+  const float STWDampingMinFactor = 0.35f;
+  const float STWDampingMaxFactor = 1.0f;
 };
-struct SteeringController_Config {
+struct SteeringControllerConfig {
+  // Aggregate config owned by the SystemController.
   SteeringMechanicsConfig mechanics;
   SteeringRegulationConfig regulations;
   SteeringPhysicsConfig physics;
-  SteeringSourceEVConfig source;
+  SteeringSourceHandlingConfig source;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/csc/csc.h ===== */
 #pragma once
 
 #include "core/config.h"
@@ -67,10 +69,13 @@ struct SteeringController_Config {
 #include <cstdint>
 #include <optional>
 
-
 class CoreSteeringController {
 public:
-  explicit CoreSteeringController(SteeringController_Config &config);
+  // Contract:
+  // Purpose: Decide if a steering impulse should be issued.
+  // Inputs: current heading, internal target, regulation config slice.
+  // Outputs/Side-effects: optional SteeringIntent; updates internal state.
+  explicit CoreSteeringController(SteeringRegulationConfig &config);
 
   std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
 
@@ -79,27 +84,22 @@ public:
   uint16_t getInternalTarget() const;
 
 private:
-  // --- Configuration ---
-  SteeringController_Config &m_config;
-
   // --- State ---
   uint16_t m_currentCourse{0};
   uint16_t m_internalTargetCourse{0};
 
   // --- Subsystems ---
-private:
   HeadingErrorCalculator m_errorCalculator;
   ObservationBuffer m_observationBuffer;
   Deadband m_deadband;
   SteeringGuard m_steeringGuard;
 
   // --- Internal helpers ---
+  // Direction is derived from the median error sign only.
   SteeringDirection determineDirection(int16_t median) const;
   uint32_t m_lastObsUpdate = 0;
   uint32_t m_lastIntent = 0;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/csc/deadband.h ===== */
 #pragma once
 
 #include "core/config.h"
@@ -107,16 +107,17 @@ private:
 
 class Deadband {
 public:
-    Deadband(SteeringController_Config& config);
+  // Contract:
+  // Purpose: Reject small errors as noise.
+  // Inputs: error + regulation config slice.
+  // Outputs/Side-effects: boolean decision, no side-effects.
+  Deadband(SteeringRegulationConfig &config);
 
-bool errorSignificant(int16_t error);
+  bool errorSignificant(int16_t error);
 
 private:
-SteeringController_Config& m_config;
-
+  SteeringRegulationConfig &m_config;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/csc/headingErrorCalculator.h ===== */
 #pragma once
 #include <cstdint>
 
@@ -125,9 +126,7 @@ public:
   HeadingErrorCalculator() = default;
 
   int16_t getCurrentError(uint16_t current, uint16_t target);
-};
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/csc/observationBuffer.h ===== */
-#pragma once
+};#pragma once
 
 #include "core/config.h"
 #include <array>
@@ -135,7 +134,7 @@ public:
 
 class ObservationBuffer {
 private:
-  SteeringController_Config &m_config;
+  SteeringRegulationConfig &m_config;
 
   static constexpr uint8_t bufferSize =
       SteeringRegulationConfig::observationBufferSize;
@@ -146,15 +145,17 @@ private:
   int16_t median = 0;
 
 public:
-  ObservationBuffer(SteeringController_Config &config);
+  // Contract:
+  // Purpose: Store recent errors and compute a median for direction decision.
+  // Inputs: error samples + regulation config slice.
+  // Outputs/Side-effects: median and sample count; internal buffer mutated.
+  ObservationBuffer(SteeringRegulationConfig &config);
 
   const int16_t getMedian() const;
   void update(int16_t error);
-  uint8_t getSampleSize() const; 
+  uint8_t getSampleSize() const;
   void reset();
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/csc/steeringGuard.h ===== */
 #pragma once
 
 #include "core/config.h"
@@ -162,7 +163,11 @@ public:
 
 class SteeringGuard {
 public:
-  SteeringGuard(SteeringController_Config &config);
+  // Contract:
+  // Purpose: Gate observation/intent by timing and sample thresholds.
+  // Inputs: timestamps, sample size, regulation config slice.
+  // Outputs/Side-effects: boolean decisions, no side-effects.
+  SteeringGuard(SteeringRegulationConfig &config);
 
   bool observationBlocked(uint32_t loopTimestamp, uint32_t lastUpdate,
                           uint32_t lastIntent);
@@ -170,28 +175,29 @@ public:
                      uint8_t sampleSize);
 
 private:
-  SteeringController_Config &m_config;
+  SteeringRegulationConfig &m_config;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/impulseFilter.h ===== */
 #pragma once
 #include "core/config.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 
-
 class ImpulseFilter {
 public:
+  // Contract:
+  // Purpose: Shape an abstract steering intent into a PWM command.
+  // Inputs: intent + navigation snapshot + mechanics/physics config slices.
+  // Outputs/Side-effects: returns PWMCommand, no hardware side-effects.
+  ImpulseFilter(SteeringMechanicsConfig &mechanicsConfig,
+                SteeringPhysicsConfig &physicsConfig);
 
-  ImpulseFilter(SteeringController_Config &config);
-
-  PWMCommand apply(SteeringIntent intent, NavigationSensors::NavigationSnapshot snapshot);
+  PWMCommand apply(SteeringIntent intent,
+                   NavigationSensors::NavigationSnapshot snapshot);
 
 private:
-  SteeringController_Config &m_config;
+  SteeringMechanicsConfig &m_mechanics;
+  SteeringPhysicsConfig &m_physics;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/sourceHandling.h ===== */
 #pragma once
 #include "core/config.h"
 #include "core/steering/csc/csc.h"
@@ -205,7 +211,11 @@ private:
 
 class SourcePolicyEngine {
 public:
-  SourcePolicyEngine(SteeringController_Config &config,
+  // Contract:
+  // Purpose: Select the effective navigation source with fallbacks.
+  // Inputs: requested source + sensor snapshot + policy config slice.
+  // Outputs/Side-effects: effective source; may emit diagnostics.
+  SourcePolicyEngine(SteeringSourceHandlingConfig &config,
                      Diagnostics &diagnostics);
 
   NavigationSource evaluate(NavigationSource requested,
@@ -213,45 +223,58 @@ public:
                             uint32_t loopTimestamp);
 
 private:
-  SteeringController_Config &m_config;
+  SteeringSourceHandlingConfig &m_config;
   Diagnostics &m_diagnostics;
 };
 
 class SourceTargetInterpreter {
 public:
-  SourceTargetInterpreter(GPSModel& gpsModel, WindModel& windmodel);
-  uint16_t applySourceFilters(uint16_t generalTarget, NavigationSource effective);
+  // Contract:
+  // Purpose: Filter a target based on the effective source.
+  // Inputs: general target + effective source + source models.
+  // Outputs/Side-effects: filtered target; no side-effects.
+  SourceTargetInterpreter(GPSModel &gpsModel, WindModel &windmodel);
+  uint16_t applySourceFilters(uint16_t generalTarget,
+                              NavigationSource effective);
 
 private:
-  GPSModel& m_gpsModel; 
-  WindModel& m_windModel; 
+  GPSModel &m_gpsModel;
+  WindModel &m_windModel;
 };
 
 class SourceExecutor {
 
-  public:
-  SourceExecutor(NavigationSensors& navsens, CoreSteeringController& csc);
+public:
+  // Contract:
+  // Purpose: Apply effective source and target to the steering stack.
+  // Inputs: effective source + filtered target.
+  // Outputs/Side-effects: updates NavigationSensors and CSC state.
+  SourceExecutor(NavigationSensors &navsens, CoreSteeringController &csc);
 
   void execute(NavigationSource effective, uint16_t filteredTarget);
 
-  private:
-  NavigationSensors& m_navigationSensors; 
-  CoreSteeringController& m_csc; 
+private:
+  NavigationSensors &m_navigationSensors;
+  CoreSteeringController &m_csc;
 };
 
 class SourceHandler {
 public:
+  // Contract:
+  // Purpose: Orchestrate policy, filtering, and execution for sources.
+  // Inputs: requested source, snapshot, target, and config slice.
+  // Outputs/Side-effects: updates CSC target, navigation lead source, diagnostics.
   explicit SourceHandler(const ControlPanel &panel, NavigationSensors &navsens,
-                         SteeringController_Config &config,
+                        SteeringSourceHandlingConfig &config,
                          Diagnostics &diagnostics, CoreSteeringController &csc);
 
   void tick(NavigationSource requestedSource, uint32_t loopTimestamp,
-            NavigationSensors::NavigationSnapshot snapshot, uint16_t generalTarget);
+            NavigationSensors::NavigationSnapshot snapshot,
+            uint16_t generalTarget);
 
 private:
   const ControlPanel &m_panel;
   NavigationSensors &m_navigationSensors;
-  SteeringController_Config &m_steeringController_Config;
   Diagnostics &m_diagnostics;
   CoreSteeringController &m_csc;
 
@@ -262,64 +285,64 @@ private:
   SourceExecutor m_sourceExecutor;
 
   static constexpr uint8_t OBSERVATION_BUFFER_SIZE =
-      SteeringSourceEVConfig::observationBufferSize;
+      SteeringSourceHandlingConfig::observationBufferSize;
   std::array<uint16_t, OBSERVATION_BUFFER_SIZE> m_observationBuffer;
-
-  uint32_t m_lastObservation;
-  uint32_t m_lastCorrection;
-  uint16_t m_observationCounter;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/sourceModels/gpsModel.h ===== */
 #pragma once
 
 #include <cstdint>
 
 class GPSModel {
 public:
+  // Contract:
+  // Purpose: Apply GPS-specific filtering to a target course.
+  // Inputs: target heading/course (uint16_t).
+  // Outputs/Side-effects: filtered target; no side-effects.
   GPSModel();
 
   uint16_t applyFilter(uint16_t target);
 };
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/sourceModels/windModel.h ===== */
 #pragma once
 
 #include <cstdint>
 
 class WindModel{
 public:
+    // Contract:
+    // Purpose: Apply wind-specific filtering to a target course.
+    // Inputs: target heading/course (uint16_t).
+    // Outputs/Side-effects: filtered target; no side-effects.
     WindModel();
 
     uint16_t applyFilter(uint16_t target);
 };
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/steering/steeringOrchestrator.h ===== */
-#pragma once 
+#pragma once
 
+#include "actuators/pwmController.h"
 #include "core/steering/csc/csc.h"
 #include "core/steering/impulseFilter.h"
-#include "actuators/pwmController.h"
 #include "sensors/navigationSensors.h"
-#include "core/steering/sourceHandling.h"
 #include "types/globalTypes.h"
 #include <cstdint>
+
 class SteeringOrchestrator {
-    public: 
-    
-    SteeringOrchestrator(SourceHandler& eval, CoreSteeringController& csc, ImpulseFilter& filter, PWMController& pwm);
+public:
+  // Contract:
+  // Purpose: Connect CSC intent to actuator command execution.
+  // Inputs: navigation snapshot + loop timestamp.
+  // Outputs/Side-effects: issues PWM commands when intent exists.
+  SteeringOrchestrator(CoreSteeringController &csc, ImpulseFilter &filter,
+                       PWMController &pwm);
 
-    void tick(NavigationSensors::NavigationSnapshot snapshot, uint32_t loopTimestamp);
-   
+  void tick(NavigationSensors::NavigationSnapshot snapshot,
+            uint32_t loopTimestamp);
 
-    private: 
-    SourceHandler & m_sourceEvaluator; 
-    CoreSteeringController& m_csc;
-    ImpulseFilter& m_impulsefilter; 
-    PWMController& m_pwm;
-    SteeringIntent m_steeringIntent;
-
+private:
+  CoreSteeringController &m_csc;
+  ImpulseFilter &m_impulsefilter;
+  PWMController &m_pwm;
+  SteeringIntent m_steeringIntent;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/core/systemController.h ===== */
 #pragma once
 #include "actuators/pwmController.h"
 #include "core/config.h"
@@ -335,11 +358,16 @@ class SteeringOrchestrator {
 
 class SystemController {
 public:
+  // Contract:
+  // Purpose: Compose modules and run the top-level control loop.
+  // Inputs: loop timestamp; internal sensors and UI state.
+  // Outputs/Side-effects: drives actuators, diagnostics, and display updates.
   SystemController();
 
   void tick(uint32_t loopTimestamp);
 
 private:
+  // Top-level composition root. Owns hardware modules, config, and orchestration.
   ControlPanel m_controlPanel{};
   CompassModule m_compassModule{};
   GPSModule m_gpsModule;
@@ -347,7 +375,7 @@ private:
   NMEA183BUS m_nmea183Bus;
   NavigationSensors m_navigationSensors;
   PWMController m_pwmController{};
-  SteeringController_Config m_SteeringController_Config;
+  SteeringControllerConfig m_config;
   Diagnostics m_diagnostics;
   ImpulseFilter m_impulseFilter;
   CoreSteeringController m_csc;
@@ -355,8 +383,6 @@ private:
   SteeringOrchestrator m_steeringOrchestrator;
   Display m_display;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/diagnostics/diagnostic_types.h ===== */
 #pragma once
 #include <cstdint>
 
@@ -382,8 +408,6 @@ enum class CapabilityState : uint8_t {
     Degraded,
     Lost
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/diagnostics/diagnostics.h ===== */
 #pragma once
 #include <cstdint>
 #include "diagnostics/diagnostic_types.h"
@@ -395,6 +419,10 @@ struct DiagnosticEntry {
 };
 class Diagnostics {
 public:
+    // Contract:
+    // Purpose: Capture and expose diagnostic events and capability states.
+    // Inputs: events emitted by domain code + loop timestamps.
+    // Outputs/Side-effects: internal event buffer and latched states.
     static constexpr uint8_t kEventBufferSize = 32;
 
     // vom Domain-Code aufgerufen
@@ -405,7 +433,7 @@ public:
     // vom SystemController im Tick aufgerufen
     void tick(uint32_t loopTimestamp);
 
-    // für spätere Auswertung (noch minimal)
+    // fÃ¼r spÃ¤tere Auswertung (noch minimal)
     CapabilityState capabilityState(FunctionalCapability cap) const;
 
 private:
@@ -414,7 +442,7 @@ private:
     uint8_t m_writeIndex = 0;
     uint8_t m_count = 0;
 
-    // --- Capability-Zustände (latched) ---
+    // --- Capability-ZustÃ¤nde (latched) ---
     CapabilityState m_states[
         static_cast<uint8_t>(FunctionalCapability::COUNT)
     ];
@@ -427,23 +455,6 @@ private:
                                FunctionalCapability capability);
 };
 
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/sensors/NMEA183BUS.h ===== */
-#pragma once 
-
-
-/* Holt sich Geschwindigkeit durchs Wasser von NASA Clipper über 
-NMEA183 Protokoll
-Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
-
-#include "types/globalTypes.h"
-class NMEA183BUS {
-    public:
-NMEA183BUS() = default; 
-
-SensorSample<float> readSTW() const;
-};
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/sensors/compassModule.h ===== */
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -451,10 +462,12 @@ SensorSample<float> readSTW() const;
 
 class CompassModule {
 public:
+  // Contract:
+  // Purpose: Read compass heading.
+  // Inputs: hardware sensor state.
+  // Outputs/Side-effects: returns SensorSample; no side-effects.
   SensorSample<uint16_t> read() const;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/sensors/gpsModule.h ===== */
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -462,12 +475,15 @@ public:
 
 class GPSModule {
 public:
+// Contract:
+// Purpose: Read GPS course and speed over ground.
+// Inputs: hardware sensor state.
+// Outputs/Side-effects: returns SensorSample values; no side-effects.
 SensorSample<uint16_t> readCOG() const;
 SensorSample<float> readSOG() const;
 
 
 };
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/sensors/navigationSensors.h ===== */
 #pragma once
 #include "sensors/NMEA183BUS.h"
 #include "sensors/compassModule.h"
@@ -478,6 +494,10 @@ SensorSample<float> readSOG() const;
 
 class NavigationSensors {
 public:
+  // Contract:
+  // Purpose: Read and aggregate navigation sensor data into a snapshot.
+  // Inputs: hardware modules + lead source selection.
+  // Outputs/Side-effects: returns snapshot; updates lead source state.
   explicit NavigationSensors(const CompassModule &compass, const GPSModule &gps,
                              const WindModule &wind,
                              const NMEA183BUS &nmea183Bus)
@@ -515,8 +535,24 @@ private:
   const NMEA183BUS &m_nmea183Bus;
   SensorActivation m_sensorActivation;
 };
+#pragma once 
 
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/sensors/windModule.h ===== */
+
+/* Holt sich Geschwindigkeit durchs Wasser von NASA Clipper Ã¼ber 
+NMEA183 Protokoll
+Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
+
+#include "types/globalTypes.h"
+class NMEA183BUS {
+    public:
+// Contract:
+// Purpose: Read speed through water (STW) via NMEA.
+// Inputs: NMEA bus messages.
+// Outputs/Side-effects: returns SensorSample; no side-effects.
+NMEA183BUS() = default; 
+
+SensorSample<float> readSTW() const;
+};
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -524,11 +560,13 @@ private:
 
 class WindModule {
 public:
+  // Contract:
+  // Purpose: Read wind angle.
+  // Inputs: hardware sensor state.
+  // Outputs/Side-effects: returns SensorSample; no side-effects.
   SensorSample<uint16_t> read() const;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/types/globalTypes.h ===== */
-﻿#pragma once
+#pragma once
 #include <cstdint>
 
 enum class NavigationSource { Compass, Gps, Wind };
@@ -550,19 +588,19 @@ template <typename T> struct SensorSample {
   bool valid{false};
 };
 
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/ui/controlPanel.h ===== */
 #pragma once
 
 #include "ui/controlPanelTypes.h"
 class ControlPanel {
 public:
+  // Contract:
+  // Purpose: Read user intent from the control interface.
+  // Inputs: external UI hardware/state.
+  // Outputs/Side-effects: returns PanelIntent; no side-effects.
 
   PanelIntent readIntent() const;
 
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/ui/controlPanelTypes.h ===== */
 #pragma once
 
 #include "types/globalTypes.h"
@@ -578,23 +616,22 @@ struct PanelIntent {
     Safe,
   };
   NavigationSource requestedSource;
-};
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/include/ui/display.h ===== */
-#pragma once
+};#pragma once
 class Display {
 public:
+    // Contract:
+    // Purpose: Render the latest system state to the display.
+    // Inputs: internal system state (not shown here).
+    // Outputs/Side-effects: updates display hardware.
     void update();
 };
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/actuators/pwmController.cpp ===== */
 #include "actuators/pwmController.h"
 #include "types/globalTypes.h"
 
 void PWMController::command(PWMCommand command) {
   // TODO HardwareImpulse ausegeben
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/main.cpp ===== */
-﻿#include "stm32f4xx_hal.h" // IWYU pragma: keep
+#include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
 #include "core/systemController.h"
 #include <sys/_intsup.h>
@@ -629,9 +666,7 @@ int main()
         systemController.tick(loopTimestamp);
     }
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/steering/csc/csc.cpp ===== */
-﻿#include "core/steering/csc/csc.h"
+#include "core/steering/csc/csc.h"
 
 #include "core/steering/csc/deadband.h"
 #include "core/steering/csc/headingErrorCalculator.h"
@@ -639,10 +674,9 @@ int main()
 #include "core/steering/csc/steeringGuard.h"
 #include <cstdint>
 
-CoreSteeringController::CoreSteeringController(
-    SteeringController_Config &config)
-    : m_config(config), m_observationBuffer(m_config), m_deadband(m_config),
-      m_steeringGuard(m_config) {}
+CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
+    :  m_observationBuffer(config), m_deadband(config),
+      m_steeringGuard(config) {}
 
 std::optional<SteeringIntent>
 CoreSteeringController::tick(uint32_t loopTimestamp) {
@@ -652,6 +686,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   Wenn er wegen Guards nicht beobachten darf early return*/
 
+  // Gate observation to avoid reacting too frequently.
   if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
                                          m_lastIntent)) {
     return std::nullopt;
@@ -664,6 +699,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   /*Ein nicht signifikanter Error kann keine Aktion auslösen
   Deswegen darf das direkt zum early return führen*/
+  // Ignore small errors to avoid actuator chatter.
   if (!m_deadband.errorSignificant(error)) {
     return std::nullopt;
   }
@@ -693,6 +729,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
     /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
     diese wird bewusst verworfen*/
 
+    // Intent consumed; discard accumulated evidence to start fresh.
     m_observationBuffer.reset();
 
     return intent;
@@ -720,23 +757,21 @@ CoreSteeringController::determineDirection(int16_t median) const {
   };
   return SteeringDirection::Left;
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/steering/csc/deadband.cpp ===== */
 #include "core/steering/csc/deadband.h"
 #include <algorithm>
 
-Deadband::Deadband(SteeringController_Config &config) : m_config(config){};
+Deadband::Deadband(SteeringRegulationConfig &config) : m_config(config) {};
 
 bool Deadband::errorSignificant(int16_t error) {
 
-  if (abs(error) <= m_config.regulations.steeringTolerance_deg) {
+  // Treat small errors as noise.
+  if (abs(error) <= m_config.steeringTolerance_deg) {
     return false;
-  } else if (error > m_config.regulations.steeringTolerance_deg) {
+  } else if (error > m_config.steeringTolerance_deg) {
     return true;
   };
   return false;
 };
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/steering/csc/headingErrorCalculator.cpp ===== */
 #include "core/steering/csc/headingErrorCalculator.h"
 
 int16_t HeadingErrorCalculator::getCurrentError(uint16_t current,
@@ -750,18 +785,17 @@ int16_t HeadingErrorCalculator::getCurrentError(uint16_t current,
   diff -= 180;
 
   return diff; 
-};
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/steering/csc/observationBuffer.cpp ===== */
-#include "core/steering/csc/observationBuffer.h"
+};#include "core/steering/csc/observationBuffer.h"
 #include <algorithm>
 
-ObservationBuffer::ObservationBuffer(SteeringController_Config &config)
-    : m_config(config){};
+ObservationBuffer::ObservationBuffer(SteeringRegulationConfig &config)
+    : m_config(config) {};
 
 const int16_t ObservationBuffer::getMedian() const { return median; };
 
 void ObservationBuffer::update(int16_t error) {
-  if (validErrorsCounter >= m_config.regulations.observationBufferSize) {
+  // Reset the buffer if it overflows its configured capacity.
+  if (validErrorsCounter >= m_config.observationBufferSize) {
     reset();
   }
 
@@ -774,11 +808,11 @@ void ObservationBuffer::update(int16_t error) {
 
   /* Da nur signifikante Werte geschrieben werden, ist null semantisch kein Wert
   statt gemessen 0 Da in jedem update neue Medianberechnung ist kein
-  Zurücksetzen erforderlich*/
+  ZurÃ¼cksetzen erforderlich*/
   medianIndex = validErrorsCounter / 2;
   median = m_errorArray[medianIndex];
 
-  // symmetric guard
+  // Symmetric guard: if positives and negatives are balanced, treat as zero.
   bool symmetric = false;
   uint8_t negativeValues = 0;
   uint8_t positiveValues = 0;
@@ -809,22 +843,22 @@ void ObservationBuffer::reset() {
   medianIndex = 0;
   median = 0;
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/steering/csc/steeringGuard.cpp ===== */
 #include "core/steering/csc/steeringGuard.h"
 
-SteeringGuard::SteeringGuard(SteeringController_Config &config)
-    : m_config(config){};
+SteeringGuard::SteeringGuard(SteeringRegulationConfig &config)
+    : m_config(config) {};
 
 bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
                                        uint32_t lastUpdate,
                                        uint32_t lastIntent) {
-  if (loopTimestamp - lastUpdate < m_config.regulations.minimumTimeBtwObs_ms) {
+  // Minimum time between observations.
+  if (loopTimestamp - lastUpdate < m_config.minimumTimeBtwObs_ms) {
     return true;
   };
 
+  // Pause observations right after an impulse to wait for stabilization.
   if (loopTimestamp - lastIntent <
-      m_config.regulations.pauseForValidObsAfterImpulse_ms) {
+      m_config.pauseForValidObsAfterImpulse_ms) {
     return true;
   };
 
@@ -833,28 +867,29 @@ bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
 
 bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
                                   uint8_t sampleSize) {
-  /*Semantisch eigentlich Hardwareschutz kommt vllt in den PWM später*/
-  if (loopTimestamp - lastIntent < m_config.regulations.SteeringCooldown_ms) {
+  /*Semantisch eigentlich Hardwareschutz kommt vllt in den PWM spÃ¤ter*/
+  // Cooldown between actuator commands.
+  if (loopTimestamp - lastIntent < m_config.steeringCooldown_ms) {
     return true;
   };
 
-  if (sampleSize < m_config.regulations.minimumSampleSize) {
+  // Require a minimum number of samples before commanding.
+  if (sampleSize < m_config.minimumSampleSize) {
     return true;
   };
   return false;
 };
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/steering/impulseFilter.cpp ===== */
 #include "core/steering/impulseFilter.h"
 #include "types/globalTypes.h"
 #include <algorithm>
 #include <cstdint>
 
-/*Für mein zukünftiges Ich. Die Syntax mit return .x ist ziemlich cool, weil ich
-damit keine lokale Variable des Rückgabewerts zwischenspeichern muss, sondern
-direkt auf die Argumente des Rückgabewerts schreibe */
+/*FÃ¼r mein zukÃ¼nftiges Ich. Die Syntax mit return .x ist ziemlich cool, weil ich
+damit keine lokale Variable des RÃ¼ckgabewerts zwischenspeichern muss, sondern
+direkt auf die Argumente des RÃ¼ckgabewerts schreibe */
 
-ImpulseFilter::ImpulseFilter(SteeringController_Config &config)
-    : m_config(config) {};
+ImpulseFilter::ImpulseFilter(SteeringMechanicsConfig& mechanicsConfig, SteeringPhysicsConfig& physicsConfig)
+    : m_mechanics(mechanicsConfig), m_physics(physicsConfig) {};
 
 PWMCommand
 ImpulseFilter::apply(SteeringIntent intent,
@@ -863,18 +898,18 @@ ImpulseFilter::apply(SteeringIntent intent,
   if (!snapshot.stw_kts.valid) {
     return {
         .dir = intent.dir,
-        .pulse_ms = m_config.mechanics.SteeringMaxImpulse_ms,
-        .dutyCycle = m_config.mechanics.dutyCycleDefault,
+        .pulse_ms = m_mechanics.steeringMaxImpulse_ms,
+        .dutyCycle = m_mechanics.dutyCycleDefault,
     };
   };
 
   const float v = snapshot.stw_kts.value;
 
-  float damping =
-      1.0f / (1.0f + m_config.physics.stwDampingRegulator * v * v); // Physik Bruder
+  float damping = 1.0f / (1.0f + m_physics.STWDampingRegulator * v *
+                                     v); // Physik Bruder
 
-  damping = std::clamp(damping, m_config.physics.stwDampingMinFactor,
-                       m_config.physics.stwDampingMaxFactor);
+  damping = std::clamp(damping, m_physics.STWDampingMinFactor,
+                       m_physics.STWDampingMaxFactor);
 
   float abstract =
       intent.abstractImpulse_0_100; // Ist bei Aufruf von CSC immer 100
@@ -885,28 +920,26 @@ ImpulseFilter::apply(SteeringIntent intent,
   // Zero pulse is not a valid hardware state.
   // "No action" is modeled via std::nullopt at CSC level.
 
-  uint32_t pulse_ms = m_config.mechanics.SteeringMinImpulse_ms +
-                      normalized * (m_config.mechanics.SteeringMaxImpulse_ms -
-                                    m_config.mechanics.SteeringMinImpulse_ms);
+  uint32_t pulse_ms = m_mechanics.steeringMinImpulse_ms +
+                      normalized * (m_mechanics.steeringMaxImpulse_ms -
+                                    m_mechanics.steeringMinImpulse_ms);
 
   return {
       .dir = intent.dir,
       .pulse_ms = pulse_ms,
-      .dutyCycle = m_config.mechanics.dutyCycleDefault,
+      .dutyCycle = m_mechanics.dutyCycleDefault,
 
   };
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/steering/sourceHandling.cpp ===== */
 #include "core/steering/sourceHandling.h"
 
 SourceHandler::SourceHandler(const ControlPanel &panel,
                              NavigationSensors &navsens,
-                             SteeringController_Config &config,
+                             SteeringSourceHandlingConfig &config,
                              Diagnostics &diagnostics,
                              CoreSteeringController &csc)
     : m_panel(panel), m_navigationSensors(navsens),
-      m_steeringController_Config(config), m_diagnostics(diagnostics),
+      m_diagnostics(diagnostics),
       m_csc(csc), m_sourcePolicy(config, diagnostics),
       m_targetInterpreter(m_gpsModel, m_windModel),
       m_sourceExecutor(navsens, csc) {}
@@ -915,18 +948,20 @@ void SourceHandler::tick(NavigationSource requestedSource,
                          uint32_t loopTimestamp,
                          NavigationSensors::NavigationSnapshot snapshot,
                          uint16_t generalTarget) {
-  // Policy auf Quelle anwenden
+  // Apply source policy and fallback rules.
   NavigationSource effective =
       m_sourcePolicy.evaluate(requestedSource, snapshot, loopTimestamp);
 
+  // Filter the target based on the effective source.
   uint16_t filteredTarget =
       m_targetInterpreter.applySourceFilters(generalTarget, effective);
 
+  // Propagate the effective source and filtered target to the steering stack.
   m_sourceExecutor.execute(effective, filteredTarget);
 };
 
 //__________SOURCE_POLICY_______________________________________________
-SourcePolicyEngine::SourcePolicyEngine(SteeringController_Config &config,
+SourcePolicyEngine::SourcePolicyEngine(SteeringSourceHandlingConfig &config,
                                        Diagnostics &diagnostics)
     : m_config(config), m_diagnostics(diagnostics) {}
 
@@ -938,13 +973,13 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
 
   switch (requested) {
   case NavigationSource::Gps:
-    if (!snapshot.gps_cog_dg.valid || snapshot.gps_sog_kts.valid) {
+    if (!snapshot.gps_cog_dg.valid || !snapshot.gps_sog_kts.valid) {
       effective = NavigationSource::Compass;
       m_diagnostics.emit(DiagnosticEvent::LostWithFallback,
                          FunctionalCapability::GPS, loopTimestamp);
 
     } else if (snapshot.gps_sog_kts.value <
-               m_config.source.minimumGPS_SpeedForGPS_Use) {
+               m_config.minGpsSpeedForUse) {
       effective = NavigationSource::Compass;
       m_diagnostics.emit(DiagnosticEvent::Degraded, FunctionalCapability::GPS,
                          loopTimestamp);
@@ -952,6 +987,7 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
     } else {
       effective = NavigationSource::Gps;
     };
+    break;
   case NavigationSource::Wind:
     if (!snapshot.wind_angle_dg.valid) {
       effective = NavigationSource::Compass;
@@ -960,6 +996,7 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
     } else {
       effective = NavigationSource::Wind;
     };
+    break;
 
   case NavigationSource::Compass:
     if (!snapshot.compass_hdg_dg.valid) {
@@ -979,15 +1016,15 @@ SourceTargetInterpreter::SourceTargetInterpreter(GPSModel &gpsModel,
 uint16_t
 SourceTargetInterpreter::applySourceFilters(uint16_t generalTarget,
                                             NavigationSource effective) {
-  uint16_t filteredTarget;
+  uint16_t filteredTarget = generalTarget;
 
   switch (effective) {
   case NavigationSource::Gps:
     filteredTarget = m_gpsModel.applyFilter(generalTarget);
-
+    break;
   case NavigationSource::Wind:
     filteredTarget = m_windModel.applyFilter(generalTarget);
-
+    break;
   case NavigationSource::Compass:
     filteredTarget = generalTarget;
   }
@@ -1007,24 +1044,35 @@ void SourceExecutor::execute(NavigationSource effective,
   m_navigationSensors.setLeadSource(effective);
   m_csc.setInternalTarget(filteredTarget);
 }
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/steering/sourceModels/gpsModel.cpp ===== */
+#include "core/steering/sourceModels/gpsModel.h"
 
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/steering/steeringOrchestrator.cpp ===== */
+GPSModel::GPSModel() = default;
+
+uint16_t GPSModel::applyFilter(uint16_t target) {
+  return target;
+}
+#include "core/steering/sourceModels/windModel.h"
+
+WindModel::WindModel() = default;
+
+uint16_t WindModel::applyFilter(uint16_t target) {
+  return target;
+}
 #include "core/steering/steeringOrchestrator.h"
 #include "core/steering/csc/csc.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 #include <cstdint>
 
-SteeringOrchestrator::SteeringOrchestrator(SourceHandler &eval,
-                                           CoreSteeringController &csc,
+SteeringOrchestrator::SteeringOrchestrator(CoreSteeringController &csc,
                                            ImpulseFilter &filter,
                                            PWMController &pwm)
-    : m_sourceEvaluator(eval), m_csc(csc), m_impulsefilter(filter),
+    :m_csc(csc), m_impulsefilter(filter),
       m_pwm(pwm){};
 
 void SteeringOrchestrator::tick(NavigationSensors::NavigationSnapshot snapshot,
                                 uint32_t loopTimestamp) {
+
 
   m_csc.currentHDG(snapshot.compass_hdg_dg.value);
 
@@ -1036,9 +1084,7 @@ void SteeringOrchestrator::tick(NavigationSensors::NavigationSnapshot snapshot,
     m_pwm.command(cmd);
   }
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/core/systemController.cpp ===== */
-﻿#include "core/systemController.h"
+#include "core/systemController.h"
 #include "sensors/navigationSensors.h"
 #include "ui/controlPanelTypes.h"
 #include <cstdint>
@@ -1046,11 +1092,12 @@ void SteeringOrchestrator::tick(NavigationSensors::NavigationSnapshot snapshot,
 SystemController::SystemController()
     : m_navigationSensors(m_compassModule, m_gpsModule, m_windModule,
                           m_nmea183Bus),
-      m_impulseFilter(m_SteeringController_Config),
-      m_csc(m_SteeringController_Config),
+      // Config is owned here and passed down in granular slices.
+      m_impulseFilter(m_config.mechanics, m_config.physics),
+      m_csc(m_config.regulations),
       m_sourceHandler(m_controlPanel, m_navigationSensors,
-                      m_SteeringController_Config, m_diagnostics, m_csc),
-      m_steeringOrchestrator(m_sourceHandler, m_csc, m_impulseFilter,
+                      m_config.source, m_diagnostics, m_csc),
+      m_steeringOrchestrator( m_csc, m_impulseFilter,
                              m_pwmController) {}
 
 void SystemController::tick(uint32_t loopTimestamp) {
@@ -1064,6 +1111,7 @@ void SystemController::tick(uint32_t loopTimestamp) {
                        intent.generalTarget);
 
   // 3. Steering Ausführen
+  // Only drive the actuator path when steering is explicitly engaged.
   if (intent.steeringEngaged) {
     m_steeringOrchestrator.tick(snapshot, loopTimestamp);
   }
@@ -1074,8 +1122,6 @@ void SystemController::tick(uint32_t loopTimestamp) {
   // 5. Display updaten
   m_display.update();
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/diagnostics/diagnostics.cpp ===== */
 #include "diagnostics/diagnostics.h"
 #include "diagnostics/diagnostic_types.h"
 
@@ -1089,8 +1135,8 @@ void Diagnostics::emit(DiagnosticEvent event,
 
 void Diagnostics::tick(uint32_t /*loopTimestamp*/)
 {
-    // bewusst leer für jetzt
-    // später: Zeitfenster, Snapshot-Vorbereitung, etc.
+    // bewusst leer fÃ¼r jetzt
+    // spÃ¤ter: Zeitfenster, Snapshot-Vorbereitung, etc.
 }
 
 CapabilityState Diagnostics::capabilityState(FunctionalCapability cap) const
@@ -1124,12 +1170,10 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
             break;
 
         default:
-            // andere Events verändern den Zustand nicht
+            // andere Events verÃ¤ndern den Zustand nicht
             break;
     }
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/platform/fatal.cpp ===== */
 #include "platform/platform.h"
 #include "stm32f4xx_hal.h" // IWYU pragma: keep
 
@@ -1137,9 +1181,9 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
 {
     __disable_irq();
 
-    // Hier später möglich:
+    // Hier spÃ¤ter mÃ¶glich:
     // - Breakpoint
-    // - Watchdog absichtlich auslösen
+    // - Watchdog absichtlich auslÃ¶sen
     // - LED-Blink-Code
     // - Backup-Register beschreiben
 
@@ -1148,8 +1192,6 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
         // System bewusst eingefroren
     }
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/platform/platform.h ===== */
 #pragma once
 
 
@@ -1168,8 +1210,6 @@ void Platform_Init();
 
 // Configures system clocks. Must be called after HAL_Init().
 void SystemClock_Config();
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/platform/system_clock.cpp ===== */
 
 #include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
@@ -1213,10 +1253,6 @@ void SystemClock_Config()
         FatalError("Clock config failed");
     }
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/platform/system_gpio.cpp ===== */
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/platform/system_init.cpp ===== */
 #include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
 
@@ -1229,18 +1265,6 @@ void Platform_Init()
 
     SystemClock_Config();
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/sensors/NMEA183BUS.cpp ===== */
-#include "sensors/NMEA183BUS.h"
-
-SensorSample<float> NMEA183BUS::readSTW() const {
-  SensorSample<float> sample;
-  sample.value = 0.0f;
-  sample.valid = false;
-  return sample;
-}
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/sensors/compassModule.cpp ===== */
 #include "sensors/compassModule.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -1249,14 +1273,12 @@ SensorSample<uint16_t> CompassModule::read()const{
     SensorSample<uint16_t> sample; 
 
     const uint16_t raw = 0; /*Hardware lesen*/ 
-    if (true /*Plausibilitätscheck*/) {
+    if (true /*PlausibilitÃ¤tscheck*/) {
         sample.value = raw;
         sample.valid = true;
     };
     return sample;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/sensors/gpsModule.cpp ===== */
 #include "sensors/gpsModule.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -1266,7 +1288,7 @@ SensorSample<uint16_t> GPSModule::readCOG() const {
   SensorSample<uint16_t> sample;
 
   const uint16_t raw = 0; /*Hardware lesen*/
-  if (true /*Plausibilitätscheck*/) {
+  if (true /*PlausibilitÃ¤tscheck*/) {
     sample.value = raw;
     sample.valid = true;
   } else if (false /*Plausi falsch*/) {
@@ -1290,8 +1312,6 @@ SensorSample<float> GPSModule::readSOG() const {
 
   return sample;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/sensors/navigationSensors.cpp ===== */
 #include "sensors/navigationSensors.h"
 
 #include "sensors/NMEA183BUS.h"
@@ -1331,8 +1351,14 @@ NavigationSensors::NavigationSnapshot NavigationSensors::createSnapshot() {
 
   return snapshot;
 };
+#include "sensors/NMEA183BUS.h"
 
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/sensors/windModule.cpp ===== */
+SensorSample<float> NMEA183BUS::readSTW() const {
+  SensorSample<float> sample;
+  sample.value = 0.0f;
+  sample.valid = false;
+  return sample;
+}
 #include "sensors/windModule.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -1341,31 +1367,25 @@ SensorSample<uint16_t> WindModule::read()const{
     SensorSample<uint16_t> sample; 
 
     const uint16_t raw = 0; /*Hardware lesen*/ 
-    if (true /*Plausibilitätscheck*/) {
+    if (true /*PlausibilitÃ¤tscheck*/) {
         sample.value = raw;
         sample.valid = true;
     };
     return sample;
 };
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/ui/controlPanel.cpp ===== */
 #include "ui/controlPanel.h"
 #include "ui/controlPanelTypes.h"
 
 PanelIntent ControlPanel::readIntent() const {
-  // TODO Inputs lesen und Intent befüllen
+  // TODO Inputs lesen und Intent befÃ¼llen
   return {};
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/src/ui/display.cpp ===== */
 #include "ui/display.h"
 
 void Display::update()
 {
     // TODO: implement display update
 }
-
-/* ===== FILE: /home/henri-32/Softwareprojekte/Arduinoprojekte/Autopilot_git/test/test_csc/test_csc.cpp ===== */
 #include "core/config.h"
 #include "core/steering/csc/deadband.h"
 #include "core/steering/csc/headingErrorCalculator.h"
@@ -1377,7 +1397,7 @@ void Display::update()
 
 namespace {
 
-SteeringController_Config makeConfig() { return SteeringController_Config{}; }
+SteeringControllerConfig makeConfig() { return SteeringControllerConfig{}; }
 
 void addSamples(ObservationBuffer &buffer, int16_t value, int count) {
   for (int i = 0; i < count; i++) {
@@ -1460,7 +1480,7 @@ void test_heading_error_returns_shortest_rotation_direction() {
 // Deadband tests
 void test_no_action_when_error_within_deadband_positive() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
@@ -1470,7 +1490,7 @@ void test_no_action_when_error_within_deadband_positive() {
 
 void test_no_action_when_error_within_deadband_negative() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
@@ -1480,7 +1500,7 @@ void test_no_action_when_error_within_deadband_negative() {
 
 void test_error_exactly_on_deadband_boundary_is_treated_as_non_significant() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
@@ -1490,7 +1510,7 @@ void test_error_exactly_on_deadband_boundary_is_treated_as_non_significant() {
 
 void test_error_just_outside_deadband_is_treated_as_significant() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
@@ -1501,7 +1521,7 @@ void test_error_just_outside_deadband_is_treated_as_significant() {
 // SteeringGuard sample-size gating tests
 void test_buffer_is_not_ready_when_empty() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
   SteeringGuard guard(config);
 
@@ -1515,7 +1535,7 @@ void test_buffer_is_not_ready_when_empty() {
 
 void test_buffer_is_not_ready_when_below_minimum_samples() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
   SteeringGuard guard(config);
 
@@ -1529,7 +1549,7 @@ void test_buffer_is_not_ready_when_below_minimum_samples() {
 
 void test_buffer_is_ready_when_minimum_samples_reached() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
   SteeringGuard guard(config);
 
@@ -1544,7 +1564,7 @@ void test_buffer_is_ready_when_minimum_samples_reached() {
 // ObservationBuffer tests
 void test_buffer_reset_clears_all_stored_samples() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
   addSamples(buffer, 20, 10);
 
@@ -1558,7 +1578,7 @@ void test_buffer_reset_clears_all_stored_samples() {
 
 void test_median_returns_positive_when_majority_positive() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
 
   const int positives = config.regulations.observationBufferSize / 2;
@@ -1572,7 +1592,7 @@ void test_median_returns_positive_when_majority_positive() {
 
 void test_median_returns_negative_when_majority_negative() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
 
   const int negatives = config.regulations.observationBufferSize / 2;
@@ -1586,7 +1606,7 @@ void test_median_returns_negative_when_majority_negative() {
 
 void test_median_returns_positive_when_one_sample_more_than_half_positive() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
 
   const int negatives = (config.regulations.observationBufferSize / 2) - 1;
@@ -1601,9 +1621,9 @@ void test_median_returns_positive_when_one_sample_more_than_half_positive() {
 // SteeringGuard cooldown tests
 void test_no_second_action_within_cooldown_period() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
-  config.regulations.SteeringCooldown_ms = 2000;
+  config.regulations.steeringCooldown_ms = 2000;
   SteeringGuard guard(config);
 
   const uint32_t lastIntent = 10000;
@@ -1616,9 +1636,9 @@ void test_no_second_action_within_cooldown_period() {
 
 void test_action_allowed_after_cooldown_expires() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
-  config.regulations.SteeringCooldown_ms = 2000;
+  config.regulations.steeringCooldown_ms = 2000;
   SteeringGuard guard(config);
 
   const uint32_t lastIntent = 10000;
@@ -1627,14 +1647,14 @@ void test_action_allowed_after_cooldown_expires() {
   // When / Then
   TEST_ASSERT_FALSE(guard.intentBlocked(lastIntent +
                                             config.regulations
-                                                .SteeringCooldown_ms +
+                                                .steeringCooldown_ms +
                                             1,
                                         lastIntent, enoughSamples));
 }
 
 void test_no_action_when_error_oscillates_symmetrically() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
 
   const int pairs = config.regulations.observationBufferSize / 2;
