@@ -1,0 +1,442 @@
+#include "core/config.h"
+#include "core/steering/csc/deadband.h"
+#include "core/steering/csc/headingErrorCalculator.h"
+#include "core/steering/csc/observationBuffer.h"
+#include "core/steering/csc/steeringGuard.h"
+#include "core/steering/csc/csc.h"
+
+#include <cstdint>
+#include <unity.h>
+
+namespace {
+
+SteeringRegulationConfig makeRegConfig() { return SteeringRegulationConfig{}; }
+
+void addSamples(ObservationBuffer &buffer, int16_t value, int count) {
+  for (int i = 0; i < count; i++) {
+    buffer.update(value);
+  }
+}
+
+} // namespace
+
+void setUp() {}
+void tearDown() {}
+
+// HeadingErrorCalculator tests
+void test_heading_error_is_zero_when_current_equals_target() {
+  // Given
+  HeadingErrorCalculator calc;
+
+  // When
+  const int16_t error = calc.getCurrentError(300, 300);
+
+  // Then
+  TEST_ASSERT_EQUAL_INT16(0, error);
+}
+
+void test_heading_error_positive_when_current_is_left_of_target() {
+  // Given
+  HeadingErrorCalculator calc;
+
+  // When
+  const int16_t error = calc.getCurrentError(299, 300);
+
+  // Then
+  TEST_ASSERT_TRUE(error > 0);
+}
+
+void test_heading_error_negative_when_current_is_right_of_target() {
+  // Given
+  HeadingErrorCalculator calc;
+
+  // When
+  const int16_t error = calc.getCurrentError(300, 299);
+
+  // Then
+  TEST_ASSERT_TRUE(error < 0);
+}
+
+void test_heading_error_wraps_correctly_over_360_clockwise() {
+  // Given
+  HeadingErrorCalculator calc;
+
+  // When
+  const int16_t error = calc.getCurrentError(359, 1);
+
+  // Then
+  TEST_ASSERT_TRUE(error > 0);
+}
+
+void test_heading_error_wraps_correctly_over_360_counterclockwise() {
+  // Given
+  HeadingErrorCalculator calc;
+
+  // When
+  const int16_t error = calc.getCurrentError(1, 359);
+
+  // Then
+  TEST_ASSERT_TRUE(error < 0);
+}
+
+void test_heading_error_returns_shortest_rotation_direction() {
+  // Given
+  HeadingErrorCalculator calc;
+
+  // When
+  const int16_t error = calc.getCurrentError(350, 10);
+
+  // Then
+  TEST_ASSERT_EQUAL_INT16(20, error);
+}
+
+// Deadband tests
+void test_no_action_when_error_within_deadband_positive() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
+  Deadband deadband(config);
+
+  // When / Then
+  TEST_ASSERT_FALSE(deadband.errorSignificant(9));
+}
+
+void test_no_action_when_error_within_deadband_negative() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
+  Deadband deadband(config);
+
+  // When / Then
+  TEST_ASSERT_FALSE(deadband.errorSignificant(-9));
+}
+
+void test_error_exactly_on_deadband_boundary_is_treated_as_non_significant() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
+  Deadband deadband(config);
+
+  // When / Then
+  TEST_ASSERT_FALSE(deadband.errorSignificant(10));
+}
+
+void test_error_just_outside_deadband_is_treated_as_significant() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
+  Deadband deadband(config);
+
+  // When / Then
+  TEST_ASSERT_TRUE(deadband.errorSignificant(11));
+}
+
+// SteeringGuard sample-size gating tests
+void test_buffer_is_not_ready_when_empty() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
+  SteeringGuard guard(config);
+
+  const uint32_t time = 10000;
+  const uint32_t lastIntent = 0;
+  const uint8_t sampleSize = 0;
+
+  // When / Then
+  TEST_ASSERT_TRUE(guard.intentBlocked(time, lastIntent, sampleSize));
+}
+
+void test_buffer_is_not_ready_when_below_minimum_samples() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
+  SteeringGuard guard(config);
+
+  const uint32_t time = 10000;
+  const uint32_t lastIntent = 0;
+  const uint8_t sampleSize = 9;
+
+  // When / Then
+  TEST_ASSERT_TRUE(guard.intentBlocked(time, lastIntent, sampleSize));
+}
+
+void test_buffer_is_ready_when_minimum_samples_reached() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
+  SteeringGuard guard(config);
+
+  const uint32_t time = 10000;
+  const uint32_t lastIntent = 0;
+  const uint8_t sampleSize = 10;
+
+  // When / Then
+  TEST_ASSERT_FALSE(guard.intentBlocked(time, lastIntent, sampleSize));
+}
+
+// ObservationBuffer tests
+void test_buffer_reset_clears_all_stored_samples() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  ObservationBuffer buffer(config);
+  addSamples(buffer, 20, 10);
+
+  // When
+  TEST_ASSERT_TRUE(buffer.getSampleSize() != 0);
+  buffer.reset();
+
+  // Then
+  TEST_ASSERT_EQUAL_UINT8(0, buffer.getSampleSize());
+}
+
+void test_median_returns_positive_when_majority_positive() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  ObservationBuffer buffer(config);
+
+  const int positives = config.observationBufferSize / 2;
+  const int negatives = config.observationBufferSize / 4;
+  addSamples(buffer, 20, positives);
+  addSamples(buffer, -20, negatives);
+
+  // Then
+  TEST_ASSERT_TRUE(buffer.getMedian() > 0);
+}
+
+void test_median_returns_negative_when_majority_negative() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  ObservationBuffer buffer(config);
+
+  const int negatives = config.observationBufferSize / 2;
+  const int positives = config.observationBufferSize / 4;
+  addSamples(buffer, -20, negatives);
+  addSamples(buffer, 20, positives);
+
+  // Then
+  TEST_ASSERT_TRUE(buffer.getMedian() < 0);
+}
+
+void test_median_returns_positive_when_one_sample_more_than_half_positive() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  ObservationBuffer buffer(config);
+
+  const int negatives = (config.observationBufferSize / 2) - 1;
+  const int positives = (config.observationBufferSize / 2) + 1;
+  addSamples(buffer, -20, negatives);
+  addSamples(buffer, 20, positives);
+
+  // Then
+  TEST_ASSERT_TRUE(buffer.getMedian() > 0);
+}
+
+// SteeringGuard cooldown tests
+void test_no_second_action_within_cooldown_period() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
+  config.steeringCooldown_ms = 2000;
+  SteeringGuard guard(config);
+
+  const uint32_t lastIntent = 10000;
+  const uint8_t enoughSamples = 10;
+
+  // When / Then
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent + 1000, lastIntent,
+                                       enoughSamples));
+}
+
+void test_action_allowed_after_cooldown_expires() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
+  config.steeringCooldown_ms = 2000;
+  SteeringGuard guard(config);
+
+  const uint32_t lastIntent = 10000;
+  const uint8_t enoughSamples = 10;
+
+  // When / Then
+  TEST_ASSERT_FALSE(guard.intentBlocked(lastIntent +
+                                            config.steeringCooldown_ms +
+                                            1,
+                                        lastIntent, enoughSamples));
+}
+
+void test_no_action_when_error_oscillates_symmetrically() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  ObservationBuffer buffer(config);
+
+  const int pairs = config.observationBufferSize / 2;
+  for (int i = 0; i < pairs; i++) {
+    buffer.update(-20);
+    buffer.update(20);
+  }
+
+  // Then
+  TEST_ASSERT_EQUAL_INT16(0, buffer.getMedian());
+}
+void test_csc_emits_intent_after_minimum_samples_reached() {
+
+    SteeringRegulationConfig config;
+    config.steeringTolerance_deg = 5;
+    config.minimumSampleSize = 5;
+    config.minimumTimeBtwObs_ms = 0;
+    config.pauseForValidObsAfterImpulse_ms = 0;
+    config.steeringCooldown_ms = 0;
+
+    CoreSteeringController csc(config);
+
+    csc.setInternalTarget(100);
+
+    std::optional<SteeringIntent> intent;
+
+    uint32_t time = 0;
+
+    for (int i = 0; i < 10; ++i) {
+
+        csc.currentHDG(80);  // +20° Fehler → Right
+        intent = csc.tick(time++);
+
+        if (intent.has_value())
+            break;
+    }
+
+    TEST_ASSERT_TRUE(intent.has_value());
+    TEST_ASSERT_EQUAL(SteeringDirection::Right, intent->dir);
+}
+
+void test_csc_does_not_emit_intent_inside_deadband() {
+
+    SteeringRegulationConfig config;
+    config.steeringTolerance_deg = 10;
+    config.minimumSampleSize = 5;
+    config.minimumTimeBtwObs_ms = 0;
+    config.pauseForValidObsAfterImpulse_ms = 0;
+    config.steeringCooldown_ms = 0;
+
+    CoreSteeringController csc(config);
+
+    csc.setInternalTarget(100);
+
+    std::optional<SteeringIntent> intent;
+
+    for (int i = 0; i < 20; ++i) {
+        csc.currentHDG(95);  // +5° → innerhalb Toleranz
+        intent = csc.tick(i);
+    }
+
+    TEST_ASSERT_FALSE(intent.has_value());
+}
+
+void test_csc_resets_observation_after_intent() {
+
+    SteeringRegulationConfig config;
+    config.steeringTolerance_deg = 5;
+    config.minimumSampleSize = 3;
+    config.minimumTimeBtwObs_ms = 0;
+    config.pauseForValidObsAfterImpulse_ms = 0;
+    config.steeringCooldown_ms = 0;
+
+    CoreSteeringController csc(config);
+
+    csc.setInternalTarget(100);
+
+    uint32_t time = 0;
+    bool firstIntentOccurred = false;
+    bool secondIntentOccurred = false;
+
+    for (int i = 0; i < 20; ++i) {
+
+        csc.currentHDG(80);
+        auto intent = csc.tick(time++);
+
+        if (intent && !firstIntentOccurred) {
+            firstIntentOccurred = true;
+        }
+        else if (intent && firstIntentOccurred) {
+            secondIntentOccurred = true;
+            break;
+        }
+    }
+
+    TEST_ASSERT_TRUE(firstIntentOccurred);
+    TEST_ASSERT_TRUE(secondIntentOccurred);
+}
+
+void test_csc_respects_time_gates_and_cooldown() {
+
+    // ---------- Config ----------
+    SteeringRegulationConfig config;
+    config.steeringTolerance_deg = 5;
+    config.minimumSampleSize = 5;
+
+    config.minimumTimeBtwObs_ms = 1000;
+    config.pauseForValidObsAfterImpulse_ms = 2000;
+    config.steeringCooldown_ms = 3000;
+
+    CoreSteeringController csc(config);
+
+    csc.setInternalTarget(100);
+
+    uint32_t time = 0;
+
+    bool firstIntent = false;
+    bool secondIntent = false;
+
+    // ---------- Simulation ----------
+    for (int i = 0; i < 30; ++i) {
+
+        csc.currentHDG(80);  // +20° Fehler
+
+        auto intent = csc.tick(time);
+
+        if (intent && !firstIntent) {
+            firstIntent = true;
+        }
+        else if (intent && firstIntent) {
+            secondIntent = true;
+            break;
+        }
+
+        time += 1000; // 1 Hz loop
+    }
+
+    TEST_ASSERT_TRUE(firstIntent);
+    TEST_ASSERT_TRUE(secondIntent);
+}
+
+
+int main() {
+  UNITY_BEGIN();
+  RUN_TEST(test_heading_error_is_zero_when_current_equals_target);
+  RUN_TEST(test_heading_error_positive_when_current_is_left_of_target);
+  RUN_TEST(test_heading_error_negative_when_current_is_right_of_target);
+  RUN_TEST(test_heading_error_wraps_correctly_over_360_clockwise);
+  RUN_TEST(test_heading_error_wraps_correctly_over_360_counterclockwise);
+  RUN_TEST(test_heading_error_returns_shortest_rotation_direction);
+  RUN_TEST(test_no_action_when_error_within_deadband_positive);
+  RUN_TEST(test_no_action_when_error_within_deadband_negative);
+  RUN_TEST(
+      test_error_exactly_on_deadband_boundary_is_treated_as_non_significant);
+  RUN_TEST(test_error_just_outside_deadband_is_treated_as_significant);
+  RUN_TEST(test_buffer_is_not_ready_when_empty);
+  RUN_TEST(test_buffer_is_not_ready_when_below_minimum_samples);
+  RUN_TEST(test_buffer_is_ready_when_minimum_samples_reached);
+  RUN_TEST(test_buffer_reset_clears_all_stored_samples);
+  RUN_TEST(test_median_returns_positive_when_majority_positive);
+  RUN_TEST(test_median_returns_negative_when_majority_negative);
+  RUN_TEST(
+      test_median_returns_positive_when_one_sample_more_than_half_positive);
+  RUN_TEST(test_no_second_action_within_cooldown_period);
+  RUN_TEST(test_action_allowed_after_cooldown_expires);
+  RUN_TEST(test_no_action_when_error_oscillates_symmetrically);
+  RUN_TEST(test_csc_emits_intent_after_minimum_samples_reached);
+  RUN_TEST(test_csc_does_not_emit_intent_inside_deadband);
+  RUN_TEST(test_csc_resets_observation_after_intent);
+  RUN_TEST(test_csc_respects_time_gates_and_cooldown);
+
+  return UNITY_END();
+}

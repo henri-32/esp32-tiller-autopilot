@@ -1,0 +1,11 @@
+# Autopilot Tests
+
+This project currently uses a dedicated native PlatformIO test environment for CSC tests.
+
+## Commands
+- `pio test -e native_csc`: run CSC unit tests (correct workflow)
+- `pio run -e native_csc`: expected to fail with missing `main` because this env is test-only
+
+## Notes
+- Keep Unity test files on public Unity headers only (`#include <unity.h>`).
+- Do not include `unity_internals.h` from C++ tests.
