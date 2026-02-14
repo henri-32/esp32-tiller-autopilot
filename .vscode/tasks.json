@@ -110,7 +110,7 @@
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "Get-ChildItem -Recurse -Path .\\src, .\\include -Include *.h,*.hpp,*.c,*.cpp | Sort-Object FullName | ForEach-Object { \"`n/* ===== FILE: $($_.FullName) ===== */`n\"; Get-Content -Raw $_.FullName } | Set-Content -NoNewline -Encoding UTF8 .\\all_sources.txt"
+        "Get-ChildItem -Recurse -Path .\\src, .\\include, .\\test -Include *.h,*.hpp,*.c,*.cpp | Sort-Object FullName | ForEach-Object { \"`n/* ===== FILE: $($_.FullName) ===== */`n\"; Get-Content -Raw $_.FullName } | Set-Content -NoNewline -Encoding UTF8 .\\all_sources.txt"
       ],
       "presentation": {
         "reveal": "always",
@@ -120,3 +120,5 @@
     }
   ]
 }
+
+

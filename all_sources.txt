@@ -15,7 +15,7 @@ private:
   SteeringDirection m_lastDir;
   Force m_lastFrc = Force::Low;
 };
-#pragma once 
+#pragma once
 #include <cstdint>
 
 struct SteeringMechanicsConfig {
@@ -31,6 +31,7 @@ struct SteeringRegulationConfig {
   uint32_t pauseForValidObsAfterImpulse_ms = 3000;
 
   static constexpr uint8_t observationBufferSize = 70;
+  uint8_t minimumSampleSize = 10;
 };
 
 struct SteeringSourceEVConfig {
@@ -52,48 +53,111 @@ struct SteeringController_Config {
 #pragma once
 
 #include "core/config.h"
+#include "core/steering/csc/deadband.h"
+#include "core/steering/csc/headingErrorCalculator.h"
+#include "core/steering/csc/observationBuffer.h"
+#include "core/steering/csc/steeringGuard.h"
 #include "types/globalTypes.h"
-#include <array>
 #include <cstdint>
 #include <optional>
 
-class PWMController;
+
 class CoreSteeringController {
 public:
   explicit CoreSteeringController(SteeringController_Config &config);
 
   std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
-  void currentHDG(uint16_t currentCourse);
-  void setInternalTarget (uint16_t target);
-  uint16_t getInternalTarget ();
+
+  void currentHDG(uint16_t current);
+  void setInternalTarget(uint16_t target);
+  uint16_t getInternalTarget() const;
 
 private:
-  const SteeringController_Config &m_SteeringController_Config;
+  // --- Configuration ---
+  SteeringController_Config &m_config;
 
-  static constexpr uint8_t OBSERVATION_BUFFER_SIZE =
+  // --- State ---
+  uint16_t m_currentCourse{0};
+  uint16_t m_internalTargetCourse{0};
+
+  // --- Subsystems ---
+public: // for testing !!TODO
+  HeadingErrorCalculator m_errorCalculator;
+  ObservationBuffer m_observationBuffer;
+  Deadband m_deadband;
+  SteeringGuard m_steeringGuard;
+
+private:
+  // --- Internal helpers ---
+  SteeringDirection determineDirection(int16_t median) const;
+  uint32_t m_lastObsUpdate = 0;
+  uint32_t m_lastIntent = 0;
+};
+#pragma once
+
+#include "core/config.h"
+#include <cstdint>
+
+class Deadband {
+public:
+    Deadband(SteeringController_Config& config);
+
+bool errorSignificant(int16_t error);
+
+private:
+SteeringController_Config& m_config;
+
+};
+#pragma once
+#include <cstdint>
+
+class HeadingErrorCalculator {
+public:
+  HeadingErrorCalculator() = default;
+
+  int16_t getCurrentError(uint16_t current, uint16_t target);
+};#pragma once
+
+#include "core/config.h"
+#include <array>
+#include <cstdint>
+
+class ObservationBuffer {
+private:
+  SteeringController_Config &m_config;
+
+  static constexpr uint8_t bufferSize =
       SteeringRegulationConfig::observationBufferSize;
 
-  uint16_t m_internalTargetCourse = 0;
-  uint16_t m_currentCourse = 0;
+  std::array<int16_t, bufferSize> m_errorArray;
+  uint8_t validErrorsCounter = 0;
+  uint8_t medianIndex;
+  int16_t median = 0;
 
-  int16_t normalizeHDGDelta(uint16_t current, uint16_t target);
-  void updateObservationBuffers(uint32_t loopTimestamp);
-  bool steeringCorrectionIsRequired();
-  SteeringDirection calculateSteeringDirectionFromObservation();
-  void resetObservations();
-  bool observationAllowed(uint32_t loopTimestamp) const;
-  bool actionAllowed(uint32_t loopTimestamp) const;
+public:
+  ObservationBuffer(SteeringController_Config &config);
 
-  std::array<int16_t, OBSERVATION_BUFFER_SIZE> m_leftErrors;
-  std::array<int16_t, OBSERVATION_BUFFER_SIZE> m_rightErrors;
-  std::array<int16_t, OBSERVATION_BUFFER_SIZE> m_mergedError;
+  const int16_t getMedian() const;
+  void update(int16_t error);
+  uint8_t getSampleSize() const; 
+  void reset();
+};
+#pragma once
 
-  int16_t m_medianOfMergedErrors = 0;
+#include "core/config.h"
+#include <cstdint>
 
-  uint32_t m_lastImpulse = 0;
-  uint32_t m_lastObservation = 0;
+class SteeringGuard {
+public:
+  SteeringGuard(SteeringController_Config &config);
 
-  uint8_t m_observationCount = 0;
+  bool activeObservationGuard(uint32_t loopTimestamp, uint32_t lastUpdate,
+                              uint32_t lastIntent);
+  bool activeIntentGuard(uint32_t loopTimestamp, uint32_t lastIntent,
+                         uint8_t sampleSize);
+
+private:
+  SteeringController_Config &m_config;
 };
 #pragma once
 #include "core/config.h"
@@ -113,7 +177,7 @@ private:
 };
 #pragma once
 #include "core/config.h"
-#include "core/steering/csc.h"
+#include "core/steering/csc/csc.h"
 #include "sensors/navigationSensors.h"
 #include "diagnostics/diagnostics.h"
 #include "ui/controlPanel.h"
@@ -143,13 +207,14 @@ private:
   uint32_t m_lastCorrection;
   uint16_t m_observationCounter; 
 };
+
 #pragma once 
 
-#include "csc.h"
-#include "impulseFilter.h"
+#include "core/steering/csc/csc.h"
+#include "core/steering/impulseFilter.h"
 #include "actuators/pwmController.h"
 #include "sensors/navigationSensors.h"
-#include "sourceEvaluator.h"
+#include "core/steering/sourceEvaluator.h"
 #include "types/globalTypes.h"
 #include <cstdint>
 class SteeringOrchestrator {
@@ -167,15 +232,16 @@ class SteeringOrchestrator {
     PWMController& m_pwm;
     SteeringIntent m_steeringIntent;
 
-};#pragma once
+};
+#pragma once
 #include "actuators/pwmController.h"
 #include "core/config.h"
-#include "core/steering/csc.h"
+#include "core/steering/csc/csc.h"
 #include "sensors/NMEA183BUS.h"
 #include "sensors/navigationSensors.h"
-#include "steering/impulseFilter.h"
-#include "steering/sourceEvaluator.h"
-#include "steering/steeringOrchestrator.h"
+#include "core/steering/impulseFilter.h"
+#include "core/steering/sourceEvaluator.h"
+#include "core/steering/steeringOrchestrator.h"
 #include "ui/controlPanel.h"
 #include "ui/display.h"
 #include "diagnostics/diagnostics.h"
@@ -202,6 +268,7 @@ private:
   SteeringOrchestrator m_steeringOrchestrator;
   Display m_display;
 };
+
 #pragma once
 #include <cstdint>
 
@@ -228,7 +295,7 @@ enum class CapabilityState : uint8_t {
 };
 #pragma once
 #include <cstdint>
-#include "diagnostic_types.h"
+#include "diagnostics/diagnostic_types.h"
 
 struct DiagnosticEntry {
     DiagnosticEvent event;
@@ -268,6 +335,7 @@ private:
     void updateCapabilityState(DiagnosticEvent event,
                                FunctionalCapability capability);
 };
+
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -446,36 +514,72 @@ int main()
         systemController.tick(loopTimestamp);
     }
 }
-#include "core/steering/csc.h"
-#include <algorithm>
-#include <array>
+#include "core/steering/csc/csc.h"
+
+#include "core/steering/csc/deadband.h"
+#include "core/steering/csc/headingErrorCalculator.h"
+#include "core/steering/csc/observationBuffer.h"
+#include "core/steering/csc/steeringGuard.h"
 #include <cstdint>
-#include <optional>
 
 CoreSteeringController::CoreSteeringController(
     SteeringController_Config &config)
-    : m_SteeringController_Config(config) {}
+    : m_config(config), m_observationBuffer(m_config), m_deadband(m_config),
+      m_steeringGuard(m_config) {}
 
 std::optional<SteeringIntent>
 CoreSteeringController::tick(uint32_t loopTimestamp) {
-  if (observationAllowed(loopTimestamp)) {
-    updateObservationBuffers(loopTimestamp);
-  }
+  /*CSC macht zwei Sachen
+  - Beobachten
+  - Intent zurückgeben
 
-  SteeringIntent intent;
-  intent.abstractImpulse_0_100 = 100;
-  intent.dir = calculateSteeringDirectionFromObservation();
+  Wenn er wegen Guards nicht beobachten darf early return*/
 
-  if (!actionAllowed(loopTimestamp)) {
-    return std::nullopt;
-  }
-  if (!steeringCorrectionIsRequired()) {
+  if (m_steeringGuard.activeObservationGuard(loopTimestamp, m_lastObsUpdate,
+                                             m_lastIntent)) {
     return std::nullopt;
   }
 
-  m_lastImpulse = loopTimestamp;
-  resetObservations();
-  return intent;
+  SteeringIntent intent; // Return value
+
+  int16_t error = m_errorCalculator.getCurrentError(m_currentCourse,
+                                                    m_internalTargetCourse);
+
+  /*Ein nicht signifikanter Error kann keine Aktion auslösen
+  Deswegen darf das direkt zum early return führen*/
+  if (!m_deadband.errorSignificant(error)) {
+    return std::nullopt;
+  }
+
+  m_observationBuffer.update(error);
+  m_lastObsUpdate = loopTimestamp;
+
+  /* Der Median wird bewusst nur für die Bestimmung der
+  nötigen Korrekturrichtung genutzt, da ich bewusst keinen
+  PID Regler will*/
+
+  SteeringDirection dir = determineDirection(m_observationBuffer.getMedian());
+
+  if (m_steeringGuard.activeIntentGuard(loopTimestamp, m_lastIntent,
+                                        m_observationBuffer.getSampleSize())) {
+    return std::nullopt;
+  } else {
+    intent.dir = dir;
+
+    /* Semantisch klargestellt. CSC setzt vollen abstrakten Impuls.
+    Der kann danach nur nach unten gedämpft, aber nicht nach
+    oben eskaliert werden.*/
+
+    intent.abstractImpulse_0_100 = 100;
+    m_lastIntent = loopTimestamp;
+    
+    /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
+    diese wird bewusst verworfen*/
+
+    m_observationBuffer.reset();
+
+    return intent;
+  }
 }
 
 void CoreSteeringController::currentHDG(uint16_t current) {
@@ -486,99 +590,112 @@ void CoreSteeringController::setInternalTarget(uint16_t target) {
   m_internalTargetCourse = target;
 };
 
-uint16_t CoreSteeringController::getInternalTarget(){
+uint16_t CoreSteeringController::getInternalTarget() const {
   return m_internalTargetCourse;
 };
 
-bool CoreSteeringController::observationAllowed(uint32_t loopTimestamp) const {
-  if (loopTimestamp - m_lastImpulse >
-      m_SteeringController_Config.regulations.pauseForValidObsAfterImpulse_ms) {
-    return true;
-  } else
-    return false;
-};
-
-void CoreSteeringController::updateObservationBuffers(uint32_t loopTimestamp) {
-  if (loopTimestamp - m_lastObservation <
-      m_SteeringController_Config.regulations.minimumTimeBtwObs_ms)
-    return;
-
-  uint16_t currentError =
-      normalizeHDGDelta(m_currentCourse, m_internalTargetCourse);
-  if (currentError > 0) {
-    m_leftErrors[m_observationCount] = 0;
-    m_rightErrors[m_observationCount] = currentError;
-  } else if (currentError < 0) {
-    m_rightErrors[m_observationCount] = 0;
-    m_leftErrors[m_observationCount] = currentError;
-  }
-
-  m_mergedError[m_observationCount] =
-      m_rightErrors[m_observationCount] + m_leftErrors[m_observationCount];
-  m_observationCount++;
-  m_lastObservation = loopTimestamp;
-
-  if (m_observationCount >=
-      m_SteeringController_Config.regulations.observationBufferSize) {
-    resetObservations();
-  }
-};
-
-bool CoreSteeringController::actionAllowed(uint32_t loopTimestamp) const {
-  if (loopTimestamp - m_lastImpulse >
-      m_SteeringController_Config.regulations.SteeringCooldown_ms) {
-    return true;
-  } else
-    return false;
-};
-
-bool CoreSteeringController::steeringCorrectionIsRequired() {
-  auto medianArray = m_mergedError;
-  std::sort(medianArray.begin(), medianArray.end());
-
-  uint8_t medianIndex =
-      m_SteeringController_Config.regulations.observationBufferSize /
-      2; // hier nur der upper median bei geraden Mengen von Werten
-  m_medianOfMergedErrors = medianArray[medianIndex];
-
-  if (abs(m_medianOfMergedErrors) >=
-      m_SteeringController_Config.regulations.steeringTolerance_deg) {
-    return true;
-  }
-  return false;
-};
-
 SteeringDirection
-CoreSteeringController::calculateSteeringDirectionFromObservation() {
-  if (m_medianOfMergedErrors <= 0) {
+CoreSteeringController::determineDirection(int16_t median) const {
+  if (median < 0) {
     return SteeringDirection::Left;
-  } else if (m_medianOfMergedErrors > 0) {
+  } else if (median > 0) {
     return SteeringDirection::Right;
-  }
+  };
   return SteeringDirection::Left;
-};
+}
+#include "core/steering/csc/deadband.h"
 
-void CoreSteeringController::resetObservations() {
-  m_observationCount = 0;
-  for (int i = 0; i < OBSERVATION_BUFFER_SIZE; i++) {
-    m_leftErrors[i] = 0;
-    m_rightErrors[i] = 0;
-    m_mergedError[i] = 0;
-  }
-};
+Deadband::Deadband(SteeringController_Config &config) : m_config(config) {};
 
-int16_t CoreSteeringController::normalizeHDGDelta(uint16_t current,
+bool Deadband::errorSignificant(int16_t error) {
+
+  if (error <= m_config.regulations.steeringTolerance_deg) {
+    return false;
+  } else if (error > m_config.regulations.steeringTolerance_deg) {
+    return true;
+  };
+  return false;
+};#include "core/steering/csc/headingErrorCalculator.h"
+
+int16_t HeadingErrorCalculator::getCurrentError(uint16_t current,
                                                   uint16_t target) {
-  int16_t diff = static_cast<int16_t>(target) - static_cast<int16_t>(current);
+
+  int16_t diff = target - current;
 
   diff += 360;
   diff += 180;
   diff %= 360;
   diff -= 180;
 
-  return diff;
-}
-#include "core/steering/impulseFilter.h"
+  return diff; 
+};#include "core/steering/csc/observationBuffer.h"
+
+ObservationBuffer::ObservationBuffer(SteeringController_Config &config)
+    : m_config(config) {};
+
+const int16_t ObservationBuffer::getMedian() const { return median; };
+
+void ObservationBuffer::update(int16_t error) {
+  m_errorArray[validErrorsCounter] = error;
+  validErrorsCounter++;
+
+  /*Das Array ist bewusst kein Ringbuffer, da die Ereignisse des letzten Arrays
+    semantisch bewusst verworfen werden*/
+  if (validErrorsCounter >= m_config.regulations.observationBufferSize) {
+    for (int i = 0; i == bufferSize; i++) {
+      m_errorArray[i] = 0;
+      validErrorsCounter = 0;
+    };
+  };
+
+  /* Da nur signifikante Werte geschrieben werden, ist null semantisch kein Wert
+  statt gemessen 0 Da in jedem update neue Medianberechnung ist kein
+  ZurÃ¼cksetzen erforderlich*/
+  medianIndex = validErrorsCounter / 2;
+  median = m_errorArray[medianIndex];
+};
+
+uint8_t ObservationBuffer::getSampleSize() const { return validErrorsCounter; };
+
+/*siehe oben bewusst verworfen*/
+void ObservationBuffer::reset() {
+  for (int i = 0; i < bufferSize; i++) {
+    m_errorArray[i] = 0;
+    validErrorsCounter = 0;
+  };
+};
+#include "core/steering/csc/steeringGuard.h"
+
+SteeringGuard::SteeringGuard(SteeringController_Config &config)
+    : m_config(config) {};
+
+bool SteeringGuard::activeObservationGuard(uint32_t loopTimestamp,
+                                           uint32_t lastUpdate,
+                                           uint32_t lastIntent) {
+  if (loopTimestamp - lastUpdate < m_config.regulations.minimumTimeBtwObs_ms) {
+    return true;
+  };
+
+  if (loopTimestamp - lastIntent <
+      m_config.regulations.pauseForValidObsAfterImpulse_ms) {
+    return true;
+  };
+
+  return false;
+};
+
+bool SteeringGuard::activeIntentGuard(uint32_t loopTimestamp,
+                                      uint32_t lastIntent, uint8_t sampleSize) {
+  /*Semantisch eigentlich Hardwareschutz kommt vllt in den PWM spÃ¤ter*/
+  if (loopTimestamp - lastIntent < m_config.regulations.SteeringCooldown_ms) {
+    return true;
+  };
+
+  if (sampleSize < m_config.regulations.minimumSampleSize) {
+    return true;
+  };
+  return false;
+};#include "core/steering/impulseFilter.h"
 #include "types/globalTypes.h"
 #include <algorithm>
 #include <cstdint>
@@ -631,13 +748,12 @@ ImpulseFilter::apply(SteeringIntent intent,
   };
 }
 #include "core/steering/sourceEvaluator.h"
-#include "core/steering/csc.h"
+#include "core/steering/csc/csc.h"
 #include "diagnostics/diagnostic_types.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 #include "ui/controlPanel.h"
 #include <cstdint>
-#include <cstdlib>
 
 SourceEvaluator::SourceEvaluator(const ControlPanel &panel,
                                  NavigationSensors &navsens,
@@ -722,7 +838,8 @@ void SourceEvaluator::evaluateWind(
       m_steeringController_Config.regulations.minimumTimeBtwObs_ms) {
     return;
   };
-
+ 
+  // Hier ist noch ein kernfehler drin, weil generalTarget nicht genutzt wird.
   uint16_t generalTarget =
       m_panel.readIntent()
           .generalTarget; // Wird bei Windmodus zu einem Windwinkel
@@ -761,8 +878,9 @@ void SourceEvaluator::evaluateWind(
   }
 };
 
+
 #include "core/steering/steeringOrchestrator.h"
-#include "core/steering/csc.h"
+#include "core/steering/csc/csc.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -779,12 +897,14 @@ void SteeringOrchestrator::tick(NavigationSensors::NavigationSnapshot snapshot,
   m_sourceEvaluator.tick(snapshot, m_csc, loopTimestamp);
 
   auto intentOpt = m_csc.tick(loopTimestamp);
+  
   if (intentOpt) {
     SteeringIntent intent = *intentOpt;
     auto cmd = m_impulsefilter.apply(intent, snapshot);
     m_pwm.command(cmd);
   }
 };
+
 #include "core/systemController.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
@@ -1093,4 +1213,241 @@ PanelIntent ControlPanel::readIntent() const {
 void Display::update()
 {
     // TODO: implement display update
+}
+#include "core/config.h"
+#include "core/steering/csc/csc.h"
+
+#include <cstdint>
+#include <unity.h>
+
+void setUp() {}
+void tearDown() {}
+
+void test_heading_error_is_zero_when_current_equals_target() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  int16_t error = csc.m_errorCalculator.getCurrentError(300, 300);
+
+  TEST_ASSERT_TRUE(error == 0);
+}
+
+void test_heading_error_positive_when_current_is_left_of_target() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  int16_t error = csc.m_errorCalculator.getCurrentError(299, 300);
+
+  TEST_ASSERT_TRUE(error > 0);
+}
+
+void test_heading_error_negative_when_current_is_right_of_target() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  int16_t error = csc.m_errorCalculator.getCurrentError(300, 299);
+
+  TEST_ASSERT_TRUE(error < 0);
+}
+
+void test_heading_error_wraps_correctly_over_360_clockwise() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  int error = csc.m_errorCalculator.getCurrentError(359, 1);
+
+  TEST_ASSERT_TRUE(error > 0);
+}
+void test_heading_error_wraps_correctly_over_360_counterclockwise() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  int16_t error = csc.m_errorCalculator.getCurrentError(1, 359);
+
+  TEST_ASSERT_TRUE(error < 0);
+}
+
+void test_heading_error_returns_shortest_rotation_direction() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  int16_t error = csc.m_errorCalculator.getCurrentError(350, 10);
+
+  TEST_ASSERT_TRUE(error == 20);
+}
+
+void test_no_action_when_error_within_deadband_positive() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  config.regulations.steeringTolerance_deg = 10;
+
+  TEST_ASSERT_FALSE(csc.m_deadband.errorSignificant(9));
+}
+
+void test_no_action_when_error_within_deadband_negative() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  config.regulations.steeringTolerance_deg = 10;
+
+  TEST_ASSERT_FALSE(csc.m_deadband.errorSignificant(-9));
+}
+
+void test_error_exactly_on_deadband_boundary_is_treated_as_non_significant() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  config.regulations.steeringTolerance_deg = 10;
+
+  TEST_ASSERT_TRUE(!csc.m_deadband.errorSignificant(10));
+}
+
+void test_error_just_outside_deadband_is_treated_as_significant() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  config.regulations.steeringTolerance_deg = 10;
+
+  TEST_ASSERT_TRUE(csc.m_deadband.errorSignificant(11));
+}
+
+void test_buffer_is_not_ready_when_empty() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  config.regulations.minimumSampleSize = 10;
+  uint32_t time = 10000;
+  uint32_t lastIntent = 0;
+  uint8_t sampleSize = 0;
+
+  TEST_ASSERT_TRUE(
+      csc.m_steeringGuard.activeIntentGuard(time, lastIntent, sampleSize));
+}
+
+void test_buffer_is_not_ready_when_below_minimum_samples() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  config.regulations.minimumSampleSize = 10;
+  uint32_t time = 10000;
+  uint32_t lastIntent = 0;
+  uint8_t sampleSize = 9;
+
+  TEST_ASSERT_TRUE(
+      csc.m_steeringGuard.activeIntentGuard(time, lastIntent, sampleSize));
+}
+void test_buffer_is_ready_when_minimum_samples_reached() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  config.regulations.minimumSampleSize = 10;
+  uint32_t time = 10000;
+  uint32_t lastIntent = 0;
+  uint8_t sampleSize = 10;
+
+  TEST_ASSERT_TRUE(
+      !csc.m_steeringGuard.activeIntentGuard(time, lastIntent, sampleSize));
+}
+void test_buffer_reset_clears_all_stored_samples() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+  uint8_t median = 0;
+  uint32_t time = 0;
+
+  config.regulations.minimumSampleSize = 10;
+  csc.setInternalTarget(300);
+
+  // Weniger als minimal Sample Size, damit nicht signifikant und reset
+  for (int i = 0; i < 10; i++) {
+    time += 1000;
+    csc.currentHDG(200); // Konstanter Fehler
+    csc.tick(time);
+  };
+  /*Array wurde beschrieben */
+  TEST_ASSERT_TRUE(csc.m_observationBuffer.getSampleSize() != 0);
+  csc.m_observationBuffer.reset();
+
+  /*Trotzdem ist das Array am Ende leer*/
+  TEST_ASSERT_TRUE(csc.m_observationBuffer.getSampleSize() == 0);
+}
+
+void test_median_returns_positive_when_majority_positive() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+  uint32_t time = 0;
+  uint8_t median = 0;
+
+  csc.setInternalTarget(300);
+
+  /* HÃ¤lfte des Buffers positiv*/
+  for (int i = 0; i < config.regulations.observationBufferSize / 2; i++) {
+    time += 1000;
+    csc.currentHDG(200); // Konstanter Fehler
+    csc.tick(time);
+  };
+
+  /*viertel des Buffers negativ*/
+  for (int i = 0; i < config.regulations.observationBufferSize / 4; i++) {
+    time += 1000;
+    csc.currentHDG(320);
+    csc.tick(time);
+  };
+
+  TEST_ASSERT_TRUE(csc.m_observationBuffer.getMedian() > 0);
+}
+void test_median_returns_negative_when_majority_negative() {}
+void test_median_returns_no_action_when_exactly_symmetric() {}
+void test_median_returns_positive_when_one_sample_more_than_half_positive() {}
+void test_median_is_not_affected_by_outliers() {}
+
+void test_no_action_when_all_samples_within_deadband_even_if_buffer_full() {}
+void test_no_action_when_only_few_significant_samples_present() {}
+void test_action_occurs_when_minimum_significant_samples_reached() {}
+void test_majority_direction_overrides_small_number_of_counter_samples() {}
+
+void test_no_second_action_within_cooldown_period() {}
+void test_action_allowed_after_cooldown_expires() {}
+void test_cooldown_does_not_block_first_action() {}
+
+void test_buffer_resets_after_action_is_emitted() {}
+void test_new_observations_after_reset_start_fresh_evaluation() {}
+void test_opposite_direction_after_reset_requires_new_evidence() {}
+
+void test_no_action_when_error_oscillates_symmetrically() {}
+void test_action_when_error_drift_is_slow_but_consistent() {}
+void test_no_action_when_error_fluctuates_randomly_around_zero() {}
+void test_action_when_error_remains_constant_over_time() {}
+
+void test_system_handles_maximum_heading_values_without_overflow() {}
+void test_system_handles_zero_and_360_equally() {}
+void test_system_does_not_emit_action_without_target_set() {}
+void test_system_does_not_emit_action_before_any_heading_received() {}
+
+void test_no_action_when_inside_tolerance_for_full_buffer_duration() {}
+void test_action_to_left_when_consistently_right_of_target() {}
+void test_action_to_right_when_consistently_left_of_target() {}
+void test_no_action_on_exact_symmetry_even_with_full_buffer() {}
+void test_action_requires_minimum_observation_count() {}
+
+int main() {
+  UNITY_BEGIN();
+  RUN_TEST(test_heading_error_is_zero_when_current_equals_target);
+  RUN_TEST(test_heading_error_positive_when_current_is_left_of_target);
+  RUN_TEST(test_heading_error_negative_when_current_is_right_of_target);
+  RUN_TEST(test_heading_error_wraps_correctly_over_360_clockwise);
+  RUN_TEST(test_heading_error_wraps_correctly_over_360_counterclockwise);
+  RUN_TEST(test_heading_error_returns_shortest_rotation_direction);
+  RUN_TEST(test_no_action_when_error_within_deadband_positive);
+  RUN_TEST(test_no_action_when_error_within_deadband_negative);
+  RUN_TEST(
+      test_error_exactly_on_deadband_boundary_is_treated_as_non_significant);
+  RUN_TEST(test_error_just_outside_deadband_is_treated_as_significant);
+  RUN_TEST(test_buffer_is_not_ready_when_empty);
+  RUN_TEST(test_buffer_is_not_ready_when_below_minimum_samples);
+  RUN_TEST(test_buffer_is_ready_when_minimum_samples_reached);
+  RUN_TEST(test_buffer_reset_clears_all_stored_samples);
+  RUN_TEST(test_median_returns_positive_when_majority_positive);
+
+  return UNITY_END();
 }

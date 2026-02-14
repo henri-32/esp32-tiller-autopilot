@@ -180,9 +180,36 @@ void test_median_returns_positive_when_majority_positive() {
 
   TEST_ASSERT_TRUE(csc.m_observationBuffer.getMedian() > 0);
 }
-void test_median_returns_negative_when_majority_negative() {}
-void test_median_returns_no_action_when_exactly_symmetric() {}
-void test_median_returns_positive_when_one_sample_more_than_half_positive() {}
+void test_median_returns_negative_when_majority_negative() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  for (int i = 0; i < config.regulations.observationBufferSize * 0.4; i++) {
+    csc.m_observationBuffer.update(-20);
+  };
+  TEST_ASSERT_TRUE(csc.m_observationBuffer.getSampleSize() > 0);
+
+  for (int i = 0; i < config.regulations.observationBufferSize * 0.6; i++) {
+    csc.m_observationBuffer.update(-20);
+  };
+  TEST_ASSERT_TRUE(csc.m_observationBuffer.getMedian() < 0);
+}
+void test_median_returns_positive_when_one_sample_more_than_half_positive() {
+  SteeringController_Config config;
+  CoreSteeringController csc(config);
+
+  for (int i = 0; i < ((config.regulations.observationBufferSize / 2) - 1);
+       i++) {
+    csc.m_observationBuffer.update(-20);
+  };
+  TEST_ASSERT_TRUE(csc.m_observationBuffer.getSampleSize() > 0);
+
+  for (int i = 0; i < ((config.regulations.observationBufferSize / 2) + 1);
+       i++) {
+    csc.m_observationBuffer.update(20);
+  };
+  TEST_ASSERT_TRUE(csc.m_observationBuffer.getMedian() > 0);
+}
 void test_median_is_not_affected_by_outliers() {}
 
 void test_no_action_when_all_samples_within_deadband_even_if_buffer_full() {}
@@ -232,6 +259,9 @@ int main() {
   RUN_TEST(test_buffer_is_ready_when_minimum_samples_reached);
   RUN_TEST(test_buffer_reset_clears_all_stored_samples);
   RUN_TEST(test_median_returns_positive_when_majority_positive);
+  RUN_TEST(test_median_returns_negative_when_majority_negative);
+  RUN_TEST(
+      test_median_returns_positive_when_one_sample_more_than_half_positive);
 
   return UNITY_END();
 }
