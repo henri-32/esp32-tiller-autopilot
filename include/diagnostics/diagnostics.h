@@ -9,6 +9,10 @@ struct DiagnosticEntry {
 };
 class Diagnostics {
 public:
+    // Contract:
+    // Purpose: Capture and expose diagnostic events and capability states.
+    // Inputs: events emitted by domain code + loop timestamps.
+    // Outputs/Side-effects: internal event buffer and latched states.
     static constexpr uint8_t kEventBufferSize = 32;
 
     // vom Domain-Code aufgerufen

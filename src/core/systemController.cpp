@@ -6,10 +6,11 @@
 SystemController::SystemController()
     : m_navigationSensors(m_compassModule, m_gpsModule, m_windModule,
                           m_nmea183Bus),
-      m_impulseFilter(m_SteeringController_Config),
-      m_csc(m_SteeringController_Config),
+      // Config is owned here and passed down in granular slices.
+      m_impulseFilter(m_config.mechanics, m_config.physics),
+      m_csc(m_config.regulations),
       m_sourceHandler(m_controlPanel, m_navigationSensors,
-                      m_SteeringController_Config, m_diagnostics, m_csc),
+                      m_config.source, m_diagnostics, m_csc),
       m_steeringOrchestrator( m_csc, m_impulseFilter,
                              m_pwmController) {}
 
@@ -24,6 +25,7 @@ void SystemController::tick(uint32_t loopTimestamp) {
                        intent.generalTarget);
 
   // 3. Steering Ausführen
+  // Only drive the actuator path when steering is explicitly engaged.
   if (intent.steeringEngaged) {
     m_steeringOrchestrator.tick(snapshot, loopTimestamp);
   }

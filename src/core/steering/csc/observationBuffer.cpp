@@ -1,13 +1,14 @@
 #include "core/steering/csc/observationBuffer.h"
 #include <algorithm>
 
-ObservationBuffer::ObservationBuffer(SteeringController_Config &config)
-    : m_config(config){};
+ObservationBuffer::ObservationBuffer(SteeringRegulationConfig &config)
+    : m_config(config) {};
 
 const int16_t ObservationBuffer::getMedian() const { return median; };
 
 void ObservationBuffer::update(int16_t error) {
-  if (validErrorsCounter >= m_config.regulations.observationBufferSize) {
+  // Reset the buffer if it overflows its configured capacity.
+  if (validErrorsCounter >= m_config.observationBufferSize) {
     reset();
   }
 
@@ -24,7 +25,7 @@ void ObservationBuffer::update(int16_t error) {
   medianIndex = validErrorsCounter / 2;
   median = m_errorArray[medianIndex];
 
-  // symmetric guard
+  // Symmetric guard: if positives and negatives are balanced, treat as zero.
   bool symmetric = false;
   uint8_t negativeValues = 0;
   uint8_t positiveValues = 0;

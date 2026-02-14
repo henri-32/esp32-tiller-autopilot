@@ -5,11 +5,14 @@
 
 class Deadband {
 public:
-    Deadband(SteeringController_Config& config);
+  // Contract:
+  // Purpose: Reject small errors as noise.
+  // Inputs: error + regulation config slice.
+  // Outputs/Side-effects: boolean decision, no side-effects.
+  Deadband(SteeringRegulationConfig &config);
 
-bool errorSignificant(int16_t error);
+  bool errorSignificant(int16_t error);
 
 private:
-SteeringController_Config& m_config;
-
+  SteeringRegulationConfig &m_config;
 };

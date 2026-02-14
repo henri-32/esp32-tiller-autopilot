@@ -9,10 +9,13 @@
 #include <cstdint>
 #include <optional>
 
-
 class CoreSteeringController {
 public:
-  explicit CoreSteeringController(SteeringController_Config &config);
+  // Contract:
+  // Purpose: Decide if a steering impulse should be issued.
+  // Inputs: current heading, internal target, regulation config slice.
+  // Outputs/Side-effects: optional SteeringIntent; updates internal state.
+  explicit CoreSteeringController(SteeringRegulationConfig &config);
 
   std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
 
@@ -21,21 +24,18 @@ public:
   uint16_t getInternalTarget() const;
 
 private:
-  // --- Configuration ---
-  SteeringController_Config &m_config;
-
   // --- State ---
   uint16_t m_currentCourse{0};
   uint16_t m_internalTargetCourse{0};
 
   // --- Subsystems ---
-private:
   HeadingErrorCalculator m_errorCalculator;
   ObservationBuffer m_observationBuffer;
   Deadband m_deadband;
   SteeringGuard m_steeringGuard;
 
   // --- Internal helpers ---
+  // Direction is derived from the median error sign only.
   SteeringDirection determineDirection(int16_t median) const;
   uint32_t m_lastObsUpdate = 0;
   uint32_t m_lastIntent = 0;

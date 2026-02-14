@@ -3,14 +3,19 @@
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 
-
 class ImpulseFilter {
 public:
+  // Contract:
+  // Purpose: Shape an abstract steering intent into a PWM command.
+  // Inputs: intent + navigation snapshot + mechanics/physics config slices.
+  // Outputs/Side-effects: returns PWMCommand, no hardware side-effects.
+  ImpulseFilter(SteeringMechanicsConfig &mechanicsConfig,
+                SteeringPhysicsConfig &physicsConfig);
 
-  ImpulseFilter(SteeringController_Config &config);
-
-  PWMCommand apply(SteeringIntent intent, NavigationSensors::NavigationSnapshot snapshot);
+  PWMCommand apply(SteeringIntent intent,
+                   NavigationSensors::NavigationSnapshot snapshot);
 
 private:
-  SteeringController_Config &m_config;
+  SteeringMechanicsConfig &m_mechanics;
+  SteeringPhysicsConfig &m_physics;
 };

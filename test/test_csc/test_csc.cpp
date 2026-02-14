@@ -9,7 +9,7 @@
 
 namespace {
 
-SteeringController_Config makeConfig() { return SteeringController_Config{}; }
+SteeringControllerConfig makeConfig() { return SteeringControllerConfig{}; }
 
 void addSamples(ObservationBuffer &buffer, int16_t value, int count) {
   for (int i = 0; i < count; i++) {
@@ -92,7 +92,7 @@ void test_heading_error_returns_shortest_rotation_direction() {
 // Deadband tests
 void test_no_action_when_error_within_deadband_positive() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
@@ -102,7 +102,7 @@ void test_no_action_when_error_within_deadband_positive() {
 
 void test_no_action_when_error_within_deadband_negative() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
@@ -112,7 +112,7 @@ void test_no_action_when_error_within_deadband_negative() {
 
 void test_error_exactly_on_deadband_boundary_is_treated_as_non_significant() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
@@ -122,7 +122,7 @@ void test_error_exactly_on_deadband_boundary_is_treated_as_non_significant() {
 
 void test_error_just_outside_deadband_is_treated_as_significant() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
@@ -133,7 +133,7 @@ void test_error_just_outside_deadband_is_treated_as_significant() {
 // SteeringGuard sample-size gating tests
 void test_buffer_is_not_ready_when_empty() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
   SteeringGuard guard(config);
 
@@ -147,7 +147,7 @@ void test_buffer_is_not_ready_when_empty() {
 
 void test_buffer_is_not_ready_when_below_minimum_samples() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
   SteeringGuard guard(config);
 
@@ -161,7 +161,7 @@ void test_buffer_is_not_ready_when_below_minimum_samples() {
 
 void test_buffer_is_ready_when_minimum_samples_reached() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
   SteeringGuard guard(config);
 
@@ -176,7 +176,7 @@ void test_buffer_is_ready_when_minimum_samples_reached() {
 // ObservationBuffer tests
 void test_buffer_reset_clears_all_stored_samples() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
   addSamples(buffer, 20, 10);
 
@@ -190,7 +190,7 @@ void test_buffer_reset_clears_all_stored_samples() {
 
 void test_median_returns_positive_when_majority_positive() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
 
   const int positives = config.regulations.observationBufferSize / 2;
@@ -204,7 +204,7 @@ void test_median_returns_positive_when_majority_positive() {
 
 void test_median_returns_negative_when_majority_negative() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
 
   const int negatives = config.regulations.observationBufferSize / 2;
@@ -218,7 +218,7 @@ void test_median_returns_negative_when_majority_negative() {
 
 void test_median_returns_positive_when_one_sample_more_than_half_positive() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
 
   const int negatives = (config.regulations.observationBufferSize / 2) - 1;
@@ -233,9 +233,9 @@ void test_median_returns_positive_when_one_sample_more_than_half_positive() {
 // SteeringGuard cooldown tests
 void test_no_second_action_within_cooldown_period() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
-  config.regulations.SteeringCooldown_ms = 2000;
+  config.regulations.steeringCooldown_ms = 2000;
   SteeringGuard guard(config);
 
   const uint32_t lastIntent = 10000;
@@ -248,9 +248,9 @@ void test_no_second_action_within_cooldown_period() {
 
 void test_action_allowed_after_cooldown_expires() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   config.regulations.minimumSampleSize = 10;
-  config.regulations.SteeringCooldown_ms = 2000;
+  config.regulations.steeringCooldown_ms = 2000;
   SteeringGuard guard(config);
 
   const uint32_t lastIntent = 10000;
@@ -259,14 +259,14 @@ void test_action_allowed_after_cooldown_expires() {
   // When / Then
   TEST_ASSERT_FALSE(guard.intentBlocked(lastIntent +
                                             config.regulations
-                                                .SteeringCooldown_ms +
+                                                .steeringCooldown_ms +
                                             1,
                                         lastIntent, enoughSamples));
 }
 
 void test_no_action_when_error_oscillates_symmetrically() {
   // Given
-  SteeringController_Config config = makeConfig();
+  SteeringControllerConfig config = makeConfig();
   ObservationBuffer buffer(config);
 
   const int pairs = config.regulations.observationBufferSize / 2;

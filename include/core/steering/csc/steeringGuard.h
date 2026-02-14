@@ -5,7 +5,11 @@
 
 class SteeringGuard {
 public:
-  SteeringGuard(SteeringController_Config &config);
+  // Contract:
+  // Purpose: Gate observation/intent by timing and sample thresholds.
+  // Inputs: timestamps, sample size, regulation config slice.
+  // Outputs/Side-effects: boolean decisions, no side-effects.
+  SteeringGuard(SteeringRegulationConfig &config);
 
   bool observationBlocked(uint32_t loopTimestamp, uint32_t lastUpdate,
                           uint32_t lastIntent);
@@ -13,5 +17,5 @@ public:
                      uint8_t sampleSize);
 
 private:
-  SteeringController_Config &m_config;
+  SteeringRegulationConfig &m_config;
 };

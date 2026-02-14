@@ -6,7 +6,7 @@
 
 class ObservationBuffer {
 private:
-  SteeringController_Config &m_config;
+  SteeringRegulationConfig &m_config;
 
   static constexpr uint8_t bufferSize =
       SteeringRegulationConfig::observationBufferSize;
@@ -17,10 +17,14 @@ private:
   int16_t median = 0;
 
 public:
-  ObservationBuffer(SteeringController_Config &config);
+  // Contract:
+  // Purpose: Store recent errors and compute a median for direction decision.
+  // Inputs: error samples + regulation config slice.
+  // Outputs/Side-effects: median and sample count; internal buffer mutated.
+  ObservationBuffer(SteeringRegulationConfig &config);
 
   const int16_t getMedian() const;
   void update(int16_t error);
-  uint8_t getSampleSize() const; 
+  uint8_t getSampleSize() const;
   void reset();
 };

@@ -8,6 +8,10 @@
 
 class NavigationSensors {
 public:
+  // Contract:
+  // Purpose: Read and aggregate navigation sensor data into a snapshot.
+  // Inputs: hardware modules + lead source selection.
+  // Outputs/Side-effects: returns snapshot; updates lead source state.
   explicit NavigationSensors(const CompassModule &compass, const GPSModule &gps,
                              const WindModule &wind,
                              const NMEA183BUS &nmea183Bus)

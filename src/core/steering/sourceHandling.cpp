@@ -2,11 +2,11 @@
 
 SourceHandler::SourceHandler(const ControlPanel &panel,
                              NavigationSensors &navsens,
-                             SteeringController_Config &config,
+                             SteeringSourceHandlingConfig &config,
                              Diagnostics &diagnostics,
                              CoreSteeringController &csc)
     : m_panel(panel), m_navigationSensors(navsens),
-      m_steeringController_Config(config), m_diagnostics(diagnostics),
+      m_diagnostics(diagnostics),
       m_csc(csc), m_sourcePolicy(config, diagnostics),
       m_targetInterpreter(m_gpsModel, m_windModel),
       m_sourceExecutor(navsens, csc) {}
@@ -15,18 +15,20 @@ void SourceHandler::tick(NavigationSource requestedSource,
                          uint32_t loopTimestamp,
                          NavigationSensors::NavigationSnapshot snapshot,
                          uint16_t generalTarget) {
-  // Policy auf Quelle anwenden
+  // Apply source policy and fallback rules.
   NavigationSource effective =
       m_sourcePolicy.evaluate(requestedSource, snapshot, loopTimestamp);
 
+  // Filter the target based on the effective source.
   uint16_t filteredTarget =
       m_targetInterpreter.applySourceFilters(generalTarget, effective);
 
+  // Propagate the effective source and filtered target to the steering stack.
   m_sourceExecutor.execute(effective, filteredTarget);
 };
 
 //__________SOURCE_POLICY_______________________________________________
-SourcePolicyEngine::SourcePolicyEngine(SteeringController_Config &config,
+SourcePolicyEngine::SourcePolicyEngine(SteeringSourceHandlingConfig &config,
                                        Diagnostics &diagnostics)
     : m_config(config), m_diagnostics(diagnostics) {}
 
@@ -44,7 +46,7 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
                          FunctionalCapability::GPS, loopTimestamp);
 
     } else if (snapshot.gps_sog_kts.value <
-               m_config.source.minimumGPS_SpeedForGPS_Use) {
+               m_config.minGpsSpeedForUse) {
       effective = NavigationSource::Compass;
       m_diagnostics.emit(DiagnosticEvent::Degraded, FunctionalCapability::GPS,
                          loopTimestamp);
@@ -81,7 +83,7 @@ SourceTargetInterpreter::SourceTargetInterpreter(GPSModel &gpsModel,
 uint16_t
 SourceTargetInterpreter::applySourceFilters(uint16_t generalTarget,
                                             NavigationSource effective) {
-  uint16_t filteredTarget;
+  uint16_t filteredTarget = generalTarget;
 
   switch (effective) {
   case NavigationSource::Gps:

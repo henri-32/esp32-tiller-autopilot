@@ -6,10 +6,9 @@
 #include "core/steering/csc/steeringGuard.h"
 #include <cstdint>
 
-CoreSteeringController::CoreSteeringController(
-    SteeringController_Config &config)
-    : m_config(config), m_observationBuffer(m_config), m_deadband(m_config),
-      m_steeringGuard(m_config) {}
+CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
+    :  m_observationBuffer(config), m_deadband(config),
+      m_steeringGuard(config) {}
 
 std::optional<SteeringIntent>
 CoreSteeringController::tick(uint32_t loopTimestamp) {
@@ -19,6 +18,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   Wenn er wegen Guards nicht beobachten darf early return*/
 
+  // Gate observation to avoid reacting too frequently.
   if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
                                          m_lastIntent)) {
     return std::nullopt;
@@ -31,6 +31,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   /*Ein nicht signifikanter Error kann keine Aktion auslösen
   Deswegen darf das direkt zum early return führen*/
+  // Ignore small errors to avoid actuator chatter.
   if (!m_deadband.errorSignificant(error)) {
     return std::nullopt;
   }
@@ -60,6 +61,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
     /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
     diese wird bewusst verworfen*/
 
+    // Intent consumed; discard accumulated evidence to start fresh.
     m_observationBuffer.reset();
 
     return intent;

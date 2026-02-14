@@ -13,11 +13,16 @@
 
 class SystemController {
 public:
+  // Contract:
+  // Purpose: Compose modules and run the top-level control loop.
+  // Inputs: loop timestamp; internal sensors and UI state.
+  // Outputs/Side-effects: drives actuators, diagnostics, and display updates.
   SystemController();
 
   void tick(uint32_t loopTimestamp);
 
 private:
+  // Top-level composition root. Owns hardware modules, config, and orchestration.
   ControlPanel m_controlPanel{};
   CompassModule m_compassModule{};
   GPSModule m_gpsModule;
@@ -25,7 +30,7 @@ private:
   NMEA183BUS m_nmea183Bus;
   NavigationSensors m_navigationSensors;
   PWMController m_pwmController{};
-  SteeringController_Config m_SteeringController_Config;
+  SteeringControllerConfig m_config;
   Diagnostics m_diagnostics;
   ImpulseFilter m_impulseFilter;
   CoreSteeringController m_csc;

@@ -9,6 +9,10 @@
 
 class SteeringOrchestrator {
 public:
+  // Contract:
+  // Purpose: Connect CSC intent to actuator command execution.
+  // Inputs: navigation snapshot + loop timestamp.
+  // Outputs/Side-effects: issues PWM commands when intent exists.
   SteeringOrchestrator(CoreSteeringController &csc, ImpulseFilter &filter,
                        PWMController &pwm);
 

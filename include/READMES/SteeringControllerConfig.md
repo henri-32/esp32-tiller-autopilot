@@ -9,6 +9,16 @@ und werden hier **nicht wiederholt**.
 
 ---
 
+## Config-Lifecycle (Hot-Reload)
+
+Die Konfiguration wird im SystemController gehalten und ist zur Laufzeit
+hot-reload faehig. Updates kommen ueber das Control-Interface, werden in
+eine pending-Struktur geschrieben und am Ende des SystemController-Ticks
+atomar uebernommen. Alle Module halten Referenzen auf die benoetigten
+Config-Slices und sehen die neuen Werte ab dem naechsten Tick konsistent.
+
+---
+
 ## Grundannahmen für das Tuning
 
 - Alle Parameter beeinflussen **Geduld und Robustheit**, nicht das Regelprinzip.
@@ -159,3 +169,6 @@ Bestimmt, wie viel Dominanz nötig ist, bevor getrimmt wird.
 **Zusammenhang**
 max. Beobachtungsdauer
 ≈ minimumTimeBtwObs_ms × observationBufferSize
+
+
+

@@ -1,17 +1,19 @@
 #include "core/steering/csc/steeringGuard.h"
 
-SteeringGuard::SteeringGuard(SteeringController_Config &config)
-    : m_config(config){};
+SteeringGuard::SteeringGuard(SteeringRegulationConfig &config)
+    : m_config(config) {};
 
 bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
                                        uint32_t lastUpdate,
                                        uint32_t lastIntent) {
-  if (loopTimestamp - lastUpdate < m_config.regulations.minimumTimeBtwObs_ms) {
+  // Minimum time between observations.
+  if (loopTimestamp - lastUpdate < m_config.minimumTimeBtwObs_ms) {
     return true;
   };
 
+  // Pause observations right after an impulse to wait for stabilization.
   if (loopTimestamp - lastIntent <
-      m_config.regulations.pauseForValidObsAfterImpulse_ms) {
+      m_config.pauseForValidObsAfterImpulse_ms) {
     return true;
   };
 
@@ -21,11 +23,13 @@ bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
 bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
                                   uint8_t sampleSize) {
   /*Semantisch eigentlich Hardwareschutz kommt vllt in den PWM später*/
-  if (loopTimestamp - lastIntent < m_config.regulations.SteeringCooldown_ms) {
+  // Cooldown between actuator commands.
+  if (loopTimestamp - lastIntent < m_config.steeringCooldown_ms) {
     return true;
   };
 
-  if (sampleSize < m_config.regulations.minimumSampleSize) {
+  // Require a minimum number of samples before commanding.
+  if (sampleSize < m_config.minimumSampleSize) {
     return true;
   };
   return false;
