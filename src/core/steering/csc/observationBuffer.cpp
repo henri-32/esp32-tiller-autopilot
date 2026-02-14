@@ -1,29 +1,48 @@
 #include "core/steering/csc/observationBuffer.h"
+#include <algorithm>
 
 ObservationBuffer::ObservationBuffer(SteeringController_Config &config)
-    : m_config(config) {};
+    : m_config(config){};
 
 const int16_t ObservationBuffer::getMedian() const { return median; };
 
 void ObservationBuffer::update(int16_t error) {
+  if (validErrorsCounter >= m_config.regulations.observationBufferSize) {
+    reset();
+  }
+
   m_errorArray[validErrorsCounter] = error;
   validErrorsCounter++;
 
   /*Das Array ist bewusst kein Ringbuffer, da die Ereignisse des letzten Arrays
     semantisch bewusst verworfen werden*/
-  if (validErrorsCounter >= m_config.regulations.observationBufferSize) {
-    for (int i = 0; i == bufferSize; i++) {
-      m_errorArray[i] = 0;
-      validErrorsCounter = 0;
-    };
-  };
+  std::sort(m_errorArray.begin(), m_errorArray.begin() + validErrorsCounter);
 
   /* Da nur signifikante Werte geschrieben werden, ist null semantisch kein Wert
   statt gemessen 0 Da in jedem update neue Medianberechnung ist kein
   Zurücksetzen erforderlich*/
   medianIndex = validErrorsCounter / 2;
   median = m_errorArray[medianIndex];
-};
+
+  // symmetric guard
+  bool symmetric = false;
+  uint8_t negativeValues = 0;
+  uint8_t positiveValues = 0;
+  for (int i = 0; i < validErrorsCounter; i++) {
+    if (m_errorArray[i] < 0) {
+      negativeValues++;
+    } else if (m_errorArray[i] > 0) {
+      positiveValues++;
+    }
+  }
+  if (positiveValues == negativeValues) {
+    symmetric = true;
+  }
+
+  if (symmetric) {
+    median = 0;
+  }
+}
 
 uint8_t ObservationBuffer::getSampleSize() const { return validErrorsCounter; };
 
@@ -31,6 +50,8 @@ uint8_t ObservationBuffer::getSampleSize() const { return validErrorsCounter; };
 void ObservationBuffer::reset() {
   for (int i = 0; i < bufferSize; i++) {
     m_errorArray[i] = 0;
-    validErrorsCounter = 0;
-  };
-};
+  }
+  validErrorsCounter = 0;
+  medianIndex = 0;
+  median = 0;
+}

@@ -1,5 +1,9 @@
 CompileFlags:
-  CompilationDatabase: .pio/build/genericSTM32F411RE
+  CompilationDatabase: .
+  Add:
+    - -Iinclude
+    - -Isrc
+    - -std=gnu++17
 
 ---
 If:
@@ -7,7 +11,7 @@ If:
     - .*src/native_main\.cpp
     - .*src\\native_main\.cpp
 CompileFlags:
-  CompilationDatabase: .pio/build/native
+  CompilationDatabase: .
 
 ---
 If:
@@ -15,4 +19,12 @@ If:
     - .*test/test_csc/.*
     - .*test\\test_csc\\.*
 CompileFlags:
-  CompilationDatabase: .pio/build/native_csc
+  CompilationDatabase: .
+  Add:
+    - -DPIO_UNIT_TESTING
+    - -DUNIT_TEST
+    - -DUNITY_INCLUDE_CONFIG_H
+    - -Itest
+    - -Itest/test_csc
+    - -I.pio/libdeps/native_csc/Unity/src
+    - -I.pio/build/native_csc/unity_config

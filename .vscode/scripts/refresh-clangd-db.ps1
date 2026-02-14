@@ -6,6 +6,13 @@ if (!(Test-Path $pio)) {
   throw "PlatformIO executable not found: $pio"
 }
 
+# Use a repo-local PlatformIO core by default to avoid stale lock/permission
+# issues when switching between Windows and Linux.
+if (-not $env:PLATFORMIO_CORE_DIR -or [string]::IsNullOrWhiteSpace($env:PLATFORMIO_CORE_DIR)) {
+  $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+  $env:PLATFORMIO_CORE_DIR = (Join-Path $repoRoot ".pio-core")
+}
+
 function Ensure-Dir([string]$path) {
   if (!(Test-Path $path)) {
     New-Item -ItemType Directory -Path $path | Out-Null

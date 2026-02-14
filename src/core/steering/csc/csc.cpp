@@ -19,8 +19,8 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   Wenn er wegen Guards nicht beobachten darf early return*/
 
-  if (m_steeringGuard.activeObservationGuard(loopTimestamp, m_lastObsUpdate,
-                                             m_lastIntent)) {
+  if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
+                                         m_lastIntent)) {
     return std::nullopt;
   }
 
@@ -44,8 +44,8 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   SteeringDirection dir = determineDirection(m_observationBuffer.getMedian());
 
-  if (m_steeringGuard.activeIntentGuard(loopTimestamp, m_lastIntent,
-                                        m_observationBuffer.getSampleSize())) {
+  if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent,
+                                    m_observationBuffer.getSampleSize())) {
     return std::nullopt;
   } else {
     intent.dir = dir;
@@ -56,7 +56,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
     intent.abstractImpulse_0_100 = 100;
     m_lastIntent = loopTimestamp;
-    
+
     /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
     diese wird bewusst verworfen*/
 

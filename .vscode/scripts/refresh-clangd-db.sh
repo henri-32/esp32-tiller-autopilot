@@ -4,14 +4,12 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
-# If ~/.platformio is not writable (common after user migration), fall back to
-# a repo-local PlatformIO core dir so DB refresh can still run.
-if [[ -z "${PLATFORMIO_CORE_DIR:-}" && ! -w "${HOME:-}/.platformio" ]]; then
+# Use a repo-local PlatformIO core by default. This avoids permission and
+# lockfile issues after switching between Linux/Windows setups.
+if [[ -z "${PLATFORMIO_CORE_DIR:-}" ]]; then
   export PLATFORMIO_CORE_DIR="$repo_root/.pio-core"
 fi
-if [[ -n "${PLATFORMIO_CORE_DIR:-}" ]]; then
-  mkdir -p "$PLATFORMIO_CORE_DIR"
-fi
+mkdir -p "$PLATFORMIO_CORE_DIR"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -38,12 +36,12 @@ capture_test_compile_commands() {
   pio test -e native_csc -vvv --without-testing >"$log_file" 2>&1
 
   local csc_cmd test_cmd
-  csc_cmd="$(grep -m1 -E '^g\+\+ .*src/core/steering/csc\.cpp$' "$log_file" || true)"
+  csc_cmd="$(grep -m1 -E '^g\+\+ .*src/core/steering/csc/csc\.cpp$' "$log_file" || true)"
   test_cmd="$(grep -m1 -E '^g\+\+ .*test/test_csc/test_csc\.cpp$' "$log_file" || true)"
 
   if [[ -z "$csc_cmd" || -z "$test_cmd" ]]; then
     local base_cmd
-    base_cmd="$(jq -r '.[] | select(.file == "src/core/steering/csc.cpp") | .command' .pio/build/native_csc/compile_commands.json)"
+    base_cmd="$(jq -r '.[] | select(.file == "src/core/steering/csc/csc.cpp") | .command' .pio/build/native_csc/compile_commands.json)"
     if [[ -z "$base_cmd" || "$base_cmd" == "null" ]]; then
       echo "Could not capture or synthesize native_csc test compile commands." >&2
       cat "$log_file" >&2
@@ -53,9 +51,9 @@ capture_test_compile_commands() {
 
     # Fallback when PlatformIO suppresses verbose compile lines in test mode.
     local base_no_src
-    base_no_src="${base_cmd% src/core/steering/csc.cpp}"
-    csc_cmd="$base_no_src -DPIO_UNIT_TESTING -DUNIT_TEST -DUNITY_INCLUDE_CONFIG_H -I.pio/libdeps/native_csc/Unity/src -I.pio/build/native_csc/unity_config -Itest/test_csc -Itest src/core/steering/csc.cpp"
-    test_cmd="${base_no_src/ -o .pio\/build\/native_csc\/src\/core\/steering\/csc.o / -o .pio\/build\/native_csc\/test\/test_csc\/test_csc.o }"
+    base_no_src="${base_cmd% src/core/steering/csc/csc.cpp}"
+    csc_cmd="$base_no_src -DPIO_UNIT_TESTING -DUNIT_TEST -DUNITY_INCLUDE_CONFIG_H -I.pio/libdeps/native_csc/Unity/src -I.pio/build/native_csc/unity_config -Itest/test_csc -Itest src/core/steering/csc/csc.cpp"
+    test_cmd="${base_no_src/ -o .pio\/build\/native_csc\/src\/core\/steering\/csc\/csc.o / -o .pio\/build\/native_csc\/test\/test_csc\/test_csc.o }"
     test_cmd="$test_cmd -DPIO_UNIT_TESTING -DUNIT_TEST -DUNITY_INCLUDE_CONFIG_H -I.pio/libdeps/native_csc/Unity/src -I.pio/build/native_csc/unity_config -Itest/test_csc -Itest test/test_csc/test_csc.cpp"
   fi
 
@@ -81,8 +79,8 @@ inject_native_csc_test_entries() {
         {
           command: $csc,
           directory: "'"$repo_root"'",
-          file: "src/core/steering/csc.cpp",
-          output: ".pio/build/native_csc/src/core/steering/csc.o"
+          file: "src/core/steering/csc/csc.cpp",
+          output: ".pio/build/native_csc/src/core/steering/csc/csc.o"
         },
         {
           command: $test,

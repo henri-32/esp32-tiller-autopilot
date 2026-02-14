@@ -2,14 +2,14 @@
 #include "actuators/pwmController.h"
 #include "core/config.h"
 #include "core/steering/csc/csc.h"
+#include "core/steering/impulseFilter.h"
+#include "core/steering/sourceHandling.h"
+#include "core/steering/steeringOrchestrator.h"
+#include "diagnostics/diagnostics.h"
 #include "sensors/NMEA183BUS.h"
 #include "sensors/navigationSensors.h"
-#include "core/steering/impulseFilter.h"
-#include "core/steering/sourceEvaluator.h"
-#include "core/steering/steeringOrchestrator.h"
 #include "ui/controlPanel.h"
 #include "ui/display.h"
-#include "diagnostics/diagnostics.h"
 
 class SystemController {
 public:
@@ -29,8 +29,7 @@ private:
   Diagnostics m_diagnostics;
   ImpulseFilter m_impulseFilter;
   CoreSteeringController m_csc;
-  SourceEvaluator m_sourceEvaluator;
+  SourceHandler m_sourceHandler;
   SteeringOrchestrator m_steeringOrchestrator;
   Display m_display;
 };
-

@@ -11,7 +11,7 @@ private:
   static constexpr uint8_t bufferSize =
       SteeringRegulationConfig::observationBufferSize;
 
-  std::array<int16_t, bufferSize> m_errorArray;
+  std::array<int16_t, bufferSize> m_errorArray{};
   uint8_t validErrorsCounter = 0;
   uint8_t medianIndex;
   int16_t median = 0;

@@ -29,13 +29,12 @@ private:
   uint16_t m_internalTargetCourse{0};
 
   // --- Subsystems ---
-public: // for testing !!TODO
+private:
   HeadingErrorCalculator m_errorCalculator;
   ObservationBuffer m_observationBuffer;
   Deadband m_deadband;
   SteeringGuard m_steeringGuard;
 
-private:
   // --- Internal helpers ---
   SteeringDirection determineDirection(int16_t median) const;
   uint32_t m_lastObsUpdate = 0;
