@@ -1,4 +1,4 @@
-#pragma once 
+#pragma once
 #include <cstdint>
 
 struct SteeringMechanicsConfig {
@@ -14,6 +14,7 @@ struct SteeringRegulationConfig {
   uint32_t pauseForValidObsAfterImpulse_ms = 3000;
 
   static constexpr uint8_t observationBufferSize = 70;
+  uint8_t minimumSampleSize = 10;
 };
 
 struct SteeringSourceEVConfig {

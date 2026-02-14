@@ -1,6 +1,6 @@
 #pragma once
 #include "core/config.h"
-#include "core/steering/csc.h"
+#include "core/steering/csc/csc.h"
 #include "sensors/navigationSensors.h"
 #include "diagnostics/diagnostics.h"
 #include "ui/controlPanel.h"
@@ -30,3 +30,4 @@ private:
   uint32_t m_lastCorrection;
   uint16_t m_observationCounter; 
 };
+

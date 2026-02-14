@@ -1,10 +1,10 @@
 #pragma once 
 
-#include "csc.h"
-#include "impulseFilter.h"
+#include "core/steering/csc/csc.h"
+#include "core/steering/impulseFilter.h"
 #include "actuators/pwmController.h"
 #include "sensors/navigationSensors.h"
-#include "sourceEvaluator.h"
+#include "core/steering/sourceEvaluator.h"
 #include "types/globalTypes.h"
 #include <cstdint>
 class SteeringOrchestrator {

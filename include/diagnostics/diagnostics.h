@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include "diagnostic_types.h"
+#include "diagnostics/diagnostic_types.h"
 
 struct DiagnosticEntry {
     DiagnosticEvent event;
@@ -40,3 +40,4 @@ private:
     void updateCapabilityState(DiagnosticEvent event,
                                FunctionalCapability capability);
 };
+
