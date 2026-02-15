@@ -35,6 +35,14 @@ function Build-Compiledb([string]$env, [string]$targetDir) {
   Copy-Item compile_commands.json (Join-Path $targetDir "compile_commands.json") -Force
 }
 
+function Get-UnityTestFlags {
+  $flags = "-DPIO_UNIT_TESTING -DUNIT_TEST -I.pio\libdeps\native_csc\Unity\src -Itest\test_csc -Itest"
+  if ((Test-Path ".pio\build\native_csc\unity_config\unity_config.h") -or (Test-Path ".pio\build\native_csc\unity_config\UnityConfig.h")) {
+    $flags += " -DUNITY_INCLUDE_CONFIG_H -I.pio\build\native_csc\unity_config"
+  }
+  return $flags
+}
+
 function Inject-CscTestEntry {
   $dbPath = ".clangd-db/native_csc/compile_commands.json"
   $db = Get-Content $dbPath -Raw | ConvertFrom-Json
@@ -52,7 +60,8 @@ function Inject-CscTestEntry {
   $baseCmd = $baseEntry.command.Trim()
   $baseNoSrc = $baseCmd -replace '(\s+src[\\/]+core[\\/]+steering[\\/]+csc[\\/]+csc\.cpp)$', ''
   $baseNoSrc = $baseNoSrc -replace '(-o\s+)\S+', '$1.pio\build\native_csc\test\test_csc\test_csc.o'
-  $testCommand = "$baseNoSrc -DPIO_UNIT_TESTING -DUNIT_TEST -DUNITY_INCLUDE_CONFIG_H -I.pio\\libdeps\\native_csc\\Unity\\src -I.pio\\build\\native_csc\\unity_config -Itest\\test_csc -Itest test\\test_csc\\test_csc.cpp"
+  $unityFlags = Get-UnityTestFlags
+  $testCommand = "$baseNoSrc $unityFlags test\test_csc\test_csc.cpp"
 
   $outputPath = ".pio\build\native_csc\test\test_csc\test_csc.o"
   $outputMatch = [regex]::Match($testCommand, "-o\s+(\S+)")

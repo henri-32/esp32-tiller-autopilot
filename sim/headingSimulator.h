@@ -1,58 +1,77 @@
 #pragma once
 
-class HeadingSignal {
-public:
-    HeadingSignal(double startHeading);
+#include <cstdint>
+#include <optional>
 
-    void setTarget(double target);
+#include "core/steering/csc/csc.h"
 
-    void enableDrift(double deg_per_sec);
-    void enableOscillation(double amplitude_deg, double period_sec);
+struct SimulationConfig {
+  // --- Time ---
+  float dt_sec;
+  uint32_t sim_seconds;
 
-    void step(double dt);
+  // --- Boot dynamics ---
+  float intentStepToOmega;
+  float initialHeading_deg;
+  float environmentTorque_deg_s2;
 
-    double getHeading() const;
-
-private:
-    double normalize(double h);
-
-    double m_heading;
-    double m_target;
-
-    // Drift
-    double m_driftRate = 0.0;
-
-    // Oscillation
-    bool m_oscEnabled = false;
-    double m_amp = 0.0;
-    double m_period = 1.0;
-    double m_time = 0.0;
+  // --- CSC ---
+  SteeringRegulationConfig regulation;
+  uint16_t target_deg;
 };
 
-class HeadingDriftSignal {
-    public:
-    HeadingDriftSignal(double startHeading, double driftDegPerSec) : m_heading(startHeading), m_driftRate(driftDegPerSec){};
+SimulationConfig makeDefaultSimulationConfig();
 
-    void step(double dt){
-        m_heading += m_driftRate * dt; 
-        normalize();
-    };
+class BootModel {
+public:
+  BootModel(float startHeading_deg, float intentStepToOmega);
 
-    double getHeading() const {
-        return m_heading;
-    };
+  // Intent effect is applied once per intent event.
+  void applyIntent(float signedImpulse_0_100);
 
-    private:
-    void normalize() {
-        while (m_heading<0) {
-        m_heading+=360;
-        }
-        while (m_heading>=360) {
-        m_heading-= 360;
-        }
-    };
+  // Minimal step model:
+  // omega += externalTorque * dt
+  // heading += omega * dt
+  void update(float dt, float externalTorque_deg_s2);
 
-    double m_heading; 
-    double m_driftRate; 
+  float heading() const;
+  float angularVelocity() const;
 
+private:
+  static float normalizeHeading(float heading_deg);
+  float m_heading_deg = 0.0f;
+  float m_angularVelocity_deg_s = 0.0f;
+  float m_intentStepToOmega = 0.0f;
+};
+
+class EnvironmentModel {
+public:
+  explicit EnvironmentModel(float constantTorque_deg_s2 = 0.0f);
+
+  // Minimal disturbance model; constant torque for now.
+  float externalTorque(float time_s) const;
+
+private:
+  float m_constantTorque_deg_s2 = 0.0f;
+};
+
+class SimulationEngine {
+public:
+  SimulationEngine(CoreSteeringController &csc, const SimulationConfig &config);
+
+  // Orchestrates one simulation step:
+  // 1) heading -> CSC
+  // 2) CSC tick
+  // 3) intent impulse -> BootModel update
+  void tick(float dt, uint32_t loopTimestamp);
+
+  float heading() const;
+  float angularVelocity() const;
+  std::optional<SteeringIntent> lastIntent() const;
+
+private:
+  BootModel m_boot;
+  EnvironmentModel m_environment;
+  CoreSteeringController &m_csc;
+  std::optional<SteeringIntent> m_lastIntent;
 };

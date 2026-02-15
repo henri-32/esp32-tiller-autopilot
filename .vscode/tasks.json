@@ -124,8 +124,15 @@
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "Get-ChildItem -Recurse -Path .\\include, .\\src, .\\test -Include *.h,*.hpp,*.cpp | Sort-Object FullName | ForEach-Object { \"`n/* ===== FILE: $($_.FullName) ===== */`n\"; Get-Content -Raw $_.FullName } | Set-Content -NoNewline -Encoding UTF8 .\\all_sources.txt"
+        "$out = '.\\all_sources.txt'; Set-Content -Path $out -Value '' -Encoding UTF8; Get-ChildItem -Recurse -Path .\\include, .\\src, .\\test, .\\sim -Include *.h,*.hpp,*.cpp | Sort-Object FullName | ForEach-Object { Add-Content -Path $out -Value \"`n/* ===== FILE: $($_.FullName) ===== */`n\" -Encoding UTF8; Add-Content -Path $out -Value (Get-Content -Raw $_.FullName) -Encoding UTF8 }"
       ],
+      "linux": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          ": > all_sources.txt; find include src test sim -type f \\( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \\) | sort | while IFS= read -r f; do printf '\\n/* ===== FILE: %s ===== */\\n' \"$f\" >> all_sources.txt; cat \"$f\" >> all_sources.txt; done"
+        ]
+      },
       "presentation": {
         "reveal": "always",
         "panel": "shared"
@@ -134,4 +141,3 @@
     }
   ]
 }
-
