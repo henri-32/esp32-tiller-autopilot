@@ -7,8 +7,8 @@
 #include <cstdint>
 
 CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
-    :  m_observationBuffer(config), m_deadband(config),
-      m_steeringGuard(config) {}
+    : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config) {
+}
 
 std::optional<SteeringIntent>
 CoreSteeringController::tick(uint32_t loopTimestamp) {
@@ -21,6 +21,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   // Gate observation to avoid reacting too frequently.
   if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
                                          m_lastIntent)) {
+    m_debug.observationBlocked = true;
     return std::nullopt;
   }
 
@@ -28,15 +29,20 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   int16_t error = m_errorCalculator.getCurrentError(m_currentCourse,
                                                     m_internalTargetCourse);
+  m_debug.error = error;
 
   /*Ein nicht signifikanter Error kann keine Aktion auslösen
   Deswegen darf das direkt zum early return führen*/
   // Ignore small errors to avoid actuator chatter.
   if (!m_deadband.errorSignificant(error)) {
+    m_debug.deadbandActive = true;
     return std::nullopt;
   }
-
   m_observationBuffer.update(error);
+
+  m_debug.median = m_observationBuffer.getMedian();
+  m_debug.sampleSize = m_observationBuffer.getSampleSize();
+
   m_lastObsUpdate = loopTimestamp;
 
   /* Der Median wird bewusst nur für die Bestimmung der
@@ -47,6 +53,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent,
                                     m_observationBuffer.getSampleSize())) {
+    m_debug.intentBlocked = true;
     return std::nullopt;
   } else {
     intent.dir = dir;
@@ -88,4 +95,8 @@ CoreSteeringController::determineDirection(int16_t median) const {
     return SteeringDirection::Right;
   };
   return SteeringDirection::Left;
+}
+
+const CSCDebugSnapshot &CoreSteeringController::getDebug() const {
+  return m_debug;
 }

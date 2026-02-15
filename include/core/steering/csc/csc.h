@@ -8,6 +8,14 @@
 #include "types/globalTypes.h"
 #include <cstdint>
 #include <optional>
+  struct CSCDebugSnapshot {
+    int16_t error = 0;
+    int16_t median = 0;
+    uint8_t sampleSize = 0;
+    bool deadbandActive = false;
+    bool observationBlocked = false;
+    bool intentBlocked = false;
+  };
 
 class CoreSteeringController {
 public:
@@ -22,6 +30,8 @@ public:
   void currentHDG(uint16_t current);
   void setInternalTarget(uint16_t target);
   uint16_t getInternalTarget() const;
+  const CSCDebugSnapshot& getDebug() const;
+
 
 private:
   // --- State ---
@@ -39,4 +49,8 @@ private:
   SteeringDirection determineDirection(int16_t median) const;
   uint32_t m_lastObsUpdate = 0;
   uint32_t m_lastIntent = 0;
+
+  // --- Debug ---
+  CSCDebugSnapshot m_debug;
+
 };

@@ -41,7 +41,7 @@ capture_test_compile_commands() {
 
   if [[ -z "$csc_cmd" || -z "$test_cmd" ]]; then
     local base_cmd
-    base_cmd="$(jq -r '.[] | select(.file == "src/core/steering/csc/csc.cpp") | .command' .pio/build/native_csc/compile_commands.json)"
+    base_cmd="$(jq -r '.[] | select(.file == "src/core/steering/csc/csc.cpp") | .command' .clangd-db/native_csc/compile_commands.json)"
     if [[ -z "$base_cmd" || "$base_cmd" == "null" ]]; then
       echo "Could not capture or synthesize native_csc test compile commands." >&2
       cat "$log_file" >&2
@@ -62,7 +62,7 @@ capture_test_compile_commands() {
 }
 
 inject_native_csc_test_entries() {
-  local db_path=".pio/build/native_csc/compile_commands.json"
+  local db_path=".clangd-db/native_csc/compile_commands.json"
   local csc_cmd="$1"
   local test_cmd="$2"
 
@@ -94,8 +94,9 @@ inject_native_csc_test_entries() {
   mv "${db_path}.tmp" "$db_path"
 }
 
-build_compiledb "genericSTM32F411RE" ".pio/build/genericSTM32F411RE"
-build_compiledb "native_csc" ".pio/build/native_csc"
+build_compiledb "genericSTM32F411RE" ".clangd-db/genericSTM32F411RE"
+build_compiledb "sim" ".clangd-db/sim"
+build_compiledb "native_csc" ".clangd-db/native_csc"
 
 mapfile -t cmds < <(capture_test_compile_commands)
 inject_native_csc_test_entries "${cmds[0]}" "${cmds[1]}"

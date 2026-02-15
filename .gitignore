@@ -11,3 +11,11 @@ index/
 # Build / Tooling
 build/
 compile_commands.json
+.clangd-db/
+
+# Python venv (simulation analysis)
+sim/analysis/venv/
+
+# Simulation outputs (generated artifacts)
+sim/sim_output/*.csv
+!sim/sim_output/.gitkeep

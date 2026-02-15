@@ -2,24 +2,79 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "PlatformIO: Generate compile_commands.json",
+      "label": "PlatformIO: Refresh clangd databases (firmware + sim + native_csc)",
       "type": "shell",
-      "command": "C:\\Users\\henri\\.platformio\\penv\\Scripts\\pio.exe",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".vscode/scripts/refresh-clangd-db.ps1"
+      ],
+      "linux": {
+        "command": "bash",
+        "args": [
+          ".vscode/scripts/refresh-clangd-db.sh"
+        ]
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "PlatformIO: Build sim",
+      "type": "shell",
+      "command": "pio",
+      "windows": {
+        "command": "C:\\Users\\henri\\.platformio\\penv\\Scripts\\pio.exe"
+      },
       "args": [
         "run",
-        "-t",
-        "compiledb",
         "-e",
-        "genericSTM32F411RE"
+        "sim"
       ],
       "linux": {
-        "command": "pio",
+        "command": "pio"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Simulation: run_simulation",
+      "type": "shell",
+      "dependsOn": [
+        "PlatformIO: Build sim"
+      ],
+      "command": ".\\.pio\\build\\sim\\program.exe",
+      "linux": {
+        "command": "./.pio/build/sim/program"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Simulation: plot_drift",
+      "type": "shell",
+      "command": ".\\sim\\analysis\\venv\\Scripts\\python.exe",
+      "args": [
+        "sim\\plots\\plot_drift.py"
+      ],
+      "linux": {
+        "command": "python3",
         "args": [
-          "run",
-          "-t",
-          "compiledb",
-          "-e",
-          "genericSTM32F411RE"
+          "sim/plots/plot_drift.py"
         ]
       },
       "group": "build",
@@ -30,69 +85,28 @@
       "problemMatcher": []
     },
     {
-      "label": "PlatformIO: Refresh clangd databases (full, includes native_csc test)",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        ".vscode/scripts/refresh-clangd-db.ps1"
+      "label": "Simulation: run_simulation + plot_drift",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Simulation: run_simulation",
+        "Simulation: plot_drift"
       ],
-      "linux": {
-        "command": "bash",
-        "args": [
-          ".vscode/scripts/refresh-clangd-db.sh"
-        ]
-      },
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "PlatformIO: Refresh clangd databases (main + test)",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        ".vscode/scripts/refresh-clangd-db.ps1"
-      ],
-      "linux": {
-        "command": "bash",
-        "args": [
-          ".vscode/scripts/refresh-clangd-db.sh"
-        ]
-      },
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
       "problemMatcher": []
     },
     {
       "label": "PlatformIO: Run native_csc tests",
       "type": "shell",
-      "command": "C:\\Users\\henri\\.platformio\\penv\\Scripts\\pio.exe",
+      "command": "pio",
+      "windows": {
+        "command": "C:\\Users\\henri\\.platformio\\penv\\Scripts\\pio.exe"
+      },
       "args": [
         "test",
         "-e",
         "native_csc"
       ],
       "linux": {
-        "command": "pio",
-        "args": [
-          "test",
-          "-e",
-          "native_csc"
-        ]
+        "command": "pio"
       },
       "group": "test",
       "presentation": {

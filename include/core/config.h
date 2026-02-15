@@ -9,7 +9,7 @@ struct SteeringMechanicsConfig {
 
 struct SteeringRegulationConfig {
   // Regulation thresholds and timing gates used by CSC.
-  uint8_t steeringTolerance_deg = 10;
+  uint8_t steeringTolerance_deg = 1;
   uint32_t steeringCooldown_ms = 2000;
   uint32_t minimumTimeBtwObs_ms = 1000;
   uint32_t pauseForValidObsAfterImpulse_ms = 3000;

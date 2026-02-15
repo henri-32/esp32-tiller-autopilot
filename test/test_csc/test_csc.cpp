@@ -408,6 +408,13 @@ void test_csc_respects_time_gates_and_cooldown() {
     TEST_ASSERT_TRUE(secondIntent);
 }
 
+void test_error_just_outside_deadband_negative_is_treated_as_significant() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
+  Deadband deadband(config);
+
+  TEST_ASSERT_TRUE(deadband.errorSignificant(-11));
+}
 
 int main() {
   UNITY_BEGIN();
@@ -437,6 +444,7 @@ int main() {
   RUN_TEST(test_csc_does_not_emit_intent_inside_deadband);
   RUN_TEST(test_csc_resets_observation_after_intent);
   RUN_TEST(test_csc_respects_time_gates_and_cooldown);
+  RUN_TEST(test_error_just_outside_deadband_negative_is_treated_as_significant);
 
   return UNITY_END();
 }

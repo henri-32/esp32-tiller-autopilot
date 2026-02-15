@@ -1,5 +1,5 @@
 CompileFlags:
-  CompilationDatabase: .
+  CompilationDatabase: .clangd-db/genericSTM32F411RE
   Add:
     - -Iinclude
     - -Isrc
@@ -8,10 +8,18 @@ CompileFlags:
 ---
 If:
   PathMatch:
-    - .*src/native_main\.cpp
-    - .*src\\native_main\.cpp
+    - .*sim/.*
+    - .*sim\\.*
 CompileFlags:
-  CompilationDatabase: .
+  CompilationDatabase: .clangd-db/sim
+
+---
+If:
+  PathMatch:
+    - .*src/core/steering/csc/.*
+    - .*src\\core\\steering\\csc\\.*
+CompileFlags:
+  CompilationDatabase: .clangd-db/native_csc
 
 ---
 If:
@@ -19,7 +27,7 @@ If:
     - .*test/test_csc/.*
     - .*test\\test_csc\\.*
 CompileFlags:
-  CompilationDatabase: .
+  CompilationDatabase: .clangd-db/native_csc
   Add:
     - -DPIO_UNIT_TESTING
     - -DUNIT_TEST

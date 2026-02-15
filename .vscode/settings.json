@@ -1,5 +1,6 @@
 {
   "editor.defaultFormatter": "xaver.clang-format",
+  "python.defaultInterpreterPath": "${workspaceFolder}/sim/analysis/venv/Scripts/python.exe",
 
   // --- Brackets & Quotes: stabil, aber nicht bevormundend ---
   "editor.autoClosingBrackets": "languageDefined",
@@ -19,8 +20,12 @@
 
   "clangd.arguments": [
     "--query-driver=C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@*/bin/arm-none-eabi-*",
+    "--query-driver=C:/Repositorys/Arduino_Projekte/Autopilot_git/.pio-core/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-*",
+    "--query-driver=C:/Repositorys/Arduino_Projekte/Autopilot_git/.pio-core/packages/toolchain-gccmingw32/bin/*g++*",
     "--query-driver=C:/msys64/mingw64/bin/g++*",
     "--query-driver=/home/*/.platformio/packages/toolchain-gccarmnoneeabi@*/bin/arm-none-eabi-*",
+    "--query-driver=*/.pio-core/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-*",
+    "--query-driver=*/.pio-core/packages/toolchain-gccmingw32/bin/*g++*",
     "--query-driver=/usr/bin/g++*",
     "--background-index",
     "--header-insertion=never",
