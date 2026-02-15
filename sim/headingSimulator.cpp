@@ -21,7 +21,7 @@ SimulationConfig makeDefaultSimulationConfig() {
   config.sim_seconds = 180;
 
   // --- Boot dynamics ---
-  config.intentStepToOmega = 0.01f;
+  config.intentStepToOmega = 0.005f; // Weil abstract intent noch 100 ist wirkt dieser parameter *100 also 0.1 = 1deg/sec
   config.initialHeading_deg = 10.0f;
   config.environmentTorque_deg_s2 = 0.0f;
 
