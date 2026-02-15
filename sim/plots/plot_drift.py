@@ -101,61 +101,81 @@ def plot_drift(df, plt) -> None:
     median_plot = unwrap_degrees(df["median_deg"])
     omega_raw = df["angular_velocity_deg_s"]
     omega_smooth = omega_raw.rolling(window=5, center=True, min_periods=1).mean()
+    obs_blocked = df["obs_blocked"]
+    intent_blocked = df["intent_blocked"]
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(
         time_s,
         heading_plot,
-        label="Heading (sampled, steps)",
+        label="Heading",
         drawstyle="steps-post",
     )
-    plt.plot(time_s, error_plot, label="Error (raw)")
-    plt.plot(time_s, median_plot, label="Median (ObservationBuffer, unwrapped)")
-    plt.plot(
+    ax.plot(time_s, error_plot, label="Error")
+    #ax.plot(time_s, median_plot, label="Median")
+    ax.plot(
         time_s,
         omega_smooth,
-        label="Angular Velocity (smoothed, deg/s)",
+        label="Omega smooth",
         linestyle="-.",
     )
-    plt.plot(
+    ax.plot(
         time_s,
         omega_raw,
-        label="Angular Velocity (raw)",
+        label="Omega raw",
         linestyle="--",
         alpha=0.25,
         linewidth=1.0,
     )
+    ax.plot(
+        time_s,
+        obs_blocked,
+        label="Obs blocked",
+        linestyle="--",
+        alpha=0.5,
+        color="black",
+    )
+    ##ax.plot(
+        #time_s,
+        #intent_blocked,
+        #label="Intent blocked",
+        #linestyle="--",
+        #alpha=0.5,
+      # color="purple",
+    #)
+
     if "trim_state" in df.columns:
-      plt.plot(
-          time_s,
-          df["trim_state"],
-          label="Trim State",
-          linestyle=":",
-      )
+        ax.plot(
+            time_s,
+            df["trim_state"],
+            label="Trim",
+            linestyle=":",
+        )
 
     intent = df[df["intent"] == 1]
     intent_right = intent[intent["dir"] == "Right"]
     intent_left = intent[intent["dir"] == "Left"]
 
-    plt.scatter(
+    ax.scatter(
         intent_right["time_ms"] / 1000.0,
         [heading_plot[idx] for idx in intent_right.index],
         color="green",
         marker="x",
-        label="Intent Right",
+        label="Intent R",
     )
-    plt.scatter(
+    ax.scatter(
         intent_left["time_ms"] / 1000.0,
         [heading_plot[idx] for idx in intent_left.index],
         color="red",
         marker="x",
-        label="Intent Left",
+        label="Intent L",
     )
 
-    plt.xlabel("Time (s)")
-    plt.ylabel("Angle (deg)")
-    plt.legend()
-    plt.grid(True)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Angle (deg)")
+    ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False)
+    ax.grid(True)
+    fig.tight_layout(rect=(0.0, 0.0, 0.82, 1.0))
     plt.show()
 
 

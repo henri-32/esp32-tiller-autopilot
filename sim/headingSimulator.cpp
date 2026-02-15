@@ -9,7 +9,7 @@
 #include "headingSimulator.h"
 #include "types/globalTypes.h"
 
-namespace{
+namespace {
 constexpr const char *kOutputPath = "sim/sim_output/drift_sim.csv";
 }
 
@@ -17,20 +17,22 @@ SimulationConfig makeDefaultSimulationConfig() {
   SimulationConfig config{};
 
   // --- Time ---
-  config.dt_sec = 0.5f;
+  config.dt_sec = 0.1f;
   config.sim_seconds = 180;
 
   // --- Boot dynamics ---
-  config.intentStepToOmega = 0.005f; // Weil abstract intent noch 100 ist wirkt dieser parameter *100 also 0.1 = 1deg/sec
+  config.intentStepToOmega =
+      0.005f; // Weil abstract intent noch 100 ist wirkt dieser parameter *100
+              // also 0.1 = 1deg/sec
   config.initialHeading_deg = 10.0f;
   config.environmentTorque_deg_s2 = 0.0f;
 
   // --- CSC ---
-  config.regulation.steeringTolerance_deg = 5;
+  config.regulation.steeringTolerance_deg = 2;
   config.regulation.minimumSampleSize = 5;
-  config.regulation.minimumTimeBtwObs_ms = 500;
-  config.regulation.pauseForValidObsAfterImpulse_ms = 3000;
-  config.regulation.steeringCooldown_ms = 2000;
+  config.regulation.minimumTimeBtwObs_ms = 100;
+  config.regulation.pauseForValidObsAfterImpulse_ms = 2000;
+  config.regulation.steeringCooldown_ms = 000;
   config.target_deg = 0;
 
   return config;
@@ -38,8 +40,7 @@ SimulationConfig makeDefaultSimulationConfig() {
 
 BootModel::BootModel(float startHeading_deg, float intentStepToOmega)
     : m_heading_deg(normalizeHeading(startHeading_deg)),
-      m_angularVelocity_deg_s(0.0f),
-      m_intentStepToOmega(intentStepToOmega) {}
+      m_angularVelocity_deg_s(0.0f), m_intentStepToOmega(intentStepToOmega) {}
 
 void BootModel::applyIntent(float signedImpulse_0_100) {
   m_angularVelocity_deg_s += m_intentStepToOmega * signedImpulse_0_100;
@@ -47,7 +48,8 @@ void BootModel::applyIntent(float signedImpulse_0_100) {
 
 void BootModel::update(float dt, float externalTorque_deg_s2) {
   m_angularVelocity_deg_s += externalTorque_deg_s2 * dt;
-  m_heading_deg = normalizeHeading(m_heading_deg + (m_angularVelocity_deg_s * dt));
+  m_heading_deg =
+      normalizeHeading(m_heading_deg + (m_angularVelocity_deg_s * dt));
 }
 
 float BootModel::heading() const { return m_heading_deg; }
@@ -74,8 +76,7 @@ float EnvironmentModel::externalTorque(float /*time_s*/) const {
 SimulationEngine::SimulationEngine(CoreSteeringController &csc,
                                    const SimulationConfig &config)
     : m_boot(config.initialHeading_deg, config.intentStepToOmega),
-      m_environment(config.environmentTorque_deg_s2),
-      m_csc(csc) {}
+      m_environment(config.environmentTorque_deg_s2), m_csc(csc) {}
 
 void SimulationEngine::tick(float dt, uint32_t loopTimestamp) {
   const uint16_t heading_u16 =
@@ -99,7 +100,9 @@ void SimulationEngine::tick(float dt, uint32_t loopTimestamp) {
 
 float SimulationEngine::heading() const { return m_boot.heading(); }
 
-float SimulationEngine::angularVelocity() const { return m_boot.angularVelocity(); }
+float SimulationEngine::angularVelocity() const {
+  return m_boot.angularVelocity();
+}
 
 std::optional<SteeringIntent> SimulationEngine::lastIntent() const {
   return m_lastIntent;
@@ -109,8 +112,8 @@ int main() {
   SimulationConfig config = makeDefaultSimulationConfig();
 
   const uint32_t dt_ms = static_cast<uint32_t>(config.dt_sec * 1000.0f);
-  const uint32_t steps =
-      static_cast<uint32_t>(static_cast<float>(config.sim_seconds) / config.dt_sec);
+  const uint32_t steps = static_cast<uint32_t>(
+      static_cast<float>(config.sim_seconds) / config.dt_sec);
 
   CoreSteeringController csc(config.regulation);
   csc.setInternalTarget(config.target_deg);
@@ -153,9 +156,9 @@ int main() {
 
     file << time_ms << "," << heading << "," << angularVelocity << ","
          << config.target_deg << "," << dbg.error << "," << dbg.median << ","
-         << static_cast<int>(dbg.sampleSize) << ","
-         << dbg.deadbandActive << "," << dbg.observationBlocked << ","
-         << dbg.intentBlocked << "," << (intent.has_value() ? 1 : 0) << ",";
+         << static_cast<int>(dbg.sampleSize) << "," << dbg.deadbandActive << ","
+         << dbg.observationBlocked << "," << dbg.intentBlocked << ","
+         << (intent.has_value() ? 1 : 0) << ",";
 
     if (intent) {
       file << (intent->dir == SteeringDirection::Left ? "Left" : "Right");

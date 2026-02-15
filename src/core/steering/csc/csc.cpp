@@ -12,6 +12,11 @@ CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
 
 std::optional<SteeringIntent>
 CoreSteeringController::tick(uint32_t loopTimestamp) {
+  // Debug flags are per-tick state, not latched state.
+  m_debug.observationBlocked = false;
+  m_debug.intentBlocked = false;
+  m_debug.deadbandActive = false;
+
   /*CSC macht zwei Sachen
   - Beobachten
   - Intent zurückgeben
