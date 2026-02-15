@@ -1,4 +1,6 @@
-﻿#pragma once
+
+/* ===== FILE: include/actuators/pwmController.h ===== */
+#pragma once
 #include "types/globalTypes.h"
 
 class PWMController {
@@ -19,6 +21,8 @@ private:
   SteeringDirection m_lastDir;
   Force m_lastFrc = Force::Low;
 };
+
+/* ===== FILE: include/core/config.h ===== */
 #pragma once
 #include <cstdint>
 
@@ -30,7 +34,7 @@ struct SteeringMechanicsConfig {
 
 struct SteeringRegulationConfig {
   // Regulation thresholds and timing gates used by CSC.
-  uint8_t steeringTolerance_deg = 10;
+  uint8_t steeringTolerance_deg = 1;
   uint32_t steeringCooldown_ms = 2000;
   uint32_t minimumTimeBtwObs_ms = 1000;
   uint32_t pauseForValidObsAfterImpulse_ms = 3000;
@@ -58,6 +62,8 @@ struct SteeringControllerConfig {
   SteeringPhysicsConfig physics;
   SteeringSourceHandlingConfig source;
 };
+
+/* ===== FILE: include/core/steering/csc/csc.h ===== */
 #pragma once
 
 #include "core/config.h"
@@ -68,6 +74,14 @@ struct SteeringControllerConfig {
 #include "types/globalTypes.h"
 #include <cstdint>
 #include <optional>
+  struct CSCDebugSnapshot {
+    int16_t error = 0;
+    int16_t median = 0;
+    uint8_t sampleSize = 0;
+    bool deadbandActive = false;
+    bool observationBlocked = false;
+    bool intentBlocked = false;
+  };
 
 class CoreSteeringController {
 public:
@@ -82,6 +96,8 @@ public:
   void currentHDG(uint16_t current);
   void setInternalTarget(uint16_t target);
   uint16_t getInternalTarget() const;
+  const CSCDebugSnapshot& getDebug() const;
+
 
 private:
   // --- State ---
@@ -99,7 +115,13 @@ private:
   SteeringDirection determineDirection(int16_t median) const;
   uint32_t m_lastObsUpdate = 0;
   uint32_t m_lastIntent = 0;
+
+  // --- Debug ---
+  CSCDebugSnapshot m_debug;
+
 };
+
+/* ===== FILE: include/core/steering/csc/deadband.h ===== */
 #pragma once
 
 #include "core/config.h"
@@ -118,6 +140,8 @@ public:
 private:
   SteeringRegulationConfig &m_config;
 };
+
+/* ===== FILE: include/core/steering/csc/headingErrorCalculator.h ===== */
 #pragma once
 #include <cstdint>
 
@@ -126,7 +150,9 @@ public:
   HeadingErrorCalculator() = default;
 
   int16_t getCurrentError(uint16_t current, uint16_t target);
-};#pragma once
+};
+/* ===== FILE: include/core/steering/csc/observationBuffer.h ===== */
+#pragma once
 
 #include "core/config.h"
 #include <array>
@@ -156,6 +182,8 @@ public:
   uint8_t getSampleSize() const;
   void reset();
 };
+
+/* ===== FILE: include/core/steering/csc/steeringGuard.h ===== */
 #pragma once
 
 #include "core/config.h"
@@ -177,6 +205,8 @@ public:
 private:
   SteeringRegulationConfig &m_config;
 };
+
+/* ===== FILE: include/core/steering/impulseFilter.h ===== */
 #pragma once
 #include "core/config.h"
 #include "sensors/navigationSensors.h"
@@ -198,6 +228,8 @@ private:
   SteeringMechanicsConfig &m_mechanics;
   SteeringPhysicsConfig &m_physics;
 };
+
+/* ===== FILE: include/core/steering/sourceHandling.h ===== */
 #pragma once
 #include "core/config.h"
 #include "core/steering/csc/csc.h"
@@ -288,6 +320,8 @@ private:
       SteeringSourceHandlingConfig::observationBufferSize;
   std::array<uint16_t, OBSERVATION_BUFFER_SIZE> m_observationBuffer;
 };
+
+/* ===== FILE: include/core/steering/sourceModels/gpsModel.h ===== */
 #pragma once
 
 #include <cstdint>
@@ -302,6 +336,8 @@ public:
 
   uint16_t applyFilter(uint16_t target);
 };
+
+/* ===== FILE: include/core/steering/sourceModels/windModel.h ===== */
 #pragma once
 
 #include <cstdint>
@@ -316,6 +352,8 @@ public:
 
     uint16_t applyFilter(uint16_t target);
 };
+
+/* ===== FILE: include/core/steering/steeringOrchestrator.h ===== */
 #pragma once
 
 #include "actuators/pwmController.h"
@@ -343,6 +381,8 @@ private:
   PWMController &m_pwm;
   SteeringIntent m_steeringIntent;
 };
+
+/* ===== FILE: include/core/systemController.h ===== */
 #pragma once
 #include "actuators/pwmController.h"
 #include "core/config.h"
@@ -383,6 +423,8 @@ private:
   SteeringOrchestrator m_steeringOrchestrator;
   Display m_display;
 };
+
+/* ===== FILE: include/diagnostics/diagnostic_types.h ===== */
 #pragma once
 #include <cstdint>
 
@@ -408,6 +450,8 @@ enum class CapabilityState : uint8_t {
     Degraded,
     Lost
 };
+
+/* ===== FILE: include/diagnostics/diagnostics.h ===== */
 #pragma once
 #include <cstdint>
 #include "diagnostics/diagnostic_types.h"
@@ -433,7 +477,7 @@ public:
     // vom SystemController im Tick aufgerufen
     void tick(uint32_t loopTimestamp);
 
-    // fÃ¼r spÃ¤tere Auswertung (noch minimal)
+    // für spätere Auswertung (noch minimal)
     CapabilityState capabilityState(FunctionalCapability cap) const;
 
 private:
@@ -442,7 +486,7 @@ private:
     uint8_t m_writeIndex = 0;
     uint8_t m_count = 0;
 
-    // --- Capability-ZustÃ¤nde (latched) ---
+    // --- Capability-Zustände (latched) ---
     CapabilityState m_states[
         static_cast<uint8_t>(FunctionalCapability::COUNT)
     ];
@@ -455,6 +499,28 @@ private:
                                FunctionalCapability capability);
 };
 
+
+/* ===== FILE: include/sensors/NMEA183BUS.h ===== */
+#pragma once 
+
+
+/* Holt sich Geschwindigkeit durchs Wasser von NASA Clipper über 
+NMEA183 Protokoll
+Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
+
+#include "types/globalTypes.h"
+class NMEA183BUS {
+    public:
+// Contract:
+// Purpose: Read speed through water (STW) via NMEA.
+// Inputs: NMEA bus messages.
+// Outputs/Side-effects: returns SensorSample; no side-effects.
+NMEA183BUS() = default; 
+
+SensorSample<float> readSTW() const;
+};
+
+/* ===== FILE: include/sensors/compassModule.h ===== */
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -468,6 +534,8 @@ public:
   // Outputs/Side-effects: returns SensorSample; no side-effects.
   SensorSample<uint16_t> read() const;
 };
+
+/* ===== FILE: include/sensors/gpsModule.h ===== */
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -484,6 +552,8 @@ SensorSample<float> readSOG() const;
 
 
 };
+
+/* ===== FILE: include/sensors/navigationSensors.h ===== */
 #pragma once
 #include "sensors/NMEA183BUS.h"
 #include "sensors/compassModule.h"
@@ -535,24 +605,8 @@ private:
   const NMEA183BUS &m_nmea183Bus;
   SensorActivation m_sensorActivation;
 };
-#pragma once 
 
-
-/* Holt sich Geschwindigkeit durchs Wasser von NASA Clipper Ã¼ber 
-NMEA183 Protokoll
-Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
-
-#include "types/globalTypes.h"
-class NMEA183BUS {
-    public:
-// Contract:
-// Purpose: Read speed through water (STW) via NMEA.
-// Inputs: NMEA bus messages.
-// Outputs/Side-effects: returns SensorSample; no side-effects.
-NMEA183BUS() = default; 
-
-SensorSample<float> readSTW() const;
-};
+/* ===== FILE: include/sensors/windModule.h ===== */
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -566,7 +620,9 @@ public:
   // Outputs/Side-effects: returns SensorSample; no side-effects.
   SensorSample<uint16_t> read() const;
 };
-#pragma once
+
+/* ===== FILE: include/types/globalTypes.h ===== */
+﻿#pragma once
 #include <cstdint>
 
 enum class NavigationSource { Compass, Gps, Wind };
@@ -588,6 +644,8 @@ template <typename T> struct SensorSample {
   bool valid{false};
 };
 
+
+/* ===== FILE: include/ui/controlPanel.h ===== */
 #pragma once
 
 #include "ui/controlPanelTypes.h"
@@ -601,6 +659,8 @@ public:
   PanelIntent readIntent() const;
 
 };
+
+/* ===== FILE: include/ui/controlPanelTypes.h ===== */
 #pragma once
 
 #include "types/globalTypes.h"
@@ -616,7 +676,9 @@ struct PanelIntent {
     Safe,
   };
   NavigationSource requestedSource;
-};#pragma once
+};
+/* ===== FILE: include/ui/display.h ===== */
+#pragma once
 class Display {
 public:
     // Contract:
@@ -625,13 +687,17 @@ public:
     // Outputs/Side-effects: updates display hardware.
     void update();
 };
+
+/* ===== FILE: src/actuators/pwmController.cpp ===== */
 #include "actuators/pwmController.h"
 #include "types/globalTypes.h"
 
 void PWMController::command(PWMCommand command) {
   // TODO HardwareImpulse ausegeben
 }
-#include "stm32f4xx_hal.h" // IWYU pragma: keep
+
+/* ===== FILE: src/core/main.cpp ===== */
+﻿#include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
 #include "core/systemController.h"
 #include <sys/_intsup.h>
@@ -666,7 +732,9 @@ int main()
         systemController.tick(loopTimestamp);
     }
 }
-#include "core/steering/csc/csc.h"
+
+/* ===== FILE: src/core/steering/csc/csc.cpp ===== */
+﻿#include "core/steering/csc/csc.h"
 
 #include "core/steering/csc/deadband.h"
 #include "core/steering/csc/headingErrorCalculator.h"
@@ -675,8 +743,8 @@ int main()
 #include <cstdint>
 
 CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
-    :  m_observationBuffer(config), m_deadband(config),
-      m_steeringGuard(config) {}
+    : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config) {
+}
 
 std::optional<SteeringIntent>
 CoreSteeringController::tick(uint32_t loopTimestamp) {
@@ -689,6 +757,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   // Gate observation to avoid reacting too frequently.
   if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
                                          m_lastIntent)) {
+    m_debug.observationBlocked = true;
     return std::nullopt;
   }
 
@@ -696,15 +765,20 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   int16_t error = m_errorCalculator.getCurrentError(m_currentCourse,
                                                     m_internalTargetCourse);
+  m_debug.error = error;
 
   /*Ein nicht signifikanter Error kann keine Aktion auslösen
   Deswegen darf das direkt zum early return führen*/
   // Ignore small errors to avoid actuator chatter.
   if (!m_deadband.errorSignificant(error)) {
+    m_debug.deadbandActive = true;
     return std::nullopt;
   }
-
   m_observationBuffer.update(error);
+
+  m_debug.median = m_observationBuffer.getMedian();
+  m_debug.sampleSize = m_observationBuffer.getSampleSize();
+
   m_lastObsUpdate = loopTimestamp;
 
   /* Der Median wird bewusst nur für die Bestimmung der
@@ -715,6 +789,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent,
                                     m_observationBuffer.getSampleSize())) {
+    m_debug.intentBlocked = true;
     return std::nullopt;
   } else {
     intent.dir = dir;
@@ -757,21 +832,25 @@ CoreSteeringController::determineDirection(int16_t median) const {
   };
   return SteeringDirection::Left;
 }
+
+const CSCDebugSnapshot &CoreSteeringController::getDebug() const {
+  return m_debug;
+}
+
+/* ===== FILE: src/core/steering/csc/deadband.cpp ===== */
 #include "core/steering/csc/deadband.h"
-#include <algorithm>
+#include <cstdint>
 
 Deadband::Deadband(SteeringRegulationConfig &config) : m_config(config) {};
 
 bool Deadband::errorSignificant(int16_t error) {
-
-  // Treat small errors as noise.
-  if (abs(error) <= m_config.steeringTolerance_deg) {
-    return false;
-  } else if (error > m_config.steeringTolerance_deg) {
-    return true;
-  };
+  if (error >  m_config.steeringTolerance_deg) return true;
+  if (error < -m_config.steeringTolerance_deg) return true;
   return false;
-};
+}
+
+
+/* ===== FILE: src/core/steering/csc/headingErrorCalculator.cpp ===== */
 #include "core/steering/csc/headingErrorCalculator.h"
 
 int16_t HeadingErrorCalculator::getCurrentError(uint16_t current,
@@ -785,7 +864,9 @@ int16_t HeadingErrorCalculator::getCurrentError(uint16_t current,
   diff -= 180;
 
   return diff; 
-};#include "core/steering/csc/observationBuffer.h"
+};
+/* ===== FILE: src/core/steering/csc/observationBuffer.cpp ===== */
+#include "core/steering/csc/observationBuffer.h"
 #include <algorithm>
 
 ObservationBuffer::ObservationBuffer(SteeringRegulationConfig &config)
@@ -808,7 +889,7 @@ void ObservationBuffer::update(int16_t error) {
 
   /* Da nur signifikante Werte geschrieben werden, ist null semantisch kein Wert
   statt gemessen 0 Da in jedem update neue Medianberechnung ist kein
-  ZurÃ¼cksetzen erforderlich*/
+  Zurücksetzen erforderlich*/
   medianIndex = validErrorsCounter / 2;
   median = m_errorArray[medianIndex];
 
@@ -843,6 +924,8 @@ void ObservationBuffer::reset() {
   medianIndex = 0;
   median = 0;
 }
+
+/* ===== FILE: src/core/steering/csc/steeringGuard.cpp ===== */
 #include "core/steering/csc/steeringGuard.h"
 
 SteeringGuard::SteeringGuard(SteeringRegulationConfig &config)
@@ -867,7 +950,7 @@ bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
 
 bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
                                   uint8_t sampleSize) {
-  /*Semantisch eigentlich Hardwareschutz kommt vllt in den PWM spÃ¤ter*/
+  /*Semantisch eigentlich Hardwareschutz kommt vllt in den PWM später*/
   // Cooldown between actuator commands.
   if (loopTimestamp - lastIntent < m_config.steeringCooldown_ms) {
     return true;
@@ -879,14 +962,16 @@ bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
   };
   return false;
 };
+
+/* ===== FILE: src/core/steering/impulseFilter.cpp ===== */
 #include "core/steering/impulseFilter.h"
 #include "types/globalTypes.h"
 #include <algorithm>
 #include <cstdint>
 
-/*FÃ¼r mein zukÃ¼nftiges Ich. Die Syntax mit return .x ist ziemlich cool, weil ich
-damit keine lokale Variable des RÃ¼ckgabewerts zwischenspeichern muss, sondern
-direkt auf die Argumente des RÃ¼ckgabewerts schreibe */
+/*Für mein zukünftiges Ich. Die Syntax mit return .x ist ziemlich cool, weil ich
+damit keine lokale Variable des Rückgabewerts zwischenspeichern muss, sondern
+direkt auf die Argumente des Rückgabewerts schreibe */
 
 ImpulseFilter::ImpulseFilter(SteeringMechanicsConfig& mechanicsConfig, SteeringPhysicsConfig& physicsConfig)
     : m_mechanics(mechanicsConfig), m_physics(physicsConfig) {};
@@ -931,6 +1016,8 @@ ImpulseFilter::apply(SteeringIntent intent,
 
   };
 }
+
+/* ===== FILE: src/core/steering/sourceHandling.cpp ===== */
 #include "core/steering/sourceHandling.h"
 
 SourceHandler::SourceHandler(const ControlPanel &panel,
@@ -1044,6 +1131,8 @@ void SourceExecutor::execute(NavigationSource effective,
   m_navigationSensors.setLeadSource(effective);
   m_csc.setInternalTarget(filteredTarget);
 }
+
+/* ===== FILE: src/core/steering/sourceModels/gpsModel.cpp ===== */
 #include "core/steering/sourceModels/gpsModel.h"
 
 GPSModel::GPSModel() = default;
@@ -1051,6 +1140,8 @@ GPSModel::GPSModel() = default;
 uint16_t GPSModel::applyFilter(uint16_t target) {
   return target;
 }
+
+/* ===== FILE: src/core/steering/sourceModels/windModel.cpp ===== */
 #include "core/steering/sourceModels/windModel.h"
 
 WindModel::WindModel() = default;
@@ -1058,6 +1149,8 @@ WindModel::WindModel() = default;
 uint16_t WindModel::applyFilter(uint16_t target) {
   return target;
 }
+
+/* ===== FILE: src/core/steering/steeringOrchestrator.cpp ===== */
 #include "core/steering/steeringOrchestrator.h"
 #include "core/steering/csc/csc.h"
 #include "sensors/navigationSensors.h"
@@ -1084,7 +1177,9 @@ void SteeringOrchestrator::tick(NavigationSensors::NavigationSnapshot snapshot,
     m_pwm.command(cmd);
   }
 };
-#include "core/systemController.h"
+
+/* ===== FILE: src/core/systemController.cpp ===== */
+﻿#include "core/systemController.h"
 #include "sensors/navigationSensors.h"
 #include "ui/controlPanelTypes.h"
 #include <cstdint>
@@ -1122,6 +1217,8 @@ void SystemController::tick(uint32_t loopTimestamp) {
   // 5. Display updaten
   m_display.update();
 }
+
+/* ===== FILE: src/diagnostics/diagnostics.cpp ===== */
 #include "diagnostics/diagnostics.h"
 #include "diagnostics/diagnostic_types.h"
 
@@ -1135,8 +1232,8 @@ void Diagnostics::emit(DiagnosticEvent event,
 
 void Diagnostics::tick(uint32_t /*loopTimestamp*/)
 {
-    // bewusst leer fÃ¼r jetzt
-    // spÃ¤ter: Zeitfenster, Snapshot-Vorbereitung, etc.
+    // bewusst leer für jetzt
+    // später: Zeitfenster, Snapshot-Vorbereitung, etc.
 }
 
 CapabilityState Diagnostics::capabilityState(FunctionalCapability cap) const
@@ -1170,10 +1267,12 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
             break;
 
         default:
-            // andere Events verÃ¤ndern den Zustand nicht
+            // andere Events verändern den Zustand nicht
             break;
     }
 }
+
+/* ===== FILE: src/platform/fatal.cpp ===== */
 #include "platform/platform.h"
 #include "stm32f4xx_hal.h" // IWYU pragma: keep
 
@@ -1181,9 +1280,9 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
 {
     __disable_irq();
 
-    // Hier spÃ¤ter mÃ¶glich:
+    // Hier später möglich:
     // - Breakpoint
-    // - Watchdog absichtlich auslÃ¶sen
+    // - Watchdog absichtlich auslösen
     // - LED-Blink-Code
     // - Backup-Register beschreiben
 
@@ -1192,6 +1291,8 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
         // System bewusst eingefroren
     }
 }
+
+/* ===== FILE: src/platform/platform.h ===== */
 #pragma once
 
 
@@ -1210,6 +1311,8 @@ void Platform_Init();
 
 // Configures system clocks. Must be called after HAL_Init().
 void SystemClock_Config();
+
+/* ===== FILE: src/platform/system_clock.cpp ===== */
 
 #include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
@@ -1253,6 +1356,10 @@ void SystemClock_Config()
         FatalError("Clock config failed");
     }
 }
+
+/* ===== FILE: src/platform/system_gpio.cpp ===== */
+
+/* ===== FILE: src/platform/system_init.cpp ===== */
 #include "stm32f4xx_hal.h" // IWYU pragma: keep
 #include "platform/platform.h"
 
@@ -1265,6 +1372,18 @@ void Platform_Init()
 
     SystemClock_Config();
 }
+
+/* ===== FILE: src/sensors/NMEA183BUS.cpp ===== */
+#include "sensors/NMEA183BUS.h"
+
+SensorSample<float> NMEA183BUS::readSTW() const {
+  SensorSample<float> sample;
+  sample.value = 0.0f;
+  sample.valid = false;
+  return sample;
+}
+
+/* ===== FILE: src/sensors/compassModule.cpp ===== */
 #include "sensors/compassModule.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -1273,12 +1392,14 @@ SensorSample<uint16_t> CompassModule::read()const{
     SensorSample<uint16_t> sample; 
 
     const uint16_t raw = 0; /*Hardware lesen*/ 
-    if (true /*PlausibilitÃ¤tscheck*/) {
+    if (true /*Plausibilitätscheck*/) {
         sample.value = raw;
         sample.valid = true;
     };
     return sample;
 };
+
+/* ===== FILE: src/sensors/gpsModule.cpp ===== */
 #include "sensors/gpsModule.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -1288,7 +1409,7 @@ SensorSample<uint16_t> GPSModule::readCOG() const {
   SensorSample<uint16_t> sample;
 
   const uint16_t raw = 0; /*Hardware lesen*/
-  if (true /*PlausibilitÃ¤tscheck*/) {
+  if (true /*Plausibilitätscheck*/) {
     sample.value = raw;
     sample.valid = true;
   } else if (false /*Plausi falsch*/) {
@@ -1312,6 +1433,8 @@ SensorSample<float> GPSModule::readSOG() const {
 
   return sample;
 };
+
+/* ===== FILE: src/sensors/navigationSensors.cpp ===== */
 #include "sensors/navigationSensors.h"
 
 #include "sensors/NMEA183BUS.h"
@@ -1351,14 +1474,8 @@ NavigationSensors::NavigationSnapshot NavigationSensors::createSnapshot() {
 
   return snapshot;
 };
-#include "sensors/NMEA183BUS.h"
 
-SensorSample<float> NMEA183BUS::readSTW() const {
-  SensorSample<float> sample;
-  sample.value = 0.0f;
-  sample.valid = false;
-  return sample;
-}
+/* ===== FILE: src/sensors/windModule.cpp ===== */
 #include "sensors/windModule.h"
 #include "types/globalTypes.h"
 #include <cstdint>
@@ -1367,37 +1484,44 @@ SensorSample<uint16_t> WindModule::read()const{
     SensorSample<uint16_t> sample; 
 
     const uint16_t raw = 0; /*Hardware lesen*/ 
-    if (true /*PlausibilitÃ¤tscheck*/) {
+    if (true /*Plausibilitätscheck*/) {
         sample.value = raw;
         sample.valid = true;
     };
     return sample;
 };
+
+/* ===== FILE: src/ui/controlPanel.cpp ===== */
 #include "ui/controlPanel.h"
 #include "ui/controlPanelTypes.h"
 
 PanelIntent ControlPanel::readIntent() const {
-  // TODO Inputs lesen und Intent befÃ¼llen
+  // TODO Inputs lesen und Intent befüllen
   return {};
 }
+
+/* ===== FILE: src/ui/display.cpp ===== */
 #include "ui/display.h"
 
 void Display::update()
 {
     // TODO: implement display update
 }
+
+/* ===== FILE: test/test_csc/test_csc.cpp ===== */
 #include "core/config.h"
 #include "core/steering/csc/deadband.h"
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
+#include "core/steering/csc/csc.h"
 
 #include <cstdint>
 #include <unity.h>
 
 namespace {
 
-SteeringControllerConfig makeConfig() { return SteeringControllerConfig{}; }
+SteeringRegulationConfig makeRegConfig() { return SteeringRegulationConfig{}; }
 
 void addSamples(ObservationBuffer &buffer, int16_t value, int count) {
   for (int i = 0; i < count; i++) {
@@ -1480,8 +1604,8 @@ void test_heading_error_returns_shortest_rotation_direction() {
 // Deadband tests
 void test_no_action_when_error_within_deadband_positive() {
   // Given
-  SteeringControllerConfig config = makeConfig();
-  config.regulations.steeringTolerance_deg = 10;
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
   // When / Then
@@ -1490,8 +1614,8 @@ void test_no_action_when_error_within_deadband_positive() {
 
 void test_no_action_when_error_within_deadband_negative() {
   // Given
-  SteeringControllerConfig config = makeConfig();
-  config.regulations.steeringTolerance_deg = 10;
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
   // When / Then
@@ -1500,8 +1624,8 @@ void test_no_action_when_error_within_deadband_negative() {
 
 void test_error_exactly_on_deadband_boundary_is_treated_as_non_significant() {
   // Given
-  SteeringControllerConfig config = makeConfig();
-  config.regulations.steeringTolerance_deg = 10;
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
   // When / Then
@@ -1510,8 +1634,8 @@ void test_error_exactly_on_deadband_boundary_is_treated_as_non_significant() {
 
 void test_error_just_outside_deadband_is_treated_as_significant() {
   // Given
-  SteeringControllerConfig config = makeConfig();
-  config.regulations.steeringTolerance_deg = 10;
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
   Deadband deadband(config);
 
   // When / Then
@@ -1521,8 +1645,8 @@ void test_error_just_outside_deadband_is_treated_as_significant() {
 // SteeringGuard sample-size gating tests
 void test_buffer_is_not_ready_when_empty() {
   // Given
-  SteeringControllerConfig config = makeConfig();
-  config.regulations.minimumSampleSize = 10;
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
   SteeringGuard guard(config);
 
   const uint32_t time = 10000;
@@ -1535,8 +1659,8 @@ void test_buffer_is_not_ready_when_empty() {
 
 void test_buffer_is_not_ready_when_below_minimum_samples() {
   // Given
-  SteeringControllerConfig config = makeConfig();
-  config.regulations.minimumSampleSize = 10;
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
   SteeringGuard guard(config);
 
   const uint32_t time = 10000;
@@ -1549,8 +1673,8 @@ void test_buffer_is_not_ready_when_below_minimum_samples() {
 
 void test_buffer_is_ready_when_minimum_samples_reached() {
   // Given
-  SteeringControllerConfig config = makeConfig();
-  config.regulations.minimumSampleSize = 10;
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
   SteeringGuard guard(config);
 
   const uint32_t time = 10000;
@@ -1564,7 +1688,7 @@ void test_buffer_is_ready_when_minimum_samples_reached() {
 // ObservationBuffer tests
 void test_buffer_reset_clears_all_stored_samples() {
   // Given
-  SteeringControllerConfig config = makeConfig();
+  SteeringRegulationConfig config = makeRegConfig();
   ObservationBuffer buffer(config);
   addSamples(buffer, 20, 10);
 
@@ -1578,11 +1702,11 @@ void test_buffer_reset_clears_all_stored_samples() {
 
 void test_median_returns_positive_when_majority_positive() {
   // Given
-  SteeringControllerConfig config = makeConfig();
+  SteeringRegulationConfig config = makeRegConfig();
   ObservationBuffer buffer(config);
 
-  const int positives = config.regulations.observationBufferSize / 2;
-  const int negatives = config.regulations.observationBufferSize / 4;
+  const int positives = config.observationBufferSize / 2;
+  const int negatives = config.observationBufferSize / 4;
   addSamples(buffer, 20, positives);
   addSamples(buffer, -20, negatives);
 
@@ -1592,11 +1716,11 @@ void test_median_returns_positive_when_majority_positive() {
 
 void test_median_returns_negative_when_majority_negative() {
   // Given
-  SteeringControllerConfig config = makeConfig();
+  SteeringRegulationConfig config = makeRegConfig();
   ObservationBuffer buffer(config);
 
-  const int negatives = config.regulations.observationBufferSize / 2;
-  const int positives = config.regulations.observationBufferSize / 4;
+  const int negatives = config.observationBufferSize / 2;
+  const int positives = config.observationBufferSize / 4;
   addSamples(buffer, -20, negatives);
   addSamples(buffer, 20, positives);
 
@@ -1606,11 +1730,11 @@ void test_median_returns_negative_when_majority_negative() {
 
 void test_median_returns_positive_when_one_sample_more_than_half_positive() {
   // Given
-  SteeringControllerConfig config = makeConfig();
+  SteeringRegulationConfig config = makeRegConfig();
   ObservationBuffer buffer(config);
 
-  const int negatives = (config.regulations.observationBufferSize / 2) - 1;
-  const int positives = (config.regulations.observationBufferSize / 2) + 1;
+  const int negatives = (config.observationBufferSize / 2) - 1;
+  const int positives = (config.observationBufferSize / 2) + 1;
   addSamples(buffer, -20, negatives);
   addSamples(buffer, 20, positives);
 
@@ -1621,9 +1745,9 @@ void test_median_returns_positive_when_one_sample_more_than_half_positive() {
 // SteeringGuard cooldown tests
 void test_no_second_action_within_cooldown_period() {
   // Given
-  SteeringControllerConfig config = makeConfig();
-  config.regulations.minimumSampleSize = 10;
-  config.regulations.steeringCooldown_ms = 2000;
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
+  config.steeringCooldown_ms = 2000;
   SteeringGuard guard(config);
 
   const uint32_t lastIntent = 10000;
@@ -1636,9 +1760,9 @@ void test_no_second_action_within_cooldown_period() {
 
 void test_action_allowed_after_cooldown_expires() {
   // Given
-  SteeringControllerConfig config = makeConfig();
-  config.regulations.minimumSampleSize = 10;
-  config.regulations.steeringCooldown_ms = 2000;
+  SteeringRegulationConfig config = makeRegConfig();
+  config.minimumSampleSize = 10;
+  config.steeringCooldown_ms = 2000;
   SteeringGuard guard(config);
 
   const uint32_t lastIntent = 10000;
@@ -1646,18 +1770,17 @@ void test_action_allowed_after_cooldown_expires() {
 
   // When / Then
   TEST_ASSERT_FALSE(guard.intentBlocked(lastIntent +
-                                            config.regulations
-                                                .steeringCooldown_ms +
+                                            config.steeringCooldown_ms +
                                             1,
                                         lastIntent, enoughSamples));
 }
 
 void test_no_action_when_error_oscillates_symmetrically() {
   // Given
-  SteeringControllerConfig config = makeConfig();
+  SteeringRegulationConfig config = makeRegConfig();
   ObservationBuffer buffer(config);
 
-  const int pairs = config.regulations.observationBufferSize / 2;
+  const int pairs = config.observationBufferSize / 2;
   for (int i = 0; i < pairs; i++) {
     buffer.update(-20);
     buffer.update(20);
@@ -1665,6 +1788,143 @@ void test_no_action_when_error_oscillates_symmetrically() {
 
   // Then
   TEST_ASSERT_EQUAL_INT16(0, buffer.getMedian());
+}
+void test_csc_emits_intent_after_minimum_samples_reached() {
+
+    SteeringRegulationConfig config;
+    config.steeringTolerance_deg = 5;
+    config.minimumSampleSize = 5;
+    config.minimumTimeBtwObs_ms = 0;
+    config.pauseForValidObsAfterImpulse_ms = 0;
+    config.steeringCooldown_ms = 0;
+
+    CoreSteeringController csc(config);
+
+    csc.setInternalTarget(100);
+
+    std::optional<SteeringIntent> intent;
+
+    uint32_t time = 0;
+
+    for (int i = 0; i < 10; ++i) {
+
+        csc.currentHDG(80);  // +20° Fehler → Right
+        intent = csc.tick(time++);
+
+        if (intent.has_value())
+            break;
+    }
+
+    TEST_ASSERT_TRUE(intent.has_value());
+    TEST_ASSERT_EQUAL(SteeringDirection::Right, intent->dir);
+}
+
+void test_csc_does_not_emit_intent_inside_deadband() {
+
+    SteeringRegulationConfig config;
+    config.steeringTolerance_deg = 10;
+    config.minimumSampleSize = 5;
+    config.minimumTimeBtwObs_ms = 0;
+    config.pauseForValidObsAfterImpulse_ms = 0;
+    config.steeringCooldown_ms = 0;
+
+    CoreSteeringController csc(config);
+
+    csc.setInternalTarget(100);
+
+    std::optional<SteeringIntent> intent;
+
+    for (int i = 0; i < 20; ++i) {
+        csc.currentHDG(95);  // +5° → innerhalb Toleranz
+        intent = csc.tick(i);
+    }
+
+    TEST_ASSERT_FALSE(intent.has_value());
+}
+
+void test_csc_resets_observation_after_intent() {
+
+    SteeringRegulationConfig config;
+    config.steeringTolerance_deg = 5;
+    config.minimumSampleSize = 3;
+    config.minimumTimeBtwObs_ms = 0;
+    config.pauseForValidObsAfterImpulse_ms = 0;
+    config.steeringCooldown_ms = 0;
+
+    CoreSteeringController csc(config);
+
+    csc.setInternalTarget(100);
+
+    uint32_t time = 0;
+    bool firstIntentOccurred = false;
+    bool secondIntentOccurred = false;
+
+    for (int i = 0; i < 20; ++i) {
+
+        csc.currentHDG(80);
+        auto intent = csc.tick(time++);
+
+        if (intent && !firstIntentOccurred) {
+            firstIntentOccurred = true;
+        }
+        else if (intent && firstIntentOccurred) {
+            secondIntentOccurred = true;
+            break;
+        }
+    }
+
+    TEST_ASSERT_TRUE(firstIntentOccurred);
+    TEST_ASSERT_TRUE(secondIntentOccurred);
+}
+
+void test_csc_respects_time_gates_and_cooldown() {
+
+    // ---------- Config ----------
+    SteeringRegulationConfig config;
+    config.steeringTolerance_deg = 5;
+    config.minimumSampleSize = 5;
+
+    config.minimumTimeBtwObs_ms = 1000;
+    config.pauseForValidObsAfterImpulse_ms = 2000;
+    config.steeringCooldown_ms = 3000;
+
+    CoreSteeringController csc(config);
+
+    csc.setInternalTarget(100);
+
+    uint32_t time = 0;
+
+    bool firstIntent = false;
+    bool secondIntent = false;
+
+    // ---------- Simulation ----------
+    for (int i = 0; i < 30; ++i) {
+
+        csc.currentHDG(80);  // +20° Fehler
+
+        auto intent = csc.tick(time);
+
+        if (intent && !firstIntent) {
+            firstIntent = true;
+        }
+        else if (intent && firstIntent) {
+            secondIntent = true;
+            break;
+        }
+
+        time += 1000; // 1 Hz loop
+    }
+
+    TEST_ASSERT_TRUE(firstIntent);
+    TEST_ASSERT_TRUE(secondIntent);
+}
+
+void test_error_just_outside_deadband_negative_is_treated_as_significant() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 10;
+  Deadband deadband(config);
+
+  TEST_ASSERT_TRUE(deadband.errorSignificant(-11));
 }
 
 int main() {
@@ -1691,6 +1951,11 @@ int main() {
   RUN_TEST(test_no_second_action_within_cooldown_period);
   RUN_TEST(test_action_allowed_after_cooldown_expires);
   RUN_TEST(test_no_action_when_error_oscillates_symmetrically);
+  RUN_TEST(test_csc_emits_intent_after_minimum_samples_reached);
+  RUN_TEST(test_csc_does_not_emit_intent_inside_deadband);
+  RUN_TEST(test_csc_resets_observation_after_intent);
+  RUN_TEST(test_csc_respects_time_gates_and_cooldown);
+  RUN_TEST(test_error_just_outside_deadband_negative_is_treated_as_significant);
 
   return UNITY_END();
 }

@@ -30,6 +30,14 @@ build_compiledb() {
   cp compile_commands.json "$target_dir/compile_commands.json"
 }
 
+unity_test_flags() {
+  local flags="-DPIO_UNIT_TESTING -DUNIT_TEST -I.pio/libdeps/native_csc/Unity/src -Itest/test_csc -Itest"
+  if [[ -f ".pio/build/native_csc/unity_config/unity_config.h" || -f ".pio/build/native_csc/unity_config/UnityConfig.h" ]]; then
+    flags="$flags -DUNITY_INCLUDE_CONFIG_H -I.pio/build/native_csc/unity_config"
+  fi
+  printf '%s' "$flags"
+}
+
 capture_test_compile_commands() {
   local log_file
   log_file="$(mktemp)"
@@ -51,10 +59,12 @@ capture_test_compile_commands() {
 
     # Fallback when PlatformIO suppresses verbose compile lines in test mode.
     local base_no_src
+    local unity_flags
+    unity_flags="$(unity_test_flags)"
     base_no_src="${base_cmd% src/core/steering/csc/csc.cpp}"
-    csc_cmd="$base_no_src -DPIO_UNIT_TESTING -DUNIT_TEST -DUNITY_INCLUDE_CONFIG_H -I.pio/libdeps/native_csc/Unity/src -I.pio/build/native_csc/unity_config -Itest/test_csc -Itest src/core/steering/csc/csc.cpp"
+    csc_cmd="$base_no_src $unity_flags src/core/steering/csc/csc.cpp"
     test_cmd="${base_no_src/ -o .pio\/build\/native_csc\/src\/core\/steering\/csc\/csc.o / -o .pio\/build\/native_csc\/test\/test_csc\/test_csc.o }"
-    test_cmd="$test_cmd -DPIO_UNIT_TESTING -DUNIT_TEST -DUNITY_INCLUDE_CONFIG_H -I.pio/libdeps/native_csc/Unity/src -I.pio/build/native_csc/unity_config -Itest/test_csc -Itest test/test_csc/test_csc.cpp"
+    test_cmd="$test_cmd $unity_flags test/test_csc/test_csc.cpp"
   fi
 
   rm -f "$log_file"
