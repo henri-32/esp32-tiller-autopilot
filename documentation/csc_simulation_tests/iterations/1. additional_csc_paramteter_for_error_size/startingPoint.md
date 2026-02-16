@@ -1,0 +1,38 @@
+## Commit on Branch 
+simulation 
+2bb1a50
+
+### Beobachtung
+Verschiedene Config Einstellungen verändern zwar Amplitude Frequenz, Häufigkeit der Intents etc. 
+Allderding ist das System nicht in der Lage das Target abzufangen sondern endet in einer stabilen aber zu großen Oszillation ohne runaway.
+Dabei ist die Amplitude scheinbar unabhängig von dem HDG Error zum Sim Start.
+Größere HDG Toleranzen führen bis ca. 7 deg zu weniger Oszillation. 
+
+### Hypothese 
+Fehlender Parameter für Größe des Fehlers führen zu immer gleich starken Impulsen. Damit kann das System das Target nicht abfangen, wenn bei kleinem Fehler der Standardimpuls eine Korrektur über das Target hinaus verursacht. 
+Der positive Einfluss von HDG Toleranz selbst in sehr einfacher Simulation spricht dafür, dass bei kleinem Fehler zu stark gesteuert wird. 
+
+Der Error zum Zeitpunkt des Intents ist als Parameter durch Störungen vermutlich zu zufällig. 
+Das einfache glätten durch Nutzung des means der letzten Errors von ca. 1-2 Sekunden ist vermutlich ein besserer Indikator. 
+Die Entscheidung für Intent und Richtungsvorgabe soll weiter über den robusten median erfolgen !!
+
+### Vorgaben 
+Der CSC soll wenn möglich erst einmal nichts von Omega als Winkelgeschwindigkeit wissen um nicht zu viele Regelungsebenen zu implementieren. 
+
+### Experiment 
+- Anpassung des CSC in Form eines zusätzlichen Parameters. 
+- Definieren ab welchem Fehler 100% des Impulses wirken dürfen 
+- Mean der letzten Errors als Fehlergröße implementieren 
+- Diesen Fehler linear auf abstractIntent_0_100 anwenden 
+
+## Ergebnis 
+
+### Entscheidung 
+- zusätzliche Implementation von mean abs(error)  gesamte sim um einen GROBEN Qualitätsmarker der angewendeten config zu bekommen
+
+### Sonstiges 
+In mehreren Fällen kam es zu nach Fehler links (führt zurecht zu mehreren Intents SteeringDirection::Right) zu einem weiteren Intent SteeringDirection::Right, obwohl das HDG zum Zeitpunkt des weiteren Intents bereits ein Fehler rechts beinhaltete. 
+Das ist kritisch weil es teilweise bei kleinerer Oszillation deutlich nach dem Überschreiten des Targets passiert. 
+--> Problem beobachten, ob es sich mit zusätzlichem Parameter der Errorgröße ändert oder ob ein zusätzlicher Guard nötig sein könnte.  
+
+Das signifikanzfiltern von Errors vor dem Schreiben in den Buffer könnte dazu führen, dass gute Steuerergebnisse das System nicht ausreichend stabilisieren. --> Im Hinterkopf behalten.  

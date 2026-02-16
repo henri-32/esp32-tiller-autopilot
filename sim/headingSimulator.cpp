@@ -1,8 +1,13 @@
-﻿#include <cstdint>
+#include <cstdint>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <optional>
+#include <regex>
+#include <sstream>
+#include <string>
 
 #include "core/config.h"
 #include "core/steering/csc/csc.h"
@@ -11,6 +16,185 @@
 
 namespace {
 constexpr const char *kOutputPath = "sim/sim_output/drift_sim.csv";
+constexpr const char *kConfigSnapshotJsonPath =
+    "sim/sim_output/drift_sim_config.json";
+constexpr const char *kNextRunConfigPath = "sim/next_run_config.json";
+
+bool readFileToString(const char *path, std::string &content) {
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    std::cerr << "Failed to open simulation config input: " << path << "\n";
+    return false;
+  }
+
+  std::ostringstream buffer;
+  buffer << file.rdbuf();
+  content = buffer.str();
+  return true;
+}
+
+bool extractNumber(const std::string &json, const char *key, double &value) {
+  const std::regex pattern("\"" + std::string(key) + "\"\\s*:\\s*([-+]?[0-9]*\\.?[0-9]+)");
+  std::smatch match;
+  if (!std::regex_search(json, match, pattern)) {
+    std::cerr << "Missing numeric key in next-run config: " << key << "\n";
+    return false;
+  }
+
+  try {
+    value = std::stod(match[1].str());
+  } catch (const std::exception &) {
+    std::cerr << "Invalid numeric value for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool toFloat(double input, const char *key, float &output) {
+  if (!std::isfinite(input)) {
+    std::cerr << "Invalid non-finite float for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+  output = static_cast<float>(input);
+  return true;
+}
+
+bool toUint32(double input, const char *key, uint32_t &output) {
+  if (!std::isfinite(input) || input < 0.0 ||
+      input > static_cast<double>(std::numeric_limits<uint32_t>::max()) ||
+      std::floor(input) != input) {
+    std::cerr << "Invalid uint32 value for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+
+  output = static_cast<uint32_t>(input);
+  return true;
+}
+
+bool toUint16(double input, const char *key, uint16_t &output) {
+  if (!std::isfinite(input) || input < 0.0 ||
+      input > static_cast<double>(std::numeric_limits<uint16_t>::max()) ||
+      std::floor(input) != input) {
+    std::cerr << "Invalid uint16 value for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+
+  output = static_cast<uint16_t>(input);
+  return true;
+}
+
+bool toUint8(double input, const char *key, uint8_t &output) {
+  if (!std::isfinite(input) || input < 0.0 ||
+      input > static_cast<double>(std::numeric_limits<uint8_t>::max()) ||
+      std::floor(input) != input) {
+    std::cerr << "Invalid uint8 value for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+
+  output = static_cast<uint8_t>(input);
+  return true;
+}
+
+bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
+  std::string json;
+  if (!readFileToString(path, json)) {
+    return false;
+  }
+
+  double dt_sec = 0.0;
+  double sim_seconds = 0.0;
+  double intentStepToOmega = 0.0;
+  double initialHeading_deg = 0.0;
+  double environmentTorque_deg_s2 = 0.0;
+  double steeringTolerance_deg = 0.0;
+  double minimumSampleSize = 0.0;
+  double minimumTimeBtwObs_ms = 0.0;
+  double pauseForValidObsAfterImpulse_ms = 0.0;
+  double steeringCooldown_ms = 0.0;
+  double target_deg = 0.0;
+
+  if (!extractNumber(json, "dt_sec", dt_sec) ||
+      !extractNumber(json, "sim_seconds", sim_seconds) ||
+      !extractNumber(json, "intentStepToOmega", intentStepToOmega) ||
+      !extractNumber(json, "initialHeading_deg", initialHeading_deg) ||
+      !extractNumber(json, "environmentTorque_deg_s2", environmentTorque_deg_s2) ||
+      !extractNumber(json, "steeringTolerance_deg", steeringTolerance_deg) ||
+      !extractNumber(json, "minimumSampleSize", minimumSampleSize) ||
+      !extractNumber(json, "minimumTimeBtwObs_ms", minimumTimeBtwObs_ms) ||
+      !extractNumber(json, "pauseForValidObsAfterImpulse_ms",
+                     pauseForValidObsAfterImpulse_ms) ||
+      !extractNumber(json, "steeringCooldown_ms", steeringCooldown_ms) ||
+      !extractNumber(json, "target_deg", target_deg)) {
+    return false;
+  }
+
+  if (!toFloat(dt_sec, "dt_sec", config.dt_sec) ||
+      !toUint32(sim_seconds, "sim_seconds", config.sim_seconds) ||
+      !toFloat(intentStepToOmega, "intentStepToOmega", config.intentStepToOmega) ||
+      !toFloat(initialHeading_deg, "initialHeading_deg",
+               config.initialHeading_deg) ||
+      !toFloat(environmentTorque_deg_s2, "environmentTorque_deg_s2",
+               config.environmentTorque_deg_s2) ||
+      !toUint8(steeringTolerance_deg, "steeringTolerance_deg",
+               config.regulation.steeringTolerance_deg) ||
+      !toUint8(minimumSampleSize, "minimumSampleSize",
+               config.regulation.minimumSampleSize) ||
+      !toUint32(minimumTimeBtwObs_ms, "minimumTimeBtwObs_ms",
+                config.regulation.minimumTimeBtwObs_ms) ||
+      !toUint32(pauseForValidObsAfterImpulse_ms,
+                "pauseForValidObsAfterImpulse_ms",
+                config.regulation.pauseForValidObsAfterImpulse_ms) ||
+      !toUint32(steeringCooldown_ms, "steeringCooldown_ms",
+                config.regulation.steeringCooldown_ms) ||
+      !toUint16(target_deg, "target_deg", config.target_deg)) {
+    return false;
+  }
+
+  std::cout << "Loaded simulation config from: " << path << "\n";
+  return true;
+}
+
+void writeConfigSnapshotJson(const SimulationConfig &config) {
+  std::ofstream file(kConfigSnapshotJsonPath);
+  if (!file.is_open()) {
+    std::cerr << "Failed to open simulation config json snapshot: "
+              << kConfigSnapshotJsonPath << "\n";
+    return;
+  }
+
+  file << std::fixed << std::setprecision(3);
+  file << "{\n";
+  file << "  \"time\": {\n";
+  file << "    \"dt_sec\": " << config.dt_sec << ",\n";
+  file << "    \"sim_seconds\": " << config.sim_seconds << "\n";
+  file << "  },\n";
+  file << "  \"boat\": {\n";
+  file << "    \"intentStepToOmega\": " << config.intentStepToOmega << ",\n";
+  file << "    \"initialHeading_deg\": " << config.initialHeading_deg << ",\n";
+  file << "    \"environmentTorque_deg_s2\": " << config.environmentTorque_deg_s2
+       << "\n";
+  file << "  },\n";
+  file << "  \"csc\": {\n";
+  file << "    \"steeringTolerance_deg\": "
+       << static_cast<int>(config.regulation.steeringTolerance_deg) << ",\n";
+  file << "    \"minimumSampleSize\": "
+       << static_cast<int>(config.regulation.minimumSampleSize) << ",\n";
+  file << "    \"minimumTimeBtwObs_ms\": "
+       << config.regulation.minimumTimeBtwObs_ms << ",\n";
+  file << "    \"pauseForValidObsAfterImpulse_ms\": "
+       << config.regulation.pauseForValidObsAfterImpulse_ms << ",\n";
+  file << "    \"steeringCooldown_ms\": "
+       << config.regulation.steeringCooldown_ms << ",\n";
+  file << "    \"target_deg\": " << config.target_deg << "\n";
+  file << "  }\n";
+  file << "}\n";
+}
 }
 
 SimulationConfig makeDefaultSimulationConfig() {
@@ -24,15 +208,15 @@ SimulationConfig makeDefaultSimulationConfig() {
   config.intentStepToOmega =
       0.005f; // Weil abstract intent noch 100 ist wirkt dieser parameter *100
               // also 0.1 = 1deg/sec
-  config.initialHeading_deg = 10.0f;
-  config.environmentTorque_deg_s2 = 0.0f;
+  config.initialHeading_deg = 15.0f;
+  config.environmentTorque_deg_s2 = 0.00f;
 
   // --- CSC ---
-  config.regulation.steeringTolerance_deg = 2;
+  config.regulation.steeringTolerance_deg = 7;
   config.regulation.minimumSampleSize = 5;
   config.regulation.minimumTimeBtwObs_ms = 100;
   config.regulation.pauseForValidObsAfterImpulse_ms = 2000;
-  config.regulation.steeringCooldown_ms = 000;
+  config.regulation.steeringCooldown_ms = 500;
   config.target_deg = 0;
 
   return config;
@@ -110,6 +294,10 @@ std::optional<SteeringIntent> SimulationEngine::lastIntent() const {
 
 int main() {
   SimulationConfig config = makeDefaultSimulationConfig();
+  if (!loadSimulationConfigFromJson(kNextRunConfigPath, config)) {
+    return 1;
+  }
+  writeConfigSnapshotJson(config);
 
   const uint32_t dt_ms = static_cast<uint32_t>(config.dt_sec * 1000.0f);
   const uint32_t steps = static_cast<uint32_t>(

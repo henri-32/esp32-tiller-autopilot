@@ -1,0 +1,33 @@
+# Sim Workflow
+
+## Standard-Run
+
+1. `sim/next_run_config.json` fuer den naechsten Lauf anpassen.
+2. Simulation bauen und starten:
+   - `pio run -e sim`
+   - `.pio/build/sim/program.exe`
+3. Output entsteht in `sim/sim_output/`:
+   - `drift_sim.csv`
+   - `drift_sim_config.json`
+4. Plot erzeugen:
+   - `python sim/plots/plot_drift.py`
+5. Plot-Output:
+   - `sim/sim_output/drift_plot.png`
+
+## VS Code Task
+
+- Komplettablauf ueber VS Code Task:
+  - `Simulation: run_simulation + plot_drift`
+- Der Task baut `sim`, fuehrt die Simulation aus und startet danach `plot_drift.py`.
+
+## Prozess bei Erweiterung der Sim-Config
+
+Der Loader ist absichtlich strikt. Wenn neue Config-Felder in der Simulation dazukommen,
+muessen die Felder an allen relevanten Stellen erweitert werden:
+
+1. `SimulationConfig` in `sim/headingSimulator.h`
+2. Parsing/Validierung in `loadSimulationConfigFromJson(...)` in `sim/headingSimulator.cpp`
+3. Snapshot-Writer `writeConfigSnapshotJson(...)` in `sim/headingSimulator.cpp`
+4. `sim/next_run_config.json` (neuen Wert eintragen)
+
+Fehlt ein Pflichtfeld, bricht der Sim-Run mit Fehlermeldung ab.
