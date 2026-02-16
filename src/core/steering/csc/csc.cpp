@@ -4,11 +4,12 @@
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
+#include <algorithm>
 #include <cstdint>
 
 CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
-    : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config) {
-}
+    : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config),
+      m_config(config) {}
 
 std::optional<SteeringIntent>
 CoreSteeringController::tick(uint32_t loopTimestamp) {
@@ -23,26 +24,31 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   Wenn er wegen Guards nicht beobachten darf early return*/
 
-  // Gate observation to avoid reacting too frequently.
   if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
                                          m_lastIntent)) {
     m_debug.observationBlocked = true;
     return std::nullopt;
   }
 
-  SteeringIntent intent; // Return value
+  SteeringIntent intent; // Return value instanziert
 
   int16_t error = m_errorCalculator.getCurrentError(m_currentCourse,
                                                     m_internalTargetCourse);
   m_debug.error = error;
 
-  /*Ein nicht signifikanter Error kann keine Aktion auslösen
-  Deswegen darf das direkt zum early return führen*/
-  // Ignore small errors to avoid actuator chatter.
-  if (!m_deadband.errorSignificant(error)) {
+  /*
+  Aktuell ist das ganze Deadband Modul nicht genutzt. Siehe
+  documentation\csc_simulation_tests\iterations\1.
+  additional_csc_paramteter_for_error_size
+
+  -------------------------------------------
+    if (!m_deadband.errorSignificant(error)) {
     m_debug.deadbandActive = true;
     return std::nullopt;
   }
+  -----------------------------------------------
+*/
+
   m_observationBuffer.update(error);
 
   m_debug.median = m_observationBuffer.getMedian();
@@ -50,32 +56,18 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   m_lastObsUpdate = loopTimestamp;
 
-  /* Der Median wird bewusst nur für die Bestimmung der
-  nötigen Korrekturrichtung genutzt, da ich bewusst keinen
-  PID Regler will*/
-
-  SteeringDirection dir = determineDirection(m_observationBuffer.getMedian());
-
   if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent,
                                     m_observationBuffer.getSampleSize())) {
     m_debug.intentBlocked = true;
     return std::nullopt;
   } else {
-    intent.dir = dir;
 
-    /* Semantisch klargestellt. CSC setzt vollen abstrakten Impuls.
-    Der kann danach nur nach unten gedämpft, aber nicht nach
-    oben eskaliert werden.*/
-
-    intent.abstractImpulse_0_100 = 100;
+    auto intent = calculateIntentFromObs();
     m_lastIntent = loopTimestamp;
 
     /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
-    diese wird bewusst verworfen*/
-
-    // Intent consumed; discard accumulated evidence to start fresh.
+      diese wird bewusst verworfen*/
     m_observationBuffer.reset();
-
     return intent;
   }
 }
@@ -90,6 +82,32 @@ void CoreSteeringController::setInternalTarget(uint16_t target) {
 
 uint16_t CoreSteeringController::getInternalTarget() const {
   return m_internalTargetCourse;
+};
+
+std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
+
+  /* Der Median wird bewusst nur für die Bestimmung der
+  nötigen Korrekturrichtung genutzt, da ich bewusst keinen
+  PID Regler will*/
+  SteeringIntent intent;
+
+  intent.dir = determineDirection(m_observationBuffer.getMedian());
+
+  /* Semantisch klargestellt. CSC setzt vollen abstrakten Impuls.
+  Der kann danach nur nach unten gedämpft, aber nicht nach
+  oben eskaliert werden.*/
+  intent.abstractImpulse_0_100 = 100;
+  int8_t currentError = m_observationBuffer.getSmoothedCurrentError();
+
+  /*In dem clamped Fenster wird der Abstrakte Impulse runter gefiltert
+  Außerhalb bleibt er voll */
+  currentError = std::clamp(
+      currentError,
+      static_cast<int8_t>(m_config.lowClampSmoothedMeanApplicationWindow_deg),
+      static_cast<int8_t>(m_config.highClampSmoothedMeanApplicationWindow_deg));
+
+  int8_t filter = TODO WEITERARBEITEN Filter entwickeln Außerdem die neuen
+      config werte auch für sim anwenden !!return intent;
 };
 
 SteeringDirection

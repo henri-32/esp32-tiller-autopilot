@@ -29,5 +29,6 @@ muessen die Felder an allen relevanten Stellen erweitert werden:
 2. Parsing/Validierung in `loadSimulationConfigFromJson(...)` in `sim/headingSimulator.cpp`
 3. Snapshot-Writer `writeConfigSnapshotJson(...)` in `sim/headingSimulator.cpp`
 4. `sim/next_run_config.json` (neuen Wert eintragen)
+5. Optional, aber empfohlen: `include/READMES/SteeringControllerConfig.md` mit dem neuen Parameter aktualisieren
 
 Fehlt ein Pflichtfeld, bricht der Sim-Run mit Fehlermeldung ab.

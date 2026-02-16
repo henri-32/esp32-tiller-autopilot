@@ -117,6 +117,7 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
   double minimumTimeBtwObs_ms = 0.0;
   double pauseForValidObsAfterImpulse_ms = 0.0;
   double steeringCooldown_ms = 0.0;
+  double calculationWindowSmoothedMean = 0.0;
   double target_deg = 0.0;
 
   if (!extractNumber(json, "dt_sec", dt_sec) ||
@@ -130,6 +131,8 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
       !extractNumber(json, "pauseForValidObsAfterImpulse_ms",
                      pauseForValidObsAfterImpulse_ms) ||
       !extractNumber(json, "steeringCooldown_ms", steeringCooldown_ms) ||
+      !extractNumber(json, "calculationWindowSmoothedMean",
+                     calculationWindowSmoothedMean) ||
       !extractNumber(json, "target_deg", target_deg)) {
     return false;
   }
@@ -152,6 +155,9 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
                 config.regulation.pauseForValidObsAfterImpulse_ms) ||
       !toUint32(steeringCooldown_ms, "steeringCooldown_ms",
                 config.regulation.steeringCooldown_ms) ||
+      !toUint32(calculationWindowSmoothedMean,
+                "calculationWindowSmoothedMean",
+                config.regulation.calculationWindowSmoothedMean) ||
       !toUint16(target_deg, "target_deg", config.target_deg)) {
     return false;
   }
@@ -191,6 +197,8 @@ void writeConfigSnapshotJson(const SimulationConfig &config) {
        << config.regulation.pauseForValidObsAfterImpulse_ms << ",\n";
   file << "    \"steeringCooldown_ms\": "
        << config.regulation.steeringCooldown_ms << ",\n";
+  file << "    \"calculationWindowSmoothedMean\": "
+       << config.regulation.calculationWindowSmoothedMean << ",\n";
   file << "    \"target_deg\": " << config.target_deg << "\n";
   file << "  }\n";
   file << "}\n";
@@ -217,6 +225,7 @@ SimulationConfig makeDefaultSimulationConfig() {
   config.regulation.minimumTimeBtwObs_ms = 100;
   config.regulation.pauseForValidObsAfterImpulse_ms = 2000;
   config.regulation.steeringCooldown_ms = 500;
+  config.regulation.calculationWindowSmoothedMean = 4;
   config.target_deg = 0;
 
   return config;

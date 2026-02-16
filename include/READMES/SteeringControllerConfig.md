@@ -35,6 +35,7 @@ Config-Slices und sehen die neuen Werte ab dem naechsten Tick konsistent.
 - `SteeringCooldown_ms`
 - `minimumTimeBtwObs_ms`
 - `observationBufferSize`
+- `calculationWindowSmoothedMean`
 - `pauseForValidObsAfterImpulse_ms`
 
 ---
@@ -172,3 +173,33 @@ max. Beobachtungsdauer
 
 
 
+---
+
+### `calculationWindowSmoothedMean`
+
+**Bedeutung**  
+Anzahl der Error-Samples fuer einen geglaetteten Mean der Fehlergroesse.
+Die Richtungsentscheidung bleibt median-basiert; der Mean ist als
+zusaetzlicher Groessenindikator gedacht.
+
+**Ziel im Tuning-Kontext**  
+Bei kleinen Fehlern soll weniger aggressiv reagiert werden, um
+Nachtrimmen und Ueberschwingen um das Target zu reduzieren.
+
+**Einheit / Bezug**  
+Sample-Anzahl (kein Zeitwert).  
+Effektive Zeitspanne grob:
+`calculationWindowSmoothedMean * minimumTimeBtwObs_ms`
+
+**Groesser einstellen**
+- staerker geglaettete Fehlergroesse
+- robuster gegen einzelne Ausreisser
+- traeger bei schnellen Aenderungen
+
+**Kleiner einstellen**
+- reaktiver auf aktuelle Fehlergroesse
+- empfindlicher gegen Messrauschen
+
+**Hinweis Implementierungsstand**  
+Die Berechnung liegt im ObservationBuffer (`getSmoothedCurrentError()`).
+Der CSC bestimmt die Richtung weiterhin ueber den Median.

@@ -12,7 +12,7 @@ private:
       SteeringRegulationConfig::observationBufferSize;
 
   std::array<int16_t, bufferSize> m_errorArray{};
-  uint8_t validErrorsCounter = 0;
+  uint8_t writtenErrorsCounter = 0;
   uint8_t medianIndex;
   int16_t median = 0;
 
@@ -23,8 +23,9 @@ public:
   // Outputs/Side-effects: median and sample count; internal buffer mutated.
   ObservationBuffer(SteeringRegulationConfig &config);
 
-  const int16_t getMedian() const;
   void update(int16_t error);
+  int16_t getMedian() const;
+  int16_t getSmoothedCurrentError(); 
   uint8_t getSampleSize() const;
   void reset();
 };

@@ -16,6 +16,8 @@ Der Error zum Zeitpunkt des Intents ist als Parameter durch Störungen vermutlic
 Das einfache glätten durch Nutzung des means der letzten Errors von ca. 1-2 Sekunden ist vermutlich ein besserer Indikator. 
 Die Entscheidung für Intent und Richtungsvorgabe soll weiter über den robusten median erfolgen !!
 
+Das Signifikanzfiltern von Errors vor dem Schreiben in den Buffer könnte dazu führen, dass gute Steuerergebnisse das System nicht ausreichend stabilisieren. --> Im Hinterkopf behalten.  
+
 ### Vorgaben 
 Der CSC soll wenn möglich erst einmal nichts von Omega als Winkelgeschwindigkeit wissen um nicht zu viele Regelungsebenen zu implementieren. 
 
@@ -25,14 +27,20 @@ Der CSC soll wenn möglich erst einmal nichts von Omega als Winkelgeschwindigkei
 - Mean der letzten Errors als Fehlergröße implementieren 
 - Diesen Fehler linear auf abstractIntent_0_100 anwenden 
 
+--- Während dieser Implementierung ist Folgendes aufgefallen : 
+Ein neues Array für mean berechnung wirkt wie Speicher / Komplexitäts Overhead weil bereits ein Error Array vorhanden ist.
+Wenn ich dieses aber zur Berechnung der Fehlergröße nutze, müssen auch für die Richtungsentscheidung nicht signifikante Fehler im Array sein. Deswegen kommentiere ich die signifikanzfilterung der Richtungsentscheidung für den nächsten Run erstmal wieder aus. 
+Sollte sich herausstellen, dass die RICHTUNGSENTSCHEIDUNG schlechte Ergebnisse liefert, könnte ich es wieder implementieren. Bisher spricht aber alles dafür, dass das Array für den Median zur Richtungsentscheidung (bis auf den Fall s.u.) robust ist, und andere Parameter problematisch sind. 
+
+
+
 ## Ergebnis 
 
 ### Entscheidung 
-- zusätzliche Implementation von mean abs(error)  gesamte sim um einen GROBEN Qualitätsmarker der angewendeten config zu bekommen
+- zusätzliche (hier nicht begründete) Implementation von mean abs(error)  gesamte sim um einen GROBEN Qualitätsmarker der angewendeten config zu bekommen
 
 ### Sonstiges 
 In mehreren Fällen kam es zu nach Fehler links (führt zurecht zu mehreren Intents SteeringDirection::Right) zu einem weiteren Intent SteeringDirection::Right, obwohl das HDG zum Zeitpunkt des weiteren Intents bereits ein Fehler rechts beinhaltete. 
 Das ist kritisch weil es teilweise bei kleinerer Oszillation deutlich nach dem Überschreiten des Targets passiert. 
 --> Problem beobachten, ob es sich mit zusätzlichem Parameter der Errorgröße ändert oder ob ein zusätzlicher Guard nötig sein könnte.  
 
-Das signifikanzfiltern von Errors vor dem Schreiben in den Buffer könnte dazu führen, dass gute Steuerergebnisse das System nicht ausreichend stabilisieren. --> Im Hinterkopf behalten.  

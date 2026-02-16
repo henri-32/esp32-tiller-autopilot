@@ -13,7 +13,9 @@ struct SteeringRegulationConfig {
   uint32_t steeringCooldown_ms = 2000;
   uint32_t minimumTimeBtwObs_ms = 1000;
   uint32_t pauseForValidObsAfterImpulse_ms = 3000;
-
+  uint32_t calculationWindowSmoothedMean = 4;
+  int8_t lowClampSmoothedMeanApplicationWindow_deg = -20; 
+  int8_t highClampSmoothedMeanApplicationWindow_deg = 20; 
   static constexpr uint8_t observationBufferSize = 70;
   uint8_t minimumSampleSize = 10;
 };
