@@ -159,7 +159,7 @@ def plot_drift(
         drawstyle="steps-post",
     )
     ax.plot(time_s, error_plot, label="Error")
-    #ax.plot(time_s, median_plot, label="Median")
+    ax.plot(time_s, median_plot, label="Median")
     ax.plot(
         time_s,
         omega_smooth,
@@ -220,7 +220,8 @@ def plot_drift(
 
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Angle (deg)")
-    ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False)
+    # Keep legend inside plot so right-side info boxes do not overlap.
+    ax.legend(loc="upper left", frameon=False)
     ax.grid(True)
 
     error_stats_text = (
@@ -230,10 +231,10 @@ def plot_drift(
     )
     ax.text(
         1.02,
-        0.30,
+        0.02,
         error_stats_text,
         transform=ax.transAxes,
-        va="top",
+        va="bottom",
         ha="left",
         fontsize=8,
         family="monospace",
@@ -265,7 +266,7 @@ def plot_drift(
         },
     )
 
-    fig.tight_layout(rect=(0.0, 0.0, 0.76, 1.0))
+    fig.tight_layout(rect=(0.0, 0.0, 0.70, 1.0))
     if plot_output_path is not None:
         try:
             fig.savefig(plot_output_path, dpi=150, bbox_inches="tight")

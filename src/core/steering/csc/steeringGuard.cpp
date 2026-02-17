@@ -1,7 +1,7 @@
 #include "core/steering/csc/steeringGuard.h"
 
 SteeringGuard::SteeringGuard(SteeringRegulationConfig &config)
-    : m_config(config) {};
+    : m_config(config), m_deadband(config) {};
 
 bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
                                        uint32_t lastUpdate,
@@ -12,8 +12,7 @@ bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
   };
 
   // Pause observations right after an impulse to wait for stabilization.
-  if (loopTimestamp - lastIntent <
-      m_config.pauseForValidObsAfterImpulse_ms) {
+  if (loopTimestamp - lastIntent < m_config.pauseForValidObsAfterImpulse_ms) {
     return true;
   };
 
@@ -21,7 +20,7 @@ bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
 };
 
 bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
-                                  uint8_t sampleSize) {
+                                  uint8_t sampleSize, int16_t median) {
   /*Semantisch eigentlich Hardwareschutz kommt vllt in den PWM später*/
   // Cooldown between actuator commands.
   if (loopTimestamp - lastIntent < m_config.steeringCooldown_ms) {
@@ -32,5 +31,13 @@ bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
   if (sampleSize < m_config.minimumSampleSize) {
     return true;
   };
+
+  // Der Median ist Action/NoAction Entscheidungsgrundlage
+  // Daher ist er ein Intent guard. Errors werden unabhängig von der Toleranz im
+  // Buffer gespeichert
+  if (!m_deadband.errorSignificant(median)) {
+    return true;
+  };
+
   return false;
 };

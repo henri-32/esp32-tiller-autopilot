@@ -35,9 +35,21 @@ Sollte sich herausstellen, dass die RICHTUNGSENTSCHEIDUNG schlechte Ergebnisse l
 
 
 ## Ergebnis 
+-- Das Einfließen von nicht signifikaten Werten in den median hat zu einem flüssigeren und akkuraterem median Verlauf geführt. 
+Das wird erst einmal als gut beurteilt. Er sollte damit in dieser symmetrischen und cleanen Simulation sehr genau sein und bei sensor Rauschen trotzdem noch robust. 
+
+-- Das Einführen des zusätzlichen means zur Bestimmung der Fehlerstärke hat das Problem, dass das System stabil oszilliert nicht gelöst. 
+Stattdessen schwingt es sich aktiv nun aktiv auf.
+Allerdings lässt sich jetzt eine Assymmetrie in der Verteilung der Intents auf jeder Seite des Targets erkennen. 
+Auf jeder Seite der Verteilung beginnen die Intents nach Überschreiten der Toleranzgrenze. Sie setzen sich jedoch weiter fort, nachdem die Toleranzgrenze durch Korrektur wieder unterschritten wird. 
+Dies umgeht die Toleranzgrenze einseitig, sorgt dafür, dass auf jeder Seite des targets mehr Energie durch Korrektur entsteht, als durch Fehler hineingegeben wurde und erklärt das aktive Aufschwingen. 
+Das deutet stark darauf hin, dass die Reaktion mit Intents zu verzögert passiert, weil der Buffer zu stabil ist. 
 
 ### Entscheidung 
-- zusätzliche (hier nicht begründete) Implementation von mean abs(error)  gesamte sim um einen GROBEN Qualitätsmarker der angewendeten config zu bekommen
+- zusätzliche (hier nicht begründete) Implementation von mean abs(error)  für die Sim  um einen GROBEN Qualitätsmarker der angewendeten config zu bekommen
+- nicht signifikante Werte fließen in median ein. 
+- Der mean wird erst einmal behalten, da keine unmittelbaren negativen Auswirkungen beobachtet werden können und er als Fehlergröße theoretisch wichtig erscheint. 
+- Weiterere Analyse hinsichtlich dem Blocken von Intents. 
 
 ### Sonstiges 
 In mehreren Fällen kam es zu nach Fehler links (führt zurecht zu mehreren Intents SteeringDirection::Right) zu einem weiteren Intent SteeringDirection::Right, obwohl das HDG zum Zeitpunkt des weiteren Intents bereits ein Fehler rechts beinhaltete. 

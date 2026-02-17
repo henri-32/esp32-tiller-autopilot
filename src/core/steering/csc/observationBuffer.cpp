@@ -1,73 +1,88 @@
 #include "core/steering/csc/observationBuffer.h"
+
 #include <algorithm>
 
 ObservationBuffer::ObservationBuffer(SteeringRegulationConfig &config)
-    : m_config(config) {};
+    : m_config(config) {}
 
-int16_t ObservationBuffer::getMedian() const { return median; };
+int16_t ObservationBuffer::getMedian() const { return median; }
+
+uint8_t ObservationBuffer::getActiveBufferSize() const {
+  const uint8_t configured = m_config.activeObservationBufferSize;
+  if (configured == 0) {
+    return 1;
+  }
+  return std::min(configured, maxBufferSize);
+}
 
 void ObservationBuffer::update(int16_t error) {
-  // Reset the buffer if it overflows its configured capacity.
-  if (writtenErrorsCounter >= m_config.observationBufferSize) {
+  const uint8_t activeBufferSize = getActiveBufferSize();
+
+  // Reset the buffer if it overflows its active capacity.
+  if (writtenErrorsCounter >= activeBufferSize) {
     reset();
   }
 
-  m_errorArray[writtenErrorsCounter] = error;
+  m_medianArray[writtenErrorsCounter] = error;
+  m_meanArray[writtenErrorsCounter] = error;
   writtenErrorsCounter++;
 
-  /*Das Array ist bewusst kein Ringbuffer, da die Ereignisse des letzten Arrays
-    semantisch bewusst verworfen werden*/
-  std::sort(m_errorArray.begin(), m_errorArray.begin() + writtenErrorsCounter);
+  // Deliberately no ring buffer: after one evidence window, values are dropped.
+  std::sort(m_medianArray.begin(), m_medianArray.begin() + writtenErrorsCounter);
 
-  /* Da nur signifikante Werte geschrieben werden, ist null semantisch kein Wert
-  statt gemessen 0 Da in jedem update neue Medianberechnung ist kein
-  Zurücksetzen erforderlich*/
   medianIndex = writtenErrorsCounter / 2;
-  median = m_errorArray[medianIndex];
+  median = m_medianArray[medianIndex];
 
   // Symmetric guard: if positives and negatives are balanced, treat as zero.
-  bool symmetric = false;
   uint8_t negativeValues = 0;
   uint8_t positiveValues = 0;
-  for (int i = 0; i < writtenErrorsCounter; i++) {
-    if (m_errorArray[i] < 0) {
+  for (uint8_t i = 0; i < writtenErrorsCounter; i++) {
+    if (m_medianArray[i] < 0) {
       negativeValues++;
-    } else if (m_errorArray[i] > 0) {
+    } else if (m_medianArray[i] > 0) {
       positiveValues++;
     }
   }
+
   if (positiveValues == negativeValues) {
-    symmetric = true;
+    median = 0;
   }
 
-  if (symmetric) {
-    median = 0;
+  // Full window consumed: reset evidence intentionally.
+  if (writtenErrorsCounter >= activeBufferSize) {
+    reset();
   }
 }
 
 int16_t ObservationBuffer::getSmoothedCurrentError() {
-  int16_t sum = 0;
-  int8_t counter = 0;
+  int32_t sum = 0;
+  const uint16_t samples = writtenErrorsCounter;
+  if (samples == 0) {
+    return 0;
+  }
 
-  /*Die letzten Errors werden für mean Berechnung genutzt ; Anzahl je nach
-    config*/
-  for (int i = 0;
-       i < writtenErrorsCounter - m_config.calculationWindowSmoothedMean; i++) {
-    counter++;
-    sum += m_errorArray[i];
-  };
-  int8_t mean = sum / counter;
-  return mean;
-};
+  const uint8_t cfgWindow = m_config.calculationWindowSmoothedMean;
+  if (cfgWindow == 0) {
+    return 0;
+  }
 
-uint8_t ObservationBuffer::getSampleSize() const {
-  return writtenErrorsCounter;
-};
+  const uint16_t window =
+      std::min(static_cast<uint16_t>(samples), static_cast<uint16_t>(cfgWindow));
+  const uint16_t start = samples - window;
 
-/*siehe oben bewusst verworfen*/
+  for (uint16_t i = start; i < samples; i++) {
+    sum += m_meanArray[i];
+  }
+
+  return static_cast<int16_t>(sum / static_cast<int32_t>(window));
+}
+
+uint8_t ObservationBuffer::getSampleSize() const { return writtenErrorsCounter; }
+
 void ObservationBuffer::reset() {
-  for (int i = 0; i < bufferSize; i++) {
-    m_errorArray[i] = 0;
+  for (uint8_t i = 0; i < maxBufferSize; i++) {
+    m_medianArray[i] = 0;
+    m_meanArray[i] = 0;
   }
   writtenErrorsCounter = 0;
   medianIndex = 0;

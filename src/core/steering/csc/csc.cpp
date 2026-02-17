@@ -4,8 +4,8 @@
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
-#include <algorithm>
 #include <cstdint>
+#include <cmath> 
 
 CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
     : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config),
@@ -23,42 +23,28 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   - Intent zurückgeben
 
   Wenn er wegen Guards nicht beobachten darf early return*/
-
   if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
                                          m_lastIntent)) {
     m_debug.observationBlocked = true;
     return std::nullopt;
   }
 
-  SteeringIntent intent; // Return value instanziert
+  SteeringIntent intent; // Return value
 
   int16_t error = m_errorCalculator.getCurrentError(m_currentCourse,
                                                     m_internalTargetCourse);
   m_debug.error = error;
 
-  /*
-  Aktuell ist das ganze Deadband Modul nicht genutzt. Siehe
-  documentation\csc_simulation_tests\iterations\1.
-  additional_csc_paramteter_for_error_size
-
-  -------------------------------------------
-    if (!m_deadband.errorSignificant(error)) {
-    m_debug.deadbandActive = true;
-    return std::nullopt;
-  }
-  -----------------------------------------------
-*/
-
   m_observationBuffer.update(error);
+  m_lastObsUpdate = loopTimestamp;
 
   m_debug.median = m_observationBuffer.getMedian();
   m_debug.sampleSize = m_observationBuffer.getSampleSize();
 
-  m_lastObsUpdate = loopTimestamp;
-
   if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent,
-                                    m_observationBuffer.getSampleSize())) {
+                                    m_observationBuffer.getSampleSize(), m_observationBuffer.getMedian())) {
     m_debug.intentBlocked = true;
+
     return std::nullopt;
   } else {
 
@@ -68,6 +54,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
     /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
       diese wird bewusst verworfen*/
     m_observationBuffer.reset();
+
     return intent;
   }
 }
@@ -86,28 +73,39 @@ uint16_t CoreSteeringController::getInternalTarget() const {
 
 std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
 
-  /* Der Median wird bewusst nur für die Bestimmung der
-  nötigen Korrekturrichtung genutzt, da ich bewusst keinen
-  PID Regler will*/
-  SteeringIntent intent;
+  /* Der Median wird als robuster Mittelwert für die Entscheidung
+  Action/NoAction und Richtungsentscheidung genutzt. Ein leicht geglätteter
+  aktueller mean wird als Fehlergröße für die Berechnung der abstrakten
+  Impulsstärke genutzt. */
+
+  SteeringIntent intent; // return value
 
   intent.dir = determineDirection(m_observationBuffer.getMedian());
 
-  /* Semantisch klargestellt. CSC setzt vollen abstrakten Impuls.
-  Der kann danach nur nach unten gedämpft, aber nicht nach
+  /* Semantisch klargestellt. CSC setzt grundsätzlich bei jeder Entscheidung
+  vollen abstrakten Impuls.
+  Der kann danach nach unten gedämpft, aber nicht nach
   oben eskaliert werden.*/
   intent.abstractImpulse_0_100 = 100;
   int8_t currentError = m_observationBuffer.getSmoothedCurrentError();
 
-  /*In dem clamped Fenster wird der Abstrakte Impulse runter gefiltert
-  Außerhalb bleibt er voll */
-  currentError = std::clamp(
-      currentError,
-      static_cast<int8_t>(m_config.lowClampSmoothedMeanApplicationWindow_deg),
-      static_cast<int8_t>(m_config.highClampSmoothedMeanApplicationWindow_deg));
+  if (currentError < - m_config.smoothedMeanApplicationWindow_deg ||
+      currentError > m_config.smoothedMeanApplicationWindow_deg) {
+    return intent;
+  };
 
-  int8_t filter = TODO WEITERARBEITEN Filter entwickeln Außerdem die neuen
-      config werte auch für sim anwenden !!return intent;
+  /*Bis hier hin war Richtung noch wichtig, um mean korrekt bestimmen zu
+  können Ab hier nur noch für abstractImpulse Größe ohne Vorzeichenrelevanz
+  verwendet*/
+  currentError = std::abs(currentError);
+
+  /*Wenn die obere (positive) Grenze des Windows 100% abstract Impulse bedeutet,
+  wird so in linearem Verhältnis auf die Fehlergröße reagiert*/
+  float errorPercantage = static_cast<float>(currentError) /
+                          m_config.smoothedMeanApplicationWindow_deg;
+  intent.abstractImpulse_0_100 *= errorPercantage;
+
+  return intent;
 };
 
 SteeringDirection

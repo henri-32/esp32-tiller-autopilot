@@ -32,10 +32,13 @@ Config-Slices und sehen die neuen Werte ab dem naechsten Tick konsistent.
 - `steeringTolerance_deg`
 - `SteeringMinImpulse_ms`
 - `SteeringMaxImpulse_ms`
-- `SteeringCooldown_ms`
+- `steeringCooldown_ms`
 - `minimumTimeBtwObs_ms`
 - `observationBufferSize`
+- `activeObservationBufferSize`
+- `minimumSampleSize`
 - `calculationWindowSmoothedMean`
+- `smoothedMeanApplicationWindow_deg`
 - `pauseForValidObsAfterImpulse_ms`
 
 ---
@@ -164,14 +167,25 @@ Messhygiene-Parameter, **kein Regelparameter**.
 ### `observationBufferSize`
 
 **Bedeutung**  
-Maximale Anzahl von Observations im Evidenzraum.
-Bestimmt, wie viel Dominanz nötig ist, bevor getrimmt wird.
+Compile-time Maximalgroesse des Observation-Buffers.  
+Bestimmt die feste Obergrenze der intern allozierten CSC-Arrays.
 
 **Zusammenhang**
 max. Beobachtungsdauer
-≈ minimumTimeBtwObs_ms × observationBufferSize
+~= minimumTimeBtwObs_ms * observationBufferSize
 
+### `activeObservationBufferSize`
 
+**Bedeutung**  
+Laufzeit-aktive Kapazitaet des Observation-Buffers.  
+Der Wert steuert, wie viele Samples im aktuellen Run gesammelt werden,
+bevor der Evidenzraum als voll gilt.
+
+**Hinweis Sim-Tuning**  
+In der Simulation kann dieser Wert per JSON gesetzt werden
+(`csc.observationBufferSize`).
+Im Produktiv-Default bleibt `activeObservationBufferSize` auf dem
+compile-time Maximum `observationBufferSize`.
 
 ---
 
@@ -203,3 +217,31 @@ Effektive Zeitspanne grob:
 **Hinweis Implementierungsstand**  
 Die Berechnung liegt im ObservationBuffer (`getSmoothedCurrentError()`).
 Der CSC bestimmt die Richtung weiterhin ueber den Median.
+
+---
+
+### `smoothedMeanApplicationWindow_deg`
+
+**Bedeutung**  
+Symmetrisches Fenster um 0 fuer den geglaetteten aktuellen Fehler
+(`getSmoothedCurrentError()`).
+
+**Verhalten im CSC**  
+- Wenn `|currentError| > smoothedMeanApplicationWindow_deg`, bleibt der
+  abstrakte Impuls bei 100.
+- Wenn `|currentError| <= smoothedMeanApplicationWindow_deg`, wird der Impuls
+  linear skaliert:
+  `abstractImpulse_0_100 = 100 * |currentError| / smoothedMeanApplicationWindow_deg`
+
+**Groesser einstellen**
+- mehr weicher Uebergang nahe dem Target
+- weniger abrupte Impulsspruenge
+
+**Kleiner einstellen**
+- schneller voller Impuls
+- aggressiveres Verhalten bei mittleren Fehlern
+
+**Hinweis**
+- Der Wert muss groesser als 0 bleiben, damit die lineare Skalierung sinnvoll
+  bleibt.
+

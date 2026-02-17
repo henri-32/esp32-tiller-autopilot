@@ -8,13 +8,17 @@ class ObservationBuffer {
 private:
   SteeringRegulationConfig &m_config;
 
-  static constexpr uint8_t bufferSize =
+  static constexpr uint8_t maxBufferSize =
       SteeringRegulationConfig::observationBufferSize;
 
-  std::array<int16_t, bufferSize> m_errorArray{};
+  uint8_t getActiveBufferSize() const;
+
+  std::array<int16_t, maxBufferSize> m_medianArray{};
+  std::array<int16_t, maxBufferSize> m_meanArray{};
   uint8_t writtenErrorsCounter = 0;
   uint8_t medianIndex;
   int16_t median = 0;
+
 
 public:
   // Contract:

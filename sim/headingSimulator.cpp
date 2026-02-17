@@ -101,6 +101,19 @@ bool toUint8(double input, const char *key, uint8_t &output) {
   return true;
 }
 
+bool toPositiveInt8(double input, const char *key, int8_t &output) {
+  if (!std::isfinite(input) || input <= 0.0 ||
+      input > static_cast<double>(std::numeric_limits<int8_t>::max()) ||
+      std::floor(input) != input) {
+    std::cerr << "Invalid positive int8 value for key in next-run config: "
+              << key << "\n";
+    return false;
+  }
+
+  output = static_cast<int8_t>(input);
+  return true;
+}
+
 bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
   std::string json;
   if (!readFileToString(path, json)) {
@@ -118,7 +131,10 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
   double pauseForValidObsAfterImpulse_ms = 0.0;
   double steeringCooldown_ms = 0.0;
   double calculationWindowSmoothedMean = 0.0;
+  double smoothedMeanApplicationWindow_deg = 20;
+  double observationBufferSize = 0.0;
   double target_deg = 0.0;
+
 
   if (!extractNumber(json, "dt_sec", dt_sec) ||
       !extractNumber(json, "sim_seconds", sim_seconds) ||
@@ -133,6 +149,9 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
       !extractNumber(json, "steeringCooldown_ms", steeringCooldown_ms) ||
       !extractNumber(json, "calculationWindowSmoothedMean",
                      calculationWindowSmoothedMean) ||
+      !extractNumber(json, "smoothedMeanApplicationWindow_deg",
+                     smoothedMeanApplicationWindow_deg) ||
+      !extractNumber(json, "observationBufferSize", observationBufferSize) ||
       !extractNumber(json, "target_deg", target_deg)) {
     return false;
   }
@@ -158,7 +177,34 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
       !toUint32(calculationWindowSmoothedMean,
                 "calculationWindowSmoothedMean",
                 config.regulation.calculationWindowSmoothedMean) ||
+      !toPositiveInt8(smoothedMeanApplicationWindow_deg,
+                      "smoothedMeanApplicationWindow_deg",
+                      config.regulation.smoothedMeanApplicationWindow_deg) ||
+      !toUint8(observationBufferSize, "observationBufferSize",
+               config.regulation.activeObservationBufferSize) ||
       !toUint16(target_deg, "target_deg", config.target_deg)) {
+    return false;
+  }
+
+  if (config.regulation.activeObservationBufferSize == 0) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "observationBufferSize must be >= 1\n";
+    return false;
+  }
+
+  if (config.regulation.activeObservationBufferSize >
+      SteeringRegulationConfig::observationBufferSize) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "observationBufferSize exceeds compile-time max "
+              << static_cast<int>(SteeringRegulationConfig::observationBufferSize)
+              << "\n";
+    return false;
+  }
+
+  if (config.regulation.minimumSampleSize >
+      config.regulation.activeObservationBufferSize) {
+    std::cerr << "Invalid config combination in next-run config: "
+              << "minimumSampleSize must be <= observationBufferSize\n";
     return false;
   }
 
@@ -199,6 +245,12 @@ void writeConfigSnapshotJson(const SimulationConfig &config) {
        << config.regulation.steeringCooldown_ms << ",\n";
   file << "    \"calculationWindowSmoothedMean\": "
        << config.regulation.calculationWindowSmoothedMean << ",\n";
+  file << "    \"smoothedMeanApplicationWindow_deg\": "
+       << static_cast<int>(config.regulation.smoothedMeanApplicationWindow_deg)
+       << ",\n";
+  file << "    \"observationBufferSize\": "
+       << static_cast<int>(config.regulation.activeObservationBufferSize)
+       << ",\n";
   file << "    \"target_deg\": " << config.target_deg << "\n";
   file << "  }\n";
   file << "}\n";
@@ -226,6 +278,9 @@ SimulationConfig makeDefaultSimulationConfig() {
   config.regulation.pauseForValidObsAfterImpulse_ms = 2000;
   config.regulation.steeringCooldown_ms = 500;
   config.regulation.calculationWindowSmoothedMean = 4;
+  config.regulation.smoothedMeanApplicationWindow_deg = 20;
+  config.regulation.activeObservationBufferSize =
+      SteeringRegulationConfig::observationBufferSize;
   config.target_deg = 0;
 
   return config;
@@ -337,6 +392,7 @@ int main() {
        << "obs_blocked,"
        << "intent_blocked,"
        << "intent,"
+       << "intent_abstract_force,"
        << "dir\n";
 
   file << std::fixed << std::setprecision(3);
@@ -355,7 +411,11 @@ int main() {
          << config.target_deg << "," << dbg.error << "," << dbg.median << ","
          << static_cast<int>(dbg.sampleSize) << "," << dbg.deadbandActive << ","
          << dbg.observationBlocked << "," << dbg.intentBlocked << ","
-         << (intent.has_value() ? 1 : 0) << ",";
+         << (intent.has_value() ? 1 : 0) << ","
+         << (intent.has_value()
+                 ? static_cast<int>(intent->abstractImpulse_0_100)
+                 : 0)
+         << ",";
 
     if (intent) {
       file << (intent->dir == SteeringDirection::Left ? "Left" : "Right");
