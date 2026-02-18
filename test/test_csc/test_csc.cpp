@@ -142,9 +142,11 @@ void test_buffer_is_not_ready_when_empty() {
   const uint32_t lastIntent = 0;
   const uint8_t sampleSize = 0;
   const int16_t median = 0;
+  const float omega = 0;
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(time, lastIntent, sampleSize, median));
+  TEST_ASSERT_TRUE(
+      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
 }
 
 void test_buffer_is_not_ready_when_below_minimum_samples() {
@@ -157,9 +159,11 @@ void test_buffer_is_not_ready_when_below_minimum_samples() {
   const uint32_t lastIntent = 0;
   const uint8_t sampleSize = 9;
   const int16_t median = 0;
+  const float omega = 0;
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(time, lastIntent, sampleSize, median));
+  TEST_ASSERT_TRUE(
+      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
 }
 
 void test_buffer_is_ready_when_minimum_samples_reached() {
@@ -171,9 +175,11 @@ void test_buffer_is_ready_when_minimum_samples_reached() {
   const uint32_t time = 10000;
   const uint32_t lastIntent = 0;
   const uint8_t sampleSize = 10;
-  const int16_t median = config.steeringTolerance_deg+1;
+  const int16_t median = config.steeringTolerance_deg + 1;
+  const float omega = 0;
   // When / Then
-  TEST_ASSERT_FALSE(guard.intentBlocked(time, lastIntent, sampleSize, median));
+  TEST_ASSERT_FALSE(
+      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
 }
 
 // ObservationBuffer tests
@@ -238,6 +244,75 @@ void test_median_returns_positive_when_majority_samples_are_positive() {
   TEST_ASSERT_TRUE(buffer.getMedian() > 0);
 }
 
+void test_omega_is_positive_when_error_decreases_over_time() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.omegaRobust = 3;
+  ObservationBuffer buffer(config);
+
+  // Error drops from +20 to +10 in 1 second => -d(error)/dt = +10 deg/s
+  buffer.update(20, 1000);
+  buffer.update(10, 2000);
+
+  // When
+  const float omega = buffer.getOmega(2000);
+
+  // Then
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, omega);
+}
+
+void test_omega_is_negative_when_error_increases_over_time() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.omegaRobust = 3;
+  ObservationBuffer buffer(config);
+
+  // Error rises from +10 to +20 in 1 second => -d(error)/dt = -10 deg/s
+  buffer.update(10, 1000);
+  buffer.update(20, 2000);
+
+  // When
+  const float omega = buffer.getOmega(2000);
+
+  // Then
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, -10.0f, omega);
+}
+
+void test_omega_uses_only_configured_robust_window() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.omegaRobust = 3;
+  ObservationBuffer buffer(config);
+
+  // Last 3 samples are used (80@1000 -> 40@3000), first sample ignored.
+  buffer.update(100, 0);
+  buffer.update(80, 1000);
+  buffer.update(60, 2000);
+  buffer.update(40, 3000);
+
+  // When
+  const float omega = buffer.getOmega(3000);
+
+  // Then
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 20.0f, omega);
+}
+
+void test_omega_returns_zero_when_window_timestamps_are_not_increasing() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.omegaRobust = 3;
+  ObservationBuffer buffer(config);
+
+  buffer.update(20, 1000);
+  buffer.update(10, 1000);
+
+  // When
+  const float omega = buffer.getOmega(1000);
+
+  // Then
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, omega);
+}
+
 // SteeringGuard cooldown tests
 void test_no_second_action_within_cooldown_period() {
   // Given
@@ -249,10 +324,85 @@ void test_no_second_action_within_cooldown_period() {
   const uint32_t lastIntent = 10000;
   const uint8_t enoughSamples = 10;
   const int16_t median = 0;
+  const float omega = 0;
 
   // When / Then
   TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent + 1000, lastIntent,
-                                       enoughSamples, median));
+                                       enoughSamples, median, omega));
+}
+
+void test_no_action_within_omegaDeadband() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  SteeringGuard guard(config);
+
+  const uint32_t lastIntent = 10000;
+  const uint8_t enoughSamples = 10;
+  const int16_t median = 0;
+  const float omega = 0;
+
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent + 1000, lastIntent,
+                                       enoughSamples, median, omega));
+};
+
+void test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringCooldown_ms = 0;
+  config.minimumSampleSize = 5;
+  config.steeringTolerance_deg = 5;
+  config.omegaDeadband = 0.2f;
+  SteeringGuard guard(config);
+
+  const uint32_t loopTimestamp = 10000;
+  const uint32_t lastIntent = 0;
+  const uint8_t enoughSamples = 5;
+  const int16_t median = config.steeringTolerance_deg + 1;
+  const float omega = config.omegaDeadband + 0.05f;
+
+  // When / Then
+  TEST_ASSERT_TRUE(
+      guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples, median, omega));
+}
+
+void test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringCooldown_ms = 0;
+  config.minimumSampleSize = 5;
+  config.steeringTolerance_deg = 5;
+  config.omegaDeadband = 0.2f;
+  SteeringGuard guard(config);
+
+  const uint32_t loopTimestamp = 10000;
+  const uint32_t lastIntent = 0;
+  const uint8_t enoughSamples = 5;
+  const int16_t median = -(config.steeringTolerance_deg + 1);
+  const float omega = -(config.omegaDeadband + 0.05f);
+
+  // When / Then
+  TEST_ASSERT_TRUE(
+      guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples, median, omega));
+}
+
+void test_omega_guard_allows_action_when_omega_within_deadband() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringCooldown_ms = 0;
+  config.minimumSampleSize = 5;
+  config.steeringTolerance_deg = 5;
+  config.omegaDeadband = 0.2f;
+  SteeringGuard guard(config);
+
+  const uint32_t loopTimestamp = 10000;
+  const uint32_t lastIntent = 0;
+  const uint8_t enoughSamples = 5;
+  const int16_t median = config.steeringTolerance_deg + 1;
+  const float omega = config.omegaDeadband - 0.05f;
+
+  // When / Then
+  TEST_ASSERT_FALSE(
+      guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples, median, omega));
 }
 
 void test_action_allowed_after_cooldown_expires() {
@@ -264,12 +414,13 @@ void test_action_allowed_after_cooldown_expires() {
 
   const uint32_t lastIntent = 10000;
   const uint8_t enoughSamples = 10;
-  const int16_t median = config.steeringTolerance_deg+1;
+  const int16_t median = config.steeringTolerance_deg + 1;
+  const float omega = 0;
 
   // When / Then
   TEST_ASSERT_FALSE(
       guard.intentBlocked(lastIntent + config.steeringCooldown_ms + 1,
-                          lastIntent, enoughSamples, median));
+                          lastIntent, enoughSamples, median, omega));
 }
 
 void test_no_action_when_error_oscillates_symmetrically() {
@@ -442,6 +593,10 @@ int main() {
   RUN_TEST(test_median_returns_positive_when_majority_positive);
   RUN_TEST(test_median_returns_negative_when_majority_negative);
   RUN_TEST(test_median_returns_positive_when_majority_samples_are_positive);
+  RUN_TEST(test_omega_is_positive_when_error_decreases_over_time);
+  RUN_TEST(test_omega_is_negative_when_error_increases_over_time);
+  RUN_TEST(test_omega_uses_only_configured_robust_window);
+  RUN_TEST(test_omega_returns_zero_when_window_timestamps_are_not_increasing);
   RUN_TEST(test_no_second_action_within_cooldown_period);
   RUN_TEST(test_action_allowed_after_cooldown_expires);
   RUN_TEST(test_no_action_when_error_oscillates_symmetrically);
@@ -451,6 +606,11 @@ int main() {
   RUN_TEST(test_csc_resets_observation_after_intent);
   RUN_TEST(test_csc_respects_time_gates_and_cooldown);
   RUN_TEST(test_error_just_outside_deadband_negative_is_treated_as_significant);
+  RUN_TEST(test_no_action_within_omegaDeadband);
+  RUN_TEST(test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband);
+  RUN_TEST(test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband);
+  RUN_TEST(test_omega_guard_allows_action_when_omega_within_deadband);
+
 
   return UNITY_END();
 }

@@ -15,7 +15,7 @@ public:
   bool observationBlocked(uint32_t loopTimestamp, uint32_t lastUpdate,
                           uint32_t lastIntent);
   bool intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
-                     uint8_t sampleSize, int16_t median);
+                     uint8_t sampleSize, int16_t median, float omega);
 
 private:
   SteeringRegulationConfig &m_config;

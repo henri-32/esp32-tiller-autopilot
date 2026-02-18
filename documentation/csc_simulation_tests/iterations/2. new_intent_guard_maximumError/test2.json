@@ -1,0 +1,22 @@
+{
+  "time": {
+    "dt_sec": 0.100,
+    "sim_seconds": 180
+  },
+  "boat": {
+    "intentStepToOmega": 0.020,
+    "initialHeading_deg": 25.000,
+    "environmentTorque_deg_s2": 0.000
+  },
+  "csc": {
+    "steeringTolerance_deg": 7,
+    "minimumSampleSize": 5,
+    "minimumTimeBtwObs_ms": 100,
+    "pauseForValidObsAfterImpulse_ms": 0,
+    "steeringCooldown_ms": 5000,
+    "calculationWindowSmoothedMean": 4,
+    "smoothedMeanApplicationWindow_deg": 100,
+    "observationBufferSize": 70,
+    "target_deg": 0
+  }
+}

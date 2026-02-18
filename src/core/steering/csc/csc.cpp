@@ -4,8 +4,9 @@
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
+#include <cmath>
 #include <cstdint>
-#include <cmath> 
+
 
 CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
     : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config),
@@ -35,14 +36,16 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
                                                     m_internalTargetCourse);
   m_debug.error = error;
 
-  m_observationBuffer.update(error);
+  m_observationBuffer.update(error, loopTimestamp);
   m_lastObsUpdate = loopTimestamp;
 
   m_debug.median = m_observationBuffer.getMedian();
   m_debug.sampleSize = m_observationBuffer.getSampleSize();
 
-  if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent,
-                                    m_observationBuffer.getSampleSize(), m_observationBuffer.getMedian())) {
+  if (m_steeringGuard.intentBlocked(
+          loopTimestamp, m_lastIntent, m_observationBuffer.getSampleSize(),
+          m_observationBuffer.getMedian(),
+          m_observationBuffer.getOmega(loopTimestamp))) {
     m_debug.intentBlocked = true;
 
     return std::nullopt;
@@ -87,9 +90,9 @@ std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
   Der kann danach nach unten gedämpft, aber nicht nach
   oben eskaliert werden.*/
   intent.abstractImpulse_0_100 = 100;
-  int8_t currentError = m_observationBuffer.getSmoothedCurrentError();
+  int16_t currentError = m_observationBuffer.getSmoothedCurrentError();
 
-  if (currentError < - m_config.smoothedMeanApplicationWindow_deg ||
+  if (currentError < -m_config.smoothedMeanApplicationWindow_deg ||
       currentError > m_config.smoothedMeanApplicationWindow_deg) {
     return intent;
   };

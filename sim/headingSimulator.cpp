@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -18,7 +19,19 @@ namespace {
 constexpr const char *kOutputPath = "sim/sim_output/drift_sim.csv";
 constexpr const char *kConfigSnapshotJsonPath =
     "sim/sim_output/drift_sim_config.json";
+constexpr const char *kOutputDirectoryPath = "sim/sim_output";
 constexpr const char *kNextRunConfigPath = "sim/next_run_config.json";
+
+bool ensureOutputDirectoryExists() {
+  std::error_code ec;
+  std::filesystem::create_directories(kOutputDirectoryPath, ec);
+  if (ec) {
+    std::cerr << "Failed to create simulation output directory: "
+              << kOutputDirectoryPath << " (" << ec.message() << ")\n";
+    return false;
+  }
+  return true;
+}
 
 bool readFileToString(const char *path, std::string &content) {
   std::ifstream file(path);
@@ -122,25 +135,45 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
 
   double dt_sec = 0.0;
   double sim_seconds = 0.0;
-  double intentStepToOmega = 0.0;
+  double intentStepToTiller = 0.0;
+  double tillerMaxAbs = 0.0;
+  double tillerToYawAccel_deg_s2 = 0.0;
   double initialHeading_deg = 0.0;
   double environmentTorque_deg_s2 = 0.0;
+  double yawInertia = 0.0;
+  double yawDampingLinear = 0.0;
+  double yawDampingQuadratic = 0.0;
+  double trueWindSpeed_mps = 0.0;
+  double trueWindDirection_deg = 0.0;
+  double windHullYawAccelPerMps2 = 0.0;
   double steeringTolerance_deg = 0.0;
   double minimumSampleSize = 0.0;
   double minimumTimeBtwObs_ms = 0.0;
   double pauseForValidObsAfterImpulse_ms = 0.0;
   double steeringCooldown_ms = 0.0;
   double calculationWindowSmoothedMean = 0.0;
-  double smoothedMeanApplicationWindow_deg = 20;
+  double smoothedMeanApplicationWindow_deg = 20.0;
   double observationBufferSize = 0.0;
+  double omegaRobust = 0.0;
+  double omegaDeadband = 0.0;
   double target_deg = 0.0;
 
 
   if (!extractNumber(json, "dt_sec", dt_sec) ||
       !extractNumber(json, "sim_seconds", sim_seconds) ||
-      !extractNumber(json, "intentStepToOmega", intentStepToOmega) ||
+      !extractNumber(json, "intentStepToTiller", intentStepToTiller) ||
+      !extractNumber(json, "tillerMaxAbs", tillerMaxAbs) ||
+      !extractNumber(json, "tillerToYawAccel_deg_s2", tillerToYawAccel_deg_s2) ||
       !extractNumber(json, "initialHeading_deg", initialHeading_deg) ||
-      !extractNumber(json, "environmentTorque_deg_s2", environmentTorque_deg_s2) ||
+      !extractNumber(json, "environmentTorque_deg_s2",
+                     environmentTorque_deg_s2) ||
+      !extractNumber(json, "yawInertia", yawInertia) ||
+      !extractNumber(json, "yawDampingLinear", yawDampingLinear) ||
+      !extractNumber(json, "yawDampingQuadratic", yawDampingQuadratic) ||
+      !extractNumber(json, "trueWindSpeed_mps", trueWindSpeed_mps) ||
+      !extractNumber(json, "trueWindDirection_deg", trueWindDirection_deg) ||
+      !extractNumber(json, "windHullYawAccelPerMps2",
+                     windHullYawAccelPerMps2) ||
       !extractNumber(json, "steeringTolerance_deg", steeringTolerance_deg) ||
       !extractNumber(json, "minimumSampleSize", minimumSampleSize) ||
       !extractNumber(json, "minimumTimeBtwObs_ms", minimumTimeBtwObs_ms) ||
@@ -152,17 +185,34 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
       !extractNumber(json, "smoothedMeanApplicationWindow_deg",
                      smoothedMeanApplicationWindow_deg) ||
       !extractNumber(json, "observationBufferSize", observationBufferSize) ||
+      !extractNumber(json, "omegaRobust", omegaRobust) ||
+      !extractNumber(json, "omegaDeadband", omegaDeadband) ||
       !extractNumber(json, "target_deg", target_deg)) {
     return false;
   }
 
   if (!toFloat(dt_sec, "dt_sec", config.dt_sec) ||
       !toUint32(sim_seconds, "sim_seconds", config.sim_seconds) ||
-      !toFloat(intentStepToOmega, "intentStepToOmega", config.intentStepToOmega) ||
+      !toFloat(intentStepToTiller, "intentStepToTiller",
+               config.boat.intentStepToTiller) ||
+      !toFloat(tillerMaxAbs, "tillerMaxAbs", config.boat.tillerMaxAbs) ||
+      !toFloat(tillerToYawAccel_deg_s2, "tillerToYawAccel_deg_s2",
+               config.boat.tillerToYawAccel_deg_s2) ||
       !toFloat(initialHeading_deg, "initialHeading_deg",
-               config.initialHeading_deg) ||
+               config.boat.initialHeading_deg) ||
       !toFloat(environmentTorque_deg_s2, "environmentTorque_deg_s2",
-               config.environmentTorque_deg_s2) ||
+               config.boat.environmentTorque_deg_s2) ||
+      !toFloat(yawInertia, "yawInertia", config.boat.yawInertia) ||
+      !toFloat(yawDampingLinear, "yawDampingLinear",
+               config.boat.yawDampingLinear) ||
+      !toFloat(yawDampingQuadratic, "yawDampingQuadratic",
+               config.boat.yawDampingQuadratic) ||
+      !toFloat(trueWindSpeed_mps, "trueWindSpeed_mps",
+               config.boat.trueWindSpeed_mps) ||
+      !toFloat(trueWindDirection_deg, "trueWindDirection_deg",
+               config.boat.trueWindDirection_deg) ||
+      !toFloat(windHullYawAccelPerMps2, "windHullYawAccelPerMps2",
+               config.boat.windHullYawAccelPerMps2) ||
       !toUint8(steeringTolerance_deg, "steeringTolerance_deg",
                config.regulation.steeringTolerance_deg) ||
       !toUint8(minimumSampleSize, "minimumSampleSize",
@@ -182,7 +232,21 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
                       config.regulation.smoothedMeanApplicationWindow_deg) ||
       !toUint8(observationBufferSize, "observationBufferSize",
                config.regulation.activeObservationBufferSize) ||
+      !toUint8(omegaRobust, "omegaRobust", config.regulation.omegaRobust) ||
+      !toFloat(omegaDeadband, "omegaDeadband", config.regulation.omegaDeadband) ||
       !toUint16(target_deg, "target_deg", config.target_deg)) {
+    return false;
+  }
+
+  if (config.dt_sec <= 0.0f) {
+    std::cerr
+        << "Invalid value for key in next-run config: dt_sec must be > 0\n";
+    return false;
+  }
+
+  if (config.sim_seconds == 0U) {
+    std::cerr
+        << "Invalid value for key in next-run config: sim_seconds must be > 0\n";
     return false;
   }
 
@@ -208,6 +272,60 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
     return false;
   }
 
+  if (config.regulation.omegaDeadband < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "omegaDeadband must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.yawInertia <= 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "yawInertia must be > 0\n";
+    return false;
+  }
+
+  if (config.boat.intentStepToTiller < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "intentStepToTiller must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.tillerMaxAbs <= 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "tillerMaxAbs must be > 0\n";
+    return false;
+  }
+
+  if (config.boat.tillerToYawAccel_deg_s2 < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "tillerToYawAccel_deg_s2 must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.yawDampingLinear < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "yawDampingLinear must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.yawDampingQuadratic < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "yawDampingQuadratic must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.trueWindSpeed_mps < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "trueWindSpeed_mps must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.windHullYawAccelPerMps2 < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "windHullYawAccelPerMps2 must be >= 0\n";
+    return false;
+  }
+
   std::cout << "Loaded simulation config from: " << path << "\n";
   return true;
 }
@@ -227,10 +345,27 @@ void writeConfigSnapshotJson(const SimulationConfig &config) {
   file << "    \"sim_seconds\": " << config.sim_seconds << "\n";
   file << "  },\n";
   file << "  \"boat\": {\n";
-  file << "    \"intentStepToOmega\": " << config.intentStepToOmega << ",\n";
-  file << "    \"initialHeading_deg\": " << config.initialHeading_deg << ",\n";
-  file << "    \"environmentTorque_deg_s2\": " << config.environmentTorque_deg_s2
-       << "\n";
+  file << "    \"intentStepToTiller\": " << config.boat.intentStepToTiller
+       << ",\n";
+  file << "    \"tillerMaxAbs\": " << config.boat.tillerMaxAbs << ",\n";
+  file << "    \"tillerToYawAccel_deg_s2\": "
+       << config.boat.tillerToYawAccel_deg_s2
+       << ",\n";
+  file << "    \"initialHeading_deg\": " << config.boat.initialHeading_deg
+       << ",\n";
+  file << "    \"environmentTorque_deg_s2\": "
+       << config.boat.environmentTorque_deg_s2 << ",\n";
+  file << "    \"yawInertia\": " << config.boat.yawInertia << ",\n";
+  file << "    \"yawDampingLinear\": " << config.boat.yawDampingLinear
+       << ",\n";
+  file << "    \"yawDampingQuadratic\": " << config.boat.yawDampingQuadratic
+       << ",\n";
+  file << "    \"trueWindSpeed_mps\": " << config.boat.trueWindSpeed_mps
+       << ",\n";
+  file << "    \"trueWindDirection_deg\": " << config.boat.trueWindDirection_deg
+       << ",\n";
+  file << "    \"windHullYawAccelPerMps2\": "
+       << config.boat.windHullYawAccelPerMps2 << "\n";
   file << "  },\n";
   file << "  \"csc\": {\n";
   file << "    \"steeringTolerance_deg\": "
@@ -251,6 +386,12 @@ void writeConfigSnapshotJson(const SimulationConfig &config) {
   file << "    \"observationBufferSize\": "
        << static_cast<int>(config.regulation.activeObservationBufferSize)
        << ",\n";
+  file << "    \"omegaRobust\": "
+       << static_cast<int>(config.regulation.omegaRobust)
+       << ",\n";
+  file << "    \"omegaDeadband\": "
+       << config.regulation.omegaDeadband
+       << ",\n";
   file << "    \"target_deg\": " << config.target_deg << "\n";
   file << "  }\n";
   file << "}\n";
@@ -264,12 +405,18 @@ SimulationConfig makeDefaultSimulationConfig() {
   config.dt_sec = 0.1f;
   config.sim_seconds = 180;
 
-  // --- Boot dynamics ---
-  config.intentStepToOmega =
-      0.005f; // Weil abstract intent noch 100 ist wirkt dieser parameter *100
-              // also 0.1 = 1deg/sec
-  config.initialHeading_deg = 15.0f;
-  config.environmentTorque_deg_s2 = 0.00f;
+  // --- Boat dynamics ---
+  config.boat.intentStepToTiller = 0.005f;
+  config.boat.tillerMaxAbs = 1.0f;
+  config.boat.tillerToYawAccel_deg_s2 = 1.5f;
+  config.boat.initialHeading_deg = 15.0f;
+  config.boat.environmentTorque_deg_s2 = 0.0f;
+  config.boat.yawInertia = 1.0f;
+  config.boat.yawDampingLinear = 0.30f;
+  config.boat.yawDampingQuadratic = 0.02f;
+  config.boat.trueWindSpeed_mps = 6.0f;
+  config.boat.trueWindDirection_deg = 70.0f;
+  config.boat.windHullYawAccelPerMps2 = 0.03f;
 
   // --- CSC ---
   config.regulation.steeringTolerance_deg = 7;
@@ -281,21 +428,59 @@ SimulationConfig makeDefaultSimulationConfig() {
   config.regulation.smoothedMeanApplicationWindow_deg = 20;
   config.regulation.activeObservationBufferSize =
       SteeringRegulationConfig::observationBufferSize;
+  config.regulation.omegaRobust = 3;
+  config.regulation.omegaDeadband = 0.2f;
   config.target_deg = 0;
 
   return config;
 }
 
-BootModel::BootModel(float startHeading_deg, float intentStepToOmega)
-    : m_heading_deg(normalizeHeading(startHeading_deg)),
-      m_angularVelocity_deg_s(0.0f), m_intentStepToOmega(intentStepToOmega) {}
+BootModel::BootModel(const BoatPhysicsConfig &config)
+    : m_heading_deg(normalizeHeading(config.initialHeading_deg)),
+      m_angularVelocity_deg_s(0.0f),
+      m_intentStepToTiller(config.intentStepToTiller),
+      m_tillerMaxAbs(config.tillerMaxAbs),
+      m_tillerToYawAccel_deg_s2(config.tillerToYawAccel_deg_s2),
+      m_environmentTorque_deg_s2(config.environmentTorque_deg_s2),
+      m_yawInertia(config.yawInertia),
+      m_yawDampingLinear(config.yawDampingLinear),
+      m_yawDampingQuadratic(config.yawDampingQuadratic),
+      m_trueWindSpeed_mps(config.trueWindSpeed_mps),
+      m_trueWindDirection_deg(config.trueWindDirection_deg),
+      m_windHullYawAccelPerMps2(config.windHullYawAccelPerMps2) {}
 
 void BootModel::applyIntent(float signedImpulse_0_100) {
-  m_angularVelocity_deg_s += m_intentStepToOmega * signedImpulse_0_100;
+  m_tillerPosition += m_intentStepToTiller * signedImpulse_0_100;
+  if (m_tillerPosition > m_tillerMaxAbs) {
+    m_tillerPosition = m_tillerMaxAbs;
+  } else if (m_tillerPosition < -m_tillerMaxAbs) {
+    m_tillerPosition = -m_tillerMaxAbs;
+  }
 }
 
-void BootModel::update(float dt, float externalTorque_deg_s2) {
-  m_angularVelocity_deg_s += externalTorque_deg_s2 * dt;
+void BootModel::update(float dt) {
+  const float windYawAccel_deg_s2 = computeWindYawAccel();
+  const float tillerNormalized = (m_tillerMaxAbs > 0.0f)
+                                     ? (m_tillerPosition / m_tillerMaxAbs)
+                                     : 0.0f;
+  const float tillerYawAccel_deg_s2 =
+      tillerNormalized * m_tillerToYawAccel_deg_s2;
+
+  const float dampingMoment =
+      (m_yawDampingLinear * m_angularVelocity_deg_s) +
+      (m_yawDampingQuadratic * std::fabs(m_angularVelocity_deg_s) *
+       m_angularVelocity_deg_s);
+  const float dampingYawAccel_deg_s2 = dampingMoment / m_yawInertia;
+
+  m_lastTillerYawAccel_deg_s2 = tillerYawAccel_deg_s2;
+  m_lastWindYawAccel_deg_s2 = windYawAccel_deg_s2;
+  m_lastDampingYawAccel_deg_s2 = -dampingYawAccel_deg_s2;
+
+  const float totalYawAccel_deg_s2 =
+      m_environmentTorque_deg_s2 + windYawAccel_deg_s2 +
+      tillerYawAccel_deg_s2 - dampingYawAccel_deg_s2;
+
+  m_angularVelocity_deg_s += totalYawAccel_deg_s2 * dt;
   m_heading_deg =
       normalizeHeading(m_heading_deg + (m_angularVelocity_deg_s * dt));
 }
@@ -303,6 +488,14 @@ void BootModel::update(float dt, float externalTorque_deg_s2) {
 float BootModel::heading() const { return m_heading_deg; }
 
 float BootModel::angularVelocity() const { return m_angularVelocity_deg_s; }
+
+float BootModel::tillerPosition() const { return m_tillerPosition; }
+
+float BootModel::tillerYawAccel() const { return m_lastTillerYawAccel_deg_s2; }
+
+float BootModel::windYawAccel() const { return m_lastWindYawAccel_deg_s2; }
+
+float BootModel::dampingYawAccel() const { return m_lastDampingYawAccel_deg_s2; }
 
 float BootModel::normalizeHeading(float heading_deg) {
   while (heading_deg < 0.0f) {
@@ -314,27 +507,54 @@ float BootModel::normalizeHeading(float heading_deg) {
   return heading_deg;
 }
 
-EnvironmentModel::EnvironmentModel(float constantTorque_deg_s2)
-    : m_constantTorque_deg_s2(constantTorque_deg_s2) {}
+float BootModel::normalizeAngleSignedDeg(float angle_deg) {
+  while (angle_deg > 180.0f) {
+    angle_deg -= 360.0f;
+  }
+  while (angle_deg <= -180.0f) {
+    angle_deg += 360.0f;
+  }
+  return angle_deg;
+}
 
-float EnvironmentModel::externalTorque(float /*time_s*/) const {
-  return m_constantTorque_deg_s2;
+float BootModel::degToRad(float deg) {
+  constexpr float pi = 3.14159265358979323846f;
+  return deg * (pi / 180.0f);
+}
+
+float BootModel::computeWindYawAccel() const {
+  if (m_trueWindSpeed_mps <= 0.0f || m_windHullYawAccelPerMps2 <= 0.0f) {
+    return 0.0f;
+  }
+
+  // Windage-only model (no sail lift/drag):
+  // crosswind component on hull creates yaw disturbance.
+  const float relativeWindAngle_deg =
+      normalizeAngleSignedDeg(m_trueWindDirection_deg - m_heading_deg);
+  const float relativeWindAngle_rad = degToRad(relativeWindAngle_deg);
+
+  const float windYawAccel_deg_s2 =
+      m_windHullYawAccelPerMps2 * m_trueWindSpeed_mps * m_trueWindSpeed_mps *
+      std::sin(relativeWindAngle_rad);
+
+  if (!std::isfinite(windYawAccel_deg_s2)) {
+    return 0.0f;
+  }
+  return windYawAccel_deg_s2;
 }
 
 SimulationEngine::SimulationEngine(CoreSteeringController &csc,
                                    const SimulationConfig &config)
-    : m_boot(config.initialHeading_deg, config.intentStepToOmega),
-      m_environment(config.environmentTorque_deg_s2), m_csc(csc) {}
+    : m_boot(config.boat), m_csc(csc) {}
 
 void SimulationEngine::tick(float dt, uint32_t loopTimestamp) {
-  const uint16_t heading_u16 =
-      static_cast<uint16_t>(m_boot.heading()) % static_cast<uint16_t>(360);
+  // Simulate integer compass output with nearest-degree quantization
+  // (instead of truncation, which adds a systematic bias).
+  const uint16_t heading_u16 = static_cast<uint16_t>(
+      std::lround(m_boot.heading())) % static_cast<uint16_t>(360);
   m_csc.currentHDG(heading_u16);
 
   m_lastIntent = m_csc.tick(loopTimestamp);
-
-  const float time_s = static_cast<float>(loopTimestamp) * 0.001f;
-  const float envTorque = m_environment.externalTorque(time_s);
 
   if (m_lastIntent.has_value()) {
     const float magnitude =
@@ -343,13 +563,23 @@ void SimulationEngine::tick(float dt, uint32_t loopTimestamp) {
         (m_lastIntent->dir == SteeringDirection::Left) ? -magnitude : magnitude;
     m_boot.applyIntent(signedImpulse);
   }
-  m_boot.update(dt, envTorque);
+  m_boot.update(dt);
 }
 
 float SimulationEngine::heading() const { return m_boot.heading(); }
 
 float SimulationEngine::angularVelocity() const {
   return m_boot.angularVelocity();
+}
+
+float SimulationEngine::tillerPosition() const { return m_boot.tillerPosition(); }
+
+float SimulationEngine::tillerYawAccel() const { return m_boot.tillerYawAccel(); }
+
+float SimulationEngine::windYawAccel() const { return m_boot.windYawAccel(); }
+
+float SimulationEngine::dampingYawAccel() const {
+  return m_boot.dampingYawAccel();
 }
 
 std::optional<SteeringIntent> SimulationEngine::lastIntent() const {
@@ -361,6 +591,11 @@ int main() {
   if (!loadSimulationConfigFromJson(kNextRunConfigPath, config)) {
     return 1;
   }
+
+  if (!ensureOutputDirectoryExists()) {
+    return 1;
+  }
+
   writeConfigSnapshotJson(config);
 
   const uint32_t dt_ms = static_cast<uint32_t>(config.dt_sec * 1000.0f);
@@ -384,6 +619,10 @@ int main() {
   file << "time_ms,"
        << "heading_deg,"
        << "angular_velocity_deg_s,"
+       << "tiller_position,"
+       << "tiller_yaw_accel_deg_s2,"
+       << "wind_yaw_accel_deg_s2,"
+       << "damping_yaw_accel_deg_s2,"
        << "target_deg,"
        << "error_deg,"
        << "median_deg,"
@@ -404,11 +643,17 @@ int main() {
     const auto intent = engine.lastIntent();
     const float heading = engine.heading();
     const float angularVelocity = engine.angularVelocity();
+    const float tillerPosition = engine.tillerPosition();
+    const float tillerYawAccel = engine.tillerYawAccel();
+    const float windYawAccel = engine.windYawAccel();
+    const float dampingYawAccel = engine.dampingYawAccel();
 
     const auto &dbg = csc.getDebug();
 
     file << time_ms << "," << heading << "," << angularVelocity << ","
-         << config.target_deg << "," << dbg.error << "," << dbg.median << ","
+         << tillerPosition << "," << tillerYawAccel << "," << windYawAccel
+         << "," << dampingYawAccel << "," << config.target_deg << ","
+         << dbg.error << "," << dbg.median << ","
          << static_cast<int>(dbg.sampleSize) << "," << dbg.deadbandActive << ","
          << dbg.observationBlocked << "," << dbg.intentBlocked << ","
          << (intent.has_value() ? 1 : 0) << ","

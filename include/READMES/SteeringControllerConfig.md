@@ -39,6 +39,8 @@ Config-Slices und sehen die neuen Werte ab dem naechsten Tick konsistent.
 - `minimumSampleSize`
 - `calculationWindowSmoothedMean`
 - `smoothedMeanApplicationWindow_deg`
+- `omegaRobust`
+- `omegaDeadband`
 - `pauseForValidObsAfterImpulse_ms`
 
 ---
@@ -244,4 +246,43 @@ Symmetrisches Fenster um 0 fuer den geglaetteten aktuellen Fehler
 **Hinweis**
 - Der Wert muss groesser als 0 bleiben, damit die lineare Skalierung sinnvoll
   bleibt.
+
+---
+
+### `omegaRobust`
+
+**Bedeutung**  
+Anzahl der letzten Error-Samples, die in die Omega-Schaetzung eingehen.
+Die effektive Fenstergroesse ist `min(sampleSize, omegaRobust)`.
+
+**Groesser einstellen**
+- robustere Omega-Schaetzung
+- traeger bei schnellen Richtungswechseln
+
+**Kleiner einstellen**
+- reaktiver auf kurzfristige Aenderungen
+- empfindlicher gegen Rauschen
+
+**Hinweis**
+- `0` deaktiviert effektiv die Omega-Schaetzung (`omega = 0`).
+
+---
+
+### `omegaDeadband`
+
+**Bedeutung**  
+Toleranzband fuer die Omega-Guard-Entscheidung im `SteeringGuard`.
+Liegt die gemessene Winkelgeschwindigkeit innerhalb dieses Bands, blockiert
+Omega den Intent nicht.
+
+**Groesser einstellen**
+- weniger Blockierung durch kleine Restrotationen
+- konservativeres Nachsteuern
+
+**Kleiner einstellen**
+- fruehere Blockierung bei Rotation in Zielrichtung
+- kann zu weniger Nachtrimmen fuehren
+
+**Hinweis**
+- Muss `>= 0` sein.
 

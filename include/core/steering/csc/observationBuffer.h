@@ -15,6 +15,7 @@ private:
 
   std::array<int16_t, maxBufferSize> m_medianArray{};
   std::array<int16_t, maxBufferSize> m_meanArray{};
+  std::array<uint32_t, maxBufferSize> m_timeArray{};
   uint8_t writtenErrorsCounter = 0;
   uint8_t medianIndex;
   int16_t median = 0;
@@ -28,8 +29,10 @@ public:
   ObservationBuffer(SteeringRegulationConfig &config);
 
   void update(int16_t error);
+  void update(int16_t error, uint32_t loopTimestamp);
   int16_t getMedian() const;
   int16_t getSmoothedCurrentError(); 
   uint8_t getSampleSize() const;
+  float getOmega(uint32_t loopTimestamp) const; 
   void reset();
 };

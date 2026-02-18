@@ -19,6 +19,9 @@ struct SteeringRegulationConfig {
   // Runtime-active capacity used by CSC. Defaults to compile-time maximum.
   uint8_t activeObservationBufferSize = observationBufferSize;
   uint8_t minimumSampleSize = 10;
+  uint8_t omegaRobust =
+      3; // Describes Samplesize (errors) for Omega calculation
+  float omegaDeadband = 0.2;
 };
 
 struct SteeringSourceHandlingConfig {
