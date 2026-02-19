@@ -32,6 +32,11 @@ Pflichtfelder (strikt geparst):
 - `boat.trueWindDirection_deg`
 - `boat.windHullYawAccelPerMps2`
 - `csc.steeringTolerance_deg`
+- `csc.counterNearTargetWindow_deg`
+- `csc.counterTimerGuard_ms`
+- `csc.counterCooldown_ms`
+- `csc.counterOmegaMinSampleSize`
+- `csc.omegaThresholdForCounter`
 - `csc.minimumSampleSize`
 - `csc.minimumTimeBtwObs_ms`
 - `csc.pauseForValidObsAfterImpulse_ms`
@@ -42,6 +47,13 @@ Pflichtfelder (strikt geparst):
 - `csc.omegaRobust`
 - `csc.omegaDeadband`
 - `csc.target_deg`
+
+Hinweis zum aktuellen Reglerverhalten:
+- `csc.steeringCooldown_ms` beeinflusst derzeit nicht nur den Takt normaler
+  Intents, sondern auch den Regimewechsel. Grund: Der Counter-Check laeuft im
+  CSC vor den regulaeren Intent-Guards.
+- Hoher Cooldown kann dadurch alternierende Counter/Normal-Impulse verstaerken
+  oder dominieren (abhaengig von Counter-Fenster und Omega-Zustand).
 
 ## VS Code Task
 

@@ -5,7 +5,7 @@ d75d2da
 ### Beobachtung
 Ausgangslage unverändert zu Ergebnis von 1. additional_mean_parameter_for_csc. 
 
-Drei relevant erscheinende Beobachtungen zum Thema aufschwingen: 
+Drei relevant erscheinende Beobachtungen zum Thema Aufschwingen: 
 
 -- Das Reduzieren der steeringTolerance_deg führt jetzt zu einer reduktion der Amplitude. 
 Das war vor der letzten Änderung anders. 
@@ -14,7 +14,7 @@ Dabei ist erkennbar, dass bei geringeren Toleranzen die Intents weniger asymmetr
 Dabei wirken folgende Parameter dämpfend auf die Amplitude der Schwingung 
 -- steeringCooldown (reduziert Eingriffe bei bestehender korrekter Systemträgheit)
 -- mean window (s. steeringCooldown, Intents und Intent auslösender Error sind zeitlich näher beieinander)
--- Der eingeführte mean Parameter skaliert den Intent wie vorgesehen. Je größer der Bereich ist in dem Skaliert wird, desto kleiner die Amplitude.  
+-- Der eingeführte mean Parameter skaliert den Intent wie vorgesehen. Je größer der Bereich ist in dem skaliert wird, desto kleiner die Amplitude.  
 
 ### Hypothese 
 Die Berücksichtigung nicht signifikanter Errors (innerhalb der steeringTolerance) hat den median Buffer robuster gemacht und damit Reaktionen verzögert. Dadurch lässt sich im Output erkennen, dass das System deutlich zu lange Steuerimpulse setzt, obwohl die Winkelgeschwindigkeit und trägheit des physischen systems sich in die richtige Richtung bewegen. 

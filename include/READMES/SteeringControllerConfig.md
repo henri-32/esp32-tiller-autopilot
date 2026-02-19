@@ -30,6 +30,7 @@ Config-Slices und sehen die neuen Werte ab dem naechsten Tick konsistent.
 ## Parameterübersicht
 
 - `steeringTolerance_deg`
+- `counterNearTargetWindow_deg`
 - `SteeringMinImpulse_ms`
 - `SteeringMaxImpulse_ms`
 - `steeringCooldown_ms`
@@ -137,6 +138,14 @@ Dient ausschließlich dem Schutz von Aktor und Energiehaushalt.
 - Minimum: ca. 500–1500 ms
 - Praxis: 2000–8000 ms
 - Maximum: ca. 15000–30000 ms
+
+**Hinweis zum aktuellen Implementierungsstand**
+- Der Cooldown hat derzeit einen staerkeren Systemeinfluss als reine
+  Aktorschonung, weil der Counter-Intent im `tick()` vor den regulaeren
+  Intent-Guards geprueft wird.
+- In Kombination mit engem Counter-Fenster und Omega-Logik kann ein hoher
+  Cooldown alternierende Counter/Normal-Impulse beguenstigen und damit als
+  Regimeparameter wirken.
 
 ---
 
@@ -286,3 +295,24 @@ Omega den Intent nicht.
 **Hinweis**
 - Muss `>= 0` sein.
 
+---
+
+### `counterNearTargetWindow_deg`
+
+**Bedeutung**  
+Absolutes Error-Fenster fuer den Counter-Intent (`|error| <= window`).
+Dieser Parameter ist bewusst von `steeringTolerance_deg` entkoppelt, damit
+Counter-Tuning und Deadband-Tuning getrennt erfolgen koennen.
+
+**Groesser einstellen**
+- Counter greift frueher und haeufiger ein
+- besseres fruehes Abfangen moeglich
+- hoeheres Risiko fuer alternierende Gegenimpulse
+
+**Kleiner einstellen**
+- Counter greift spaeter und seltener ein
+- konservativeres Verhalten nahe Target
+- hoehere Restenergie beim Target-UEbergang moeglich
+
+**Typische Startwerte**
+- 1-3 Grad (Default: 2 Grad)

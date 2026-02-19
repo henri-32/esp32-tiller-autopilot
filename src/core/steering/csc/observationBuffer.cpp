@@ -15,10 +15,6 @@ uint8_t ObservationBuffer::getActiveBufferSize() const {
   return std::min(configured, maxBufferSize);
 }
 
-void ObservationBuffer::update(int16_t error) {
-  update(error, 0);
-}
-
 void ObservationBuffer::update(int16_t error, uint32_t loopTimestamp) {
   const uint8_t activeBufferSize = getActiveBufferSize();
 
@@ -133,14 +129,14 @@ float ObservationBuffer::getOmega(uint32_t loopTimestamp) const {
     return 0.0f;
   }
 
-  const int32_t deltaError =
-      static_cast<int32_t>(m_meanArray[end]) - static_cast<int32_t>(m_meanArray[start]);
+  const int32_t deltaError = static_cast<int32_t>(m_meanArray[end]) -
+                             static_cast<int32_t>(m_meanArray[start]);
   const float errorRate_deg_s = (static_cast<float>(deltaError) * 1000.0f) /
                                 static_cast<float>(duration_ms);
 
   // Sign convention for guard semantics:
-  // positive omega means error decreases for positive median (moving toward target).
+  // positive omega means error decreases for positive median (moving toward
+  // target).
   const float omega_deg = -errorRate_deg_s;
   return omega_deg;
 }
-

@@ -42,14 +42,19 @@ private:
   ObservationBuffer m_observationBuffer;
   Deadband m_deadband;
   SteeringGuard m_steeringGuard;
-  SteeringRegulationConfig m_config; 
+  SteeringRegulationConfig m_config;
 
   // --- Internal helpers ---
   // Direction is derived from the median error sign only.
   std::optional<SteeringIntent> calculateIntentFromObs();
+  SteeringIntent counterIntent(float omega);
   SteeringDirection determineDirection(int16_t median) const;
+  bool counterIntentNecessary(uint32_t loopTimestamp, int16_t median,
+                              uint8_t sampleSize, float omega);
   uint32_t m_lastObsUpdate = 0;
   uint32_t m_lastIntent = 0;
+  uint32_t m_lastCounterIntent = 0; 
+  std::optional<SteeringIntent> m_lastIntentValue;
 
   // --- Debug ---
   CSCDebugSnapshot m_debug;

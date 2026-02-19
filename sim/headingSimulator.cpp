@@ -147,6 +147,11 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
   double trueWindDirection_deg = 0.0;
   double windHullYawAccelPerMps2 = 0.0;
   double steeringTolerance_deg = 0.0;
+  double counterNearTargetWindow_deg = 0.0;
+  double counterTimerGuard_ms = 0.0;
+  double counterCooldown_ms = 0.0;
+  double counterOmegaMinSampleSize = 0.0;
+  double omegaThresholdForCounter = 0.0;
   double minimumSampleSize = 0.0;
   double minimumTimeBtwObs_ms = 0.0;
   double pauseForValidObsAfterImpulse_ms = 0.0;
@@ -175,6 +180,14 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
       !extractNumber(json, "windHullYawAccelPerMps2",
                      windHullYawAccelPerMps2) ||
       !extractNumber(json, "steeringTolerance_deg", steeringTolerance_deg) ||
+      !extractNumber(json, "counterNearTargetWindow_deg",
+                     counterNearTargetWindow_deg) ||
+      !extractNumber(json, "counterTimerGuard_ms", counterTimerGuard_ms) ||
+      !extractNumber(json, "counterCooldown_ms", counterCooldown_ms) ||
+      !extractNumber(json, "counterOmegaMinSampleSize",
+                     counterOmegaMinSampleSize) ||
+      !extractNumber(json, "omegaThresholdForCounter",
+                     omegaThresholdForCounter) ||
       !extractNumber(json, "minimumSampleSize", minimumSampleSize) ||
       !extractNumber(json, "minimumTimeBtwObs_ms", minimumTimeBtwObs_ms) ||
       !extractNumber(json, "pauseForValidObsAfterImpulse_ms",
@@ -215,6 +228,16 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
                config.boat.windHullYawAccelPerMps2) ||
       !toUint8(steeringTolerance_deg, "steeringTolerance_deg",
                config.regulation.steeringTolerance_deg) ||
+      !toUint8(counterNearTargetWindow_deg, "counterNearTargetWindow_deg",
+               config.regulation.counterNearTargetWindow_deg) ||
+      !toUint32(counterTimerGuard_ms, "counterTimerGuard_ms",
+                config.regulation.counterTimerGuard_ms) ||
+      !toUint32(counterCooldown_ms, "counterCooldown_ms",
+                config.regulation.counterCooldown_ms) ||
+      !toUint8(counterOmegaMinSampleSize, "counterOmegaMinSampleSize",
+               config.regulation.counterOmegaMinSampleSize) ||
+      !toFloat(omegaThresholdForCounter, "omegaThresholdForCounter",
+               config.regulation.omegaThresholdForCounter) ||
       !toUint8(minimumSampleSize, "minimumSampleSize",
                config.regulation.minimumSampleSize) ||
       !toUint32(minimumTimeBtwObs_ms, "minimumTimeBtwObs_ms",
@@ -250,6 +273,18 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
     return false;
   }
 
+  if (config.regulation.counterNearTargetWindow_deg == 0) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "counterNearTargetWindow_deg must be >= 1\n";
+    return false;
+  }
+
+  if (config.regulation.counterOmegaMinSampleSize == 0) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "counterOmegaMinSampleSize must be >= 1\n";
+    return false;
+  }
+
   if (config.regulation.activeObservationBufferSize == 0) {
     std::cerr << "Invalid value for key in next-run config: "
               << "observationBufferSize must be >= 1\n";
@@ -275,6 +310,12 @@ bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
   if (config.regulation.omegaDeadband < 0.0f) {
     std::cerr << "Invalid value for key in next-run config: "
               << "omegaDeadband must be >= 0\n";
+    return false;
+  }
+
+  if (config.regulation.omegaThresholdForCounter < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "omegaThresholdForCounter must be >= 0\n";
     return false;
   }
 
@@ -370,6 +411,18 @@ void writeConfigSnapshotJson(const SimulationConfig &config) {
   file << "  \"csc\": {\n";
   file << "    \"steeringTolerance_deg\": "
        << static_cast<int>(config.regulation.steeringTolerance_deg) << ",\n";
+  file << "    \"counterNearTargetWindow_deg\": "
+       << static_cast<int>(config.regulation.counterNearTargetWindow_deg)
+       << ",\n";
+  file << "    \"counterTimerGuard_ms\": "
+       << config.regulation.counterTimerGuard_ms << ",\n";
+  file << "    \"counterCooldown_ms\": "
+       << config.regulation.counterCooldown_ms << ",\n";
+  file << "    \"counterOmegaMinSampleSize\": "
+       << static_cast<int>(config.regulation.counterOmegaMinSampleSize)
+       << ",\n";
+  file << "    \"omegaThresholdForCounter\": "
+       << config.regulation.omegaThresholdForCounter << ",\n";
   file << "    \"minimumSampleSize\": "
        << static_cast<int>(config.regulation.minimumSampleSize) << ",\n";
   file << "    \"minimumTimeBtwObs_ms\": "
@@ -420,6 +473,11 @@ SimulationConfig makeDefaultSimulationConfig() {
 
   // --- CSC ---
   config.regulation.steeringTolerance_deg = 7;
+  config.regulation.counterNearTargetWindow_deg = 2;
+  config.regulation.counterTimerGuard_ms = 2000;
+  config.regulation.counterCooldown_ms = 7000;
+  config.regulation.counterOmegaMinSampleSize = 3;
+  config.regulation.omegaThresholdForCounter = 0.02f;
   config.regulation.minimumSampleSize = 5;
   config.regulation.minimumTimeBtwObs_ms = 100;
   config.regulation.pauseForValidObsAfterImpulse_ms = 2000;

@@ -14,7 +14,7 @@ SteeringRegulationConfig makeRegConfig() { return SteeringRegulationConfig{}; }
 
 void addSamples(ObservationBuffer &buffer, int16_t value, int count) {
   for (int i = 0; i < count; i++) {
-    buffer.update(value);
+    buffer.update(value, static_cast<uint32_t>(i));
   }
 }
 
@@ -234,10 +234,10 @@ void test_median_returns_positive_when_majority_samples_are_positive() {
   const int negatives = (config.observationBufferSize / 2) - 1;
   const int positives = (config.observationBufferSize / 2);
   for (int i = 0; i < negatives; ++i) {
-    buffer.update(-20);
+    buffer.update(-20, static_cast<uint32_t>(i));
   }
   for (int i = 0; i < positives; ++i) {
-    buffer.update(20);
+    buffer.update(20, static_cast<uint32_t>(negatives + i));
   }
 
   // Then
@@ -430,8 +430,8 @@ void test_no_action_when_error_oscillates_symmetrically() {
 
   const int pairs = config.observationBufferSize / 2;
   for (int i = 0; i < pairs; i++) {
-    buffer.update(-20);
-    buffer.update(20);
+    buffer.update(-20, static_cast<uint32_t>(2 * i));
+    buffer.update(20, static_cast<uint32_t>(2 * i + 1));
   }
 
   // Then
@@ -573,6 +573,159 @@ void test_error_just_outside_deadband_negative_is_treated_as_significant() {
   TEST_ASSERT_TRUE(deadband.errorSignificant(-11));
 }
 
+void test_counter_does_not_fire_without_prior_intent_value() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 0.01f;
+  config.minimumSampleSize = 2;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 0;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  csc.currentHDG(98); // error +2
+  auto i1 = csc.tick(1000);
+  csc.currentHDG(99); // error +1 -> positive omega
+  auto i2 = csc.tick(2000);
+
+  TEST_ASSERT_FALSE(i1.has_value());
+  TEST_ASSERT_FALSE(i2.has_value());
+}
+
+void test_counter_fires_and_maps_impulse_from_positive_omega() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 0.01f;
+  config.minimumSampleSize = 1;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 0;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  // Seed regular intent (+error => Right), needed for counter direction basis.
+  csc.currentHDG(80);
+  auto seedIntent = csc.tick(6000);
+  TEST_ASSERT_TRUE(seedIntent.has_value());
+  TEST_ASSERT_EQUAL(SteeringDirection::Right, seedIntent->dir);
+
+  csc.currentHDG(98); // error +2
+  auto prep = csc.tick(7000);
+  csc.currentHDG(99); // error +1 over 1s => omega +1 => impulse 60
+  auto counter = csc.tick(8000);
+
+  TEST_ASSERT_FALSE(prep.has_value());
+  TEST_ASSERT_TRUE(counter.has_value());
+  TEST_ASSERT_EQUAL(SteeringDirection::Left, counter->dir);
+  TEST_ASSERT_EQUAL_UINT8(60, counter->abstractImpulse_0_100);
+}
+
+void test_counter_is_blocked_by_counter_cooldown() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 0.01f;
+  config.minimumSampleSize = 1;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 5000;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  csc.currentHDG(80);
+  auto seedIntent = csc.tick(6000);
+  TEST_ASSERT_TRUE(seedIntent.has_value());
+
+  csc.currentHDG(98);
+  (void)csc.tick(7000);
+  csc.currentHDG(99);
+  auto firstCounter = csc.tick(8000);
+  TEST_ASSERT_TRUE(firstCounter.has_value());
+
+  // Build counter conditions again, but still inside counter cooldown.
+  csc.currentHDG(98);
+  (void)csc.tick(9000);
+  csc.currentHDG(99);
+  auto blockedCounter = csc.tick(10000);
+
+  TEST_ASSERT_FALSE(blockedCounter.has_value());
+}
+
+void test_counter_is_blocked_when_abs_omega_below_counter_threshold() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 2.0f; // higher than produced omega (+1)
+  config.minimumSampleSize = 1;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 0;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  csc.currentHDG(80);
+  auto seedIntent = csc.tick(6000);
+  TEST_ASSERT_TRUE(seedIntent.has_value());
+
+  csc.currentHDG(98);
+  (void)csc.tick(7000);
+  csc.currentHDG(99);
+  auto counter = csc.tick(8000);
+
+  TEST_ASSERT_FALSE(counter.has_value());
+}
+
+void test_counter_fires_on_negative_side_with_negative_omega() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 0.01f;
+  config.minimumSampleSize = 1;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 0;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  // Seed regular intent with negative error => Left
+  csc.currentHDG(120);
+  auto seedIntent = csc.tick(6000);
+  TEST_ASSERT_TRUE(seedIntent.has_value());
+  TEST_ASSERT_EQUAL(SteeringDirection::Left, seedIntent->dir);
+
+  csc.currentHDG(102); // error -2
+  (void)csc.tick(7000);
+  csc.currentHDG(101); // error -1 over 1s => omega -1 => impulse 60
+  auto counter = csc.tick(8000);
+
+  TEST_ASSERT_TRUE(counter.has_value());
+  TEST_ASSERT_EQUAL(SteeringDirection::Right, counter->dir);
+  TEST_ASSERT_EQUAL_UINT8(60, counter->abstractImpulse_0_100);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_heading_error_is_zero_when_current_equals_target);
@@ -610,6 +763,11 @@ int main() {
   RUN_TEST(test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband);
   RUN_TEST(test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband);
   RUN_TEST(test_omega_guard_allows_action_when_omega_within_deadband);
+  RUN_TEST(test_counter_does_not_fire_without_prior_intent_value);
+  RUN_TEST(test_counter_fires_and_maps_impulse_from_positive_omega);
+  RUN_TEST(test_counter_is_blocked_by_counter_cooldown);
+  RUN_TEST(test_counter_is_blocked_when_abs_omega_below_counter_threshold);
+  RUN_TEST(test_counter_fires_on_negative_side_with_negative_omega);
 
 
   return UNITY_END();
