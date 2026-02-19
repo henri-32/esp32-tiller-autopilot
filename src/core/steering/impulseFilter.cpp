@@ -17,7 +17,7 @@ ImpulseFilter::apply(SteeringIntent intent,
   if (!snapshot.stw_kts.valid) {
     return {
         .dir = intent.dir,
-        .pulse_ms = m_mechanics.steeringMaxImpulse_ms,
+        .pulse_ms = intent.abstract_impulse_0_100,
         .dutyCycle = m_mechanics.dutyCycleDefault,
     };
   };
@@ -31,7 +31,7 @@ ImpulseFilter::apply(SteeringIntent intent,
                        m_physics.STWDampingMaxFactor);
 
   float abstract =
-      intent.abstractImpulse_0_100; // Ist bei Aufruf von CSC immer 100
+      intent.abstractImpulse_0_100;
   float effective = abstract * damping;
   float normalized = effective / 100;
 
