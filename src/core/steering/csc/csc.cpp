@@ -12,6 +12,22 @@ CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
     : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config),
       m_config(config) {}
 
+void CoreSteeringController::currentHDG(uint16_t current) {
+  m_currentCourse = current;
+}
+
+void CoreSteeringController::setInternalTarget(uint16_t target) {
+  m_internalTargetCourse = target;
+};
+
+uint16_t CoreSteeringController::getInternalTarget() const {
+  return m_internalTargetCourse;
+};
+
+const CSCDebugSnapshot &CoreSteeringController::getDebug() const {
+  return m_debug;
+}
+
 std::optional<SteeringIntent>
 CoreSteeringController::tick(uint32_t loopTimestamp) {
   // Debug flags are per-tick state, not latched state.
@@ -30,15 +46,28 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
     return std::nullopt;
   }
 
-  int16_t error = m_errorCalculator.getCurrentError(m_currentCourse,
-                                                    m_internalTargetCourse);
+  int16_t error =
+      m_errorCalculator.calculateError(m_currentCourse, m_internalTargetCourse);
   m_debug.error = error;
+
+  // Beim Fehler von 0 wird der Buffer zurückgesetzt, um schnelleres Reagieren
+  // bei Richtungswechseln zu ermöglichen, dadurch dass der Median um null
+  // weniger robust wird. Die steeringTolerance ermöglicht Oszillationen um 0
+  // als no action zu behandeln, während große Fehler schneller signifikant
+  // werden
+  // Harte Resets bei 0 haben meine counter Intents verhindert. Deswegen Reaktion auf sign flip im Bereich nahe 0 
+  const bool insideNoActionBand =
+      std::abs(error) <= m_config.steeringTolerance_deg;
+  const bool signFlip = (error<0 && m_lastError >0 || error > 0 && m_lastError < 0); 
+  if (insideNoActionBand && signFlip) {
+    m_observationBuffer.reset();
+  }
 
   m_observationBuffer.update(error, loopTimestamp);
   m_lastObsUpdate = loopTimestamp;
 
-  // Bewusst kein Struct, damit gezielte Zugriffe live möglich bleiben und nicht
-  // an snapshots gebunden wird
+  // Bewusst kein Struct, damit gezielte Zugriffe jederzeit möglich bleiben und
+  // nicht an snapshots gebunden werden
   const int16_t median = m_observationBuffer.getMedian();
   const uint8_t sampleSize = m_observationBuffer.getSampleSize();
   const float omega = m_observationBuffer.getOmega(loopTimestamp);
@@ -48,12 +77,13 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
 
   /*Counter Intent steuert kurz vor Erreichen des Targets gegen.
   Siehe Doku iterations/3. counterImpulse
-  Absichtlich außerhalb der regulären Intent-Guards, weil eigene Guards
-  Vor den regulären Intents, damit er nicht von deren Guards abgehalten wird*/
+  Absichtlich außerhalb der regulären Intent-Guards, weil eigene counterGuards
+  Vor den regulären Intents, damit der counter nicht von deren Guards abgehalten
+  wird*/
   if (counterIntentNecessary(loopTimestamp, median, sampleSize, omega)) {
     auto counter = counterIntent(omega);
-    m_lastIntent = loopTimestamp;
     m_lastCounterIntent = loopTimestamp;
+    m_lastIntent = loopTimestamp;
     m_lastIntentValue = counter;
     m_observationBuffer.reset();
     return counter;
@@ -63,15 +93,6 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent, sampleSize,
                                     median, omega)) {
     m_debug.intentBlocked = true;
-
-    // Beim Fehler von 0 wird der Buffer zurückgesetzt, um schnelleres Reagieren
-    // bei Richtungswechseln zu ermöglichen, dadurch dass der Median um null
-    // weniger robust wird. Die steeringTolerance ermöglicht Oszillationen um 0
-    // als no action zu behandeln, während große Fehler schneller signifikant
-    // werden
-    if (std::abs(error) <= 1) {
-      m_observationBuffer.reset();
-    }
 
     return std::nullopt;
   } else {
@@ -88,21 +109,22 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
       m_lastIntentValue = intent;
     }
 
+    // Für sign flip Logik
+    m_lastError = error;
+
     return intent;
   }
 }
 
-void CoreSteeringController::currentHDG(uint16_t current) {
-  m_currentCourse = current;
+SteeringDirection
+CoreSteeringController::determineDirection(int16_t median) const {
+  if (median < 0) {
+    return SteeringDirection::Left;
+  } else if (median > 0) {
+    return SteeringDirection::Right;
+  };
+  return SteeringDirection::Left;
 }
-
-void CoreSteeringController::setInternalTarget(uint16_t target) {
-  m_internalTargetCourse = target;
-};
-
-uint16_t CoreSteeringController::getInternalTarget() const {
-  return m_internalTargetCourse;
-};
 
 std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
 
@@ -140,16 +162,6 @@ std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
 
   return intent;
 };
-
-SteeringDirection
-CoreSteeringController::determineDirection(int16_t median) const {
-  if (median < 0) {
-    return SteeringDirection::Left;
-  } else if (median > 0) {
-    return SteeringDirection::Right;
-  };
-  return SteeringDirection::Left;
-}
 
 bool CoreSteeringController::counterIntentNecessary(uint32_t loopTimestamp,
                                                     int16_t median,
@@ -202,13 +214,9 @@ SteeringIntent CoreSteeringController::counterIntent(float omega) {
   Hier ist gerade SIM Logik drin !!!!!!
   Ich fange 60% von Omega ab um zu gucken, ob ich eingeregelt bekomme!!!!!*/
   const float omegaAbs = std::abs(omega);
-  const float mappedImpulse = omegaAbs * 100.0f * 0.62f;
+  const float mappedImpulse = omegaAbs * 100.0f * 0.5f;
   const float clampedImpulse = std::clamp(mappedImpulse, 0.0f, 100.0f);
   intent.abstractImpulse_0_100 = static_cast<uint8_t>(clampedImpulse);
 
   return intent;
 };
-
-const CSCDebugSnapshot &CoreSteeringController::getDebug() const {
-  return m_debug;
-}

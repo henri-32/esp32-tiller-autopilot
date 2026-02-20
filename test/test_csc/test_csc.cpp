@@ -29,7 +29,7 @@ void test_heading_error_is_zero_when_current_equals_target() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(300, 300);
+  const int16_t error = calc.calculateError(300, 300);
 
   // Then
   TEST_ASSERT_EQUAL_INT16(0, error);
@@ -40,7 +40,7 @@ void test_heading_error_positive_when_current_is_left_of_target() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(299, 300);
+  const int16_t error = calc.calculateError(299, 300);
 
   // Then
   TEST_ASSERT_TRUE(error > 0);
@@ -51,7 +51,7 @@ void test_heading_error_negative_when_current_is_right_of_target() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(300, 299);
+  const int16_t error = calc.calculateError(300, 299);
 
   // Then
   TEST_ASSERT_TRUE(error < 0);
@@ -62,7 +62,7 @@ void test_heading_error_wraps_correctly_over_360_clockwise() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(359, 1);
+  const int16_t error = calc.calculateError(359, 1);
 
   // Then
   TEST_ASSERT_TRUE(error > 0);
@@ -73,7 +73,7 @@ void test_heading_error_wraps_correctly_over_360_counterclockwise() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(1, 359);
+  const int16_t error = calc.calculateError(1, 359);
 
   // Then
   TEST_ASSERT_TRUE(error < 0);
@@ -84,7 +84,7 @@ void test_heading_error_returns_shortest_rotation_direction() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(350, 10);
+  const int16_t error = calc.calculateError(350, 10);
 
   // Then
   TEST_ASSERT_EQUAL_INT16(20, error);
@@ -361,8 +361,8 @@ void test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband() {
   const float omega = config.omegaDeadband + 0.05f;
 
   // When / Then
-  TEST_ASSERT_TRUE(
-      guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples, median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples,
+                                       median, omega));
 }
 
 void test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband() {
@@ -381,8 +381,8 @@ void test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband() {
   const float omega = -(config.omegaDeadband + 0.05f);
 
   // When / Then
-  TEST_ASSERT_TRUE(
-      guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples, median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples,
+                                       median, omega));
 }
 
 void test_omega_guard_allows_action_when_omega_within_deadband() {
@@ -401,8 +401,8 @@ void test_omega_guard_allows_action_when_omega_within_deadband() {
   const float omega = config.omegaDeadband - 0.05f;
 
   // When / Then
-  TEST_ASSERT_FALSE(
-      guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples, median, omega));
+  TEST_ASSERT_FALSE(guard.intentBlocked(loopTimestamp, lastIntent,
+                                        enoughSamples, median, omega));
 }
 
 void test_action_allowed_after_cooldown_expires() {
@@ -768,7 +768,6 @@ int main() {
   RUN_TEST(test_counter_is_blocked_by_counter_cooldown);
   RUN_TEST(test_counter_is_blocked_when_abs_omega_below_counter_threshold);
   RUN_TEST(test_counter_fires_on_negative_side_with_negative_omega);
-
 
   return UNITY_END();
 }

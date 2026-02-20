@@ -25,17 +25,29 @@ public:
   // Outputs/Side-effects: optional SteeringIntent; updates internal state.
   explicit CoreSteeringController(SteeringRegulationConfig &config);
 
-  std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
-
   void currentHDG(uint16_t current);
   void setInternalTarget(uint16_t target);
   uint16_t getInternalTarget() const;
   const CSCDebugSnapshot &getDebug() const;
+  std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
 
 private:
+  // --- Internal helpers ---
+  // Direction is derived from the median error sign only.
+  SteeringDirection determineDirection(int16_t median) const;
+  std::optional<SteeringIntent> calculateIntentFromObs();
+  SteeringIntent counterIntent(float omega);
+  bool counterIntentNecessary(uint32_t loopTimestamp, int16_t median,
+                              uint8_t sampleSize, float omega);
+
   // --- State ---
   uint16_t m_currentCourse{0};
   uint16_t m_internalTargetCourse{0};
+  int16_t m_lastError;
+  uint32_t m_lastObsUpdate = 0;
+  uint32_t m_lastIntent = 0;
+  uint32_t m_lastCounterIntent = 0;
+  std::optional<SteeringIntent> m_lastIntentValue;
 
   // --- Subsystems ---
   HeadingErrorCalculator m_errorCalculator;
@@ -43,18 +55,6 @@ private:
   Deadband m_deadband;
   SteeringGuard m_steeringGuard;
   SteeringRegulationConfig m_config;
-
-  // --- Internal helpers ---
-  // Direction is derived from the median error sign only.
-  std::optional<SteeringIntent> calculateIntentFromObs();
-  SteeringIntent counterIntent(float omega);
-  SteeringDirection determineDirection(int16_t median) const;
-  bool counterIntentNecessary(uint32_t loopTimestamp, int16_t median,
-                              uint8_t sampleSize, float omega);
-  uint32_t m_lastObsUpdate = 0;
-  uint32_t m_lastIntent = 0;
-  uint32_t m_lastCounterIntent = 0; 
-  std::optional<SteeringIntent> m_lastIntentValue;
 
   // --- Debug ---
   CSCDebugSnapshot m_debug;
