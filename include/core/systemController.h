@@ -8,8 +8,10 @@
 #include "diagnostics/diagnostics.h"
 #include "sensors/NMEA183BUS.h"
 #include "sensors/navigationSensors.h"
+#include "types/globalTypes.h"
 #include "ui/controlPanel.h"
 #include "ui/display.h"
+#include "ui/frameBuffer.h"
 
 class SystemController {
 public:
@@ -22,8 +24,10 @@ public:
   void tick(uint32_t loopTimestamp);
 
 private:
-  // Top-level composition root. Owns hardware modules, config, and orchestration.
+  // Top-level composition root. Owns hardware modules, config, and
+  // orchestration.
   ControlPanel m_controlPanel{};
+  SystemState m_state;
   CompassModule m_compassModule{};
   GPSModule m_gpsModule;
   WindModule m_windModule;
@@ -36,5 +40,8 @@ private:
   CoreSteeringController m_csc;
   SourceHandler m_sourceHandler;
   SteeringOrchestrator m_steeringOrchestrator;
+  DisplayContent m_displayContent;
   Display m_display;
+
+  void stateUpdate();
 };

@@ -644,6 +644,7 @@ std::optional<SteeringIntent> SimulationEngine::lastIntent() const {
   return m_lastIntent;
 }
 
+#ifndef HEADING_SIM_NO_MAIN
 int main() {
   SimulationConfig config = makeDefaultSimulationConfig();
   if (!loadSimulationConfigFromJson(kNextRunConfigPath, config)) {
@@ -732,3 +733,4 @@ int main() {
   file.close();
   return 0;
 }
+#endif

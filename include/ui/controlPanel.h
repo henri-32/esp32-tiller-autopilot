@@ -1,6 +1,5 @@
 #pragma once
-
-#include "ui/controlPanelTypes.h"
+#include "types/globalTypes.h"
 class ControlPanel {
 public:
   // Contract:
@@ -8,6 +7,5 @@ public:
   // Inputs: external UI hardware/state.
   // Outputs/Side-effects: returns PanelIntent; no side-effects.
 
-  PanelIntent readIntent() const;
-
+  Intent readIntent() const;
 };

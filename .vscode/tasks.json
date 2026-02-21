@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "PlatformIO: Refresh clangd databases (firmware + sim + native_csc)",
+      "label": "PlatformIO: Refresh clangd databases (firmware + sim + native_csc + gui + gui_sim)",
       "type": "shell",
       "command": "powershell",
       "args": [

@@ -84,6 +84,8 @@ function Inject-CscTestEntry {
 Build-Compiledb -env "genericSTM32F411RE" -targetDir ".clangd-db/genericSTM32F411RE"
 Build-Compiledb -env "sim" -targetDir ".clangd-db/sim"
 Build-Compiledb -env "native_csc" -targetDir ".clangd-db/native_csc"
+Build-Compiledb -env "gui" -targetDir ".clangd-db/gui"
+Build-Compiledb -env "gui_sim" -targetDir ".clangd-db/gui_sim"
 Inject-CscTestEntry
 
 # Keep the root compile_commands.json focused on the main firmware env.

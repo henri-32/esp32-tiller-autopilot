@@ -17,7 +17,7 @@ ImpulseFilter::apply(SteeringIntent intent,
   if (!snapshot.stw_kts.valid) {
     return {
         .dir = intent.dir,
-        .pulse_ms = intent.abstract_impulse_0_100,
+        .pulse_ms = intent.abstractImpulse_0_100,
         .dutyCycle = m_mechanics.dutyCycleDefault,
     };
   };

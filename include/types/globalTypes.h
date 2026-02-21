@@ -2,6 +2,13 @@
 #include <cstdint>
 
 enum class NavigationSource { Compass, Gps, Wind };
+
+struct Intent {
+  bool steeringEngaged = false;
+  uint16_t generalTarget = 0;
+  NavigationSource activeSource = NavigationSource::Compass;
+};
+
 enum class SteeringDirection { Left, Right };
 
 struct SteeringIntent {
@@ -20,3 +27,8 @@ template <typename T> struct SensorSample {
   bool valid{false};
 };
 
+
+struct SystemState {
+  enum class SystemMode { INIT, OK, AISonly, SAFE };
+  SystemMode systemMode = SystemMode::INIT;
+};

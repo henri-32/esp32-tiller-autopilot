@@ -26,6 +26,8 @@ public:
     // für spätere Auswertung (noch minimal)
     CapabilityState capabilityState(FunctionalCapability cap) const;
 
+    bool criticalErroroccured; 
+
 private:
     // --- Event Ringbuffer ---
     DiagnosticEntry m_events[kEventBufferSize];

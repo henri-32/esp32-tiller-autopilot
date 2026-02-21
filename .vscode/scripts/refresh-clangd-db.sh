@@ -107,6 +107,8 @@ inject_native_csc_test_entries() {
 build_compiledb "genericSTM32F411RE" ".clangd-db/genericSTM32F411RE"
 build_compiledb "sim" ".clangd-db/sim"
 build_compiledb "native_csc" ".clangd-db/native_csc"
+build_compiledb "gui" ".clangd-db/gui"
+build_compiledb "gui_sim" ".clangd-db/gui_sim"
 
 mapfile -t cmds < <(capture_test_compile_commands)
 inject_native_csc_test_entries "${cmds[0]}" "${cmds[1]}"
