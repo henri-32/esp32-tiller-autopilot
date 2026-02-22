@@ -21,15 +21,13 @@ struct FrameBuffer {};
 class DisplayContent {
 public:
   DisplayContent(const NavigationSensors &navsens,
-                 const Diagnostics &diagnostics, const SystemState &state);
+                 const Diagnostics &diagnostics);
 
-  FrameBuffer tick(const Intent &intent, uint32_t loopTimestamp);
+  FrameBuffer create(const Intent &intent, const SystemState & state, uint32_t loopTimestamp);
 
 private:
-  DisplayModel model;
   const NavigationSensors &m_navigationSensors;
   const Diagnostics &m_diagnostics;
-  const SystemState &m_state;
 
-  void createModel(const Intent &intent);
+  DisplayModel createModel(const Intent &intent, const SystemState& state);
 };

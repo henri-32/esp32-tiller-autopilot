@@ -26,22 +26,30 @@ public:
 private:
   // Top-level composition root. Owns hardware modules, config, and
   // orchestration.
-  ControlPanel m_controlPanel{};
   SystemState m_state;
+  SteeringControllerConfig m_config;
+
+  // Inputs and UI intent
+  ControlPanel m_controlPanel{};
   CompassModule m_compassModule{};
   GPSModule m_gpsModule;
   WindModule m_windModule;
   NMEA183BUS m_nmea183Bus;
   NavigationSensors m_navigationSensors;
-  PWMController m_pwmController{};
-  SteeringControllerConfig m_config;
+
+  // Control and supervision pipeline
   Diagnostics m_diagnostics;
   ImpulseFilter m_impulseFilter;
   CoreSteeringController m_csc;
   SourceHandler m_sourceHandler;
   SteeringOrchestrator m_steeringOrchestrator;
+
+    // Actuator output
+  PWMController m_pwmController{};
+
+  // Presentation
   DisplayContent m_displayContent;
   Display m_display;
 
-  void stateUpdate();
+  SystemState stateUpdate();
 };

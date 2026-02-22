@@ -1,19 +1,22 @@
 #include "ui/frameBuffer.h"
 
 DisplayContent::DisplayContent(const NavigationSensors &navsens,
-                               const Diagnostics &diagnostics,
-                               const SystemState &state)
-    : m_navigationSensors(navsens), m_diagnostics(diagnostics),
-      m_state(state){};
+                               const Diagnostics &diagnostics)
+    : m_navigationSensors(navsens), m_diagnostics(diagnostics){};
 
-FrameBuffer DisplayContent::tick(const Intent &intent, uint32_t loopTimestamp) {
-  createModel(intent);
+FrameBuffer DisplayContent::create(const Intent &intent,
+                                   const SystemState &state,
+                                   uint32_t loopTimestamp) {
+  createModel(intent, state);
+
   FrameBuffer buffer;
   return buffer;
 }
 
-void DisplayContent::createModel(const Intent &intent) {
-  model.mode = m_state.systemMode;
+DisplayModel DisplayContent::createModel(const Intent &intent,
+                                 const SystemState &state) {
+  DisplayModel model; 
+  model.mode = state.systemMode;
 
   model.panelIntent = intent;
 
@@ -23,4 +26,5 @@ void DisplayContent::createModel(const Intent &intent) {
   model.hullSpeed =
       m_diagnostics.capabilityState(FunctionalCapability::HullSpeed);
   model.wind = m_diagnostics.capabilityState(FunctionalCapability::WIND);
+  return model;
 };

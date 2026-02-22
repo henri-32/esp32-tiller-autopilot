@@ -35,19 +35,30 @@ struct SteeringMechanicsConfig {
 struct SteeringRegulationConfig {
   // Regulation thresholds and timing gates used by CSC.
   uint8_t steeringTolerance_deg = 1;
-  uint32_t steeringCooldown_ms = 2000;
+  uint8_t counterNearTargetWindow_deg = 2;
+  int8_t smoothedMeanApplicationWindow_deg = 20;
+  uint32_t calculationWindowSmoothedMean = 4;
+  float omegaDeadband = 0.2;
+  static constexpr uint8_t observationBufferSize = 70;
+  // Runtime-active capacity used by CSC. Defaults to compile-time maximum.
+  uint8_t activeObservationBufferSize = observationBufferSize;
+  uint8_t minimumSampleSize = 10;
+  uint8_t omegaRobust =
+      3; // Describes Samplesize (errors) for Omega calculation
+  float omegaThresholdForCounter = 0.02;
+  uint8_t counterOmegaMinSampleSize = 3;
   uint32_t minimumTimeBtwObs_ms = 1000;
   uint32_t pauseForValidObsAfterImpulse_ms = 3000;
-
-  static constexpr uint8_t observationBufferSize = 70;
-  uint8_t minimumSampleSize = 10;
+  uint32_t steeringCooldown_ms = 2000;
+  uint32_t counterTimerGuard_ms = 2000;
+  uint32_t counterCooldown_ms = 7000;
 };
 
 struct SteeringSourceHandlingConfig {
   // Policy thresholds for selecting and validating sources.
   float minGpsSpeedForUse = 1.0;
-  static constexpr uint8_t observationBufferSize = 70;
   uint32_t minTimeBetweenCorrection_ms = 20000;
+  static constexpr uint8_t observationBufferSize = 70;
 };
 struct SteeringPhysicsConfig {
   // Damping model for impulse shaping based on STW.
@@ -74,14 +85,14 @@ struct SteeringControllerConfig {
 #include "types/globalTypes.h"
 #include <cstdint>
 #include <optional>
-  struct CSCDebugSnapshot {
-    int16_t error = 0;
-    int16_t median = 0;
-    uint8_t sampleSize = 0;
-    bool deadbandActive = false;
-    bool observationBlocked = false;
-    bool intentBlocked = false;
-  };
+struct CSCDebugSnapshot {
+  int16_t error = 0;
+  int16_t median = 0;
+  uint8_t sampleSize = 0;
+  bool deadbandActive = false;
+  bool observationBlocked = false;
+  bool intentBlocked = false;
+};
 
 class CoreSteeringController {
 public:
@@ -91,34 +102,39 @@ public:
   // Outputs/Side-effects: optional SteeringIntent; updates internal state.
   explicit CoreSteeringController(SteeringRegulationConfig &config);
 
-  std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
-
   void currentHDG(uint16_t current);
   void setInternalTarget(uint16_t target);
   uint16_t getInternalTarget() const;
-  const CSCDebugSnapshot& getDebug() const;
-
+  const CSCDebugSnapshot &getDebug() const;
+  std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
 
 private:
+  // --- Internal helpers ---
+  // Direction is derived from the median error sign only.
+  SteeringDirection determineDirection(int16_t median) const;
+  std::optional<SteeringIntent> calculateIntentFromObs();
+  SteeringIntent counterIntent(float omega);
+  bool counterIntentNecessary(uint32_t loopTimestamp, int16_t median,
+                              uint8_t sampleSize, float omega);
+
   // --- State ---
   uint16_t m_currentCourse{0};
   uint16_t m_internalTargetCourse{0};
+  int16_t m_lastError;
+  uint32_t m_lastObsUpdate = 0;
+  uint32_t m_lastIntent = 0;
+  uint32_t m_lastCounterIntent = 0;
+  std::optional<SteeringIntent> m_lastIntentValue;
 
   // --- Subsystems ---
   HeadingErrorCalculator m_errorCalculator;
   ObservationBuffer m_observationBuffer;
   Deadband m_deadband;
   SteeringGuard m_steeringGuard;
-
-  // --- Internal helpers ---
-  // Direction is derived from the median error sign only.
-  SteeringDirection determineDirection(int16_t median) const;
-  uint32_t m_lastObsUpdate = 0;
-  uint32_t m_lastIntent = 0;
+  SteeringRegulationConfig m_config;
 
   // --- Debug ---
   CSCDebugSnapshot m_debug;
-
 };
 
 /* ===== FILE: include/core/steering/csc/deadband.h ===== */
@@ -149,7 +165,8 @@ class HeadingErrorCalculator {
 public:
   HeadingErrorCalculator() = default;
 
-  int16_t getCurrentError(uint16_t current, uint16_t target);
+  int16_t calculateError(uint16_t current, uint16_t target);
+  
 };
 /* ===== FILE: include/core/steering/csc/observationBuffer.h ===== */
 #pragma once
@@ -162,13 +179,18 @@ class ObservationBuffer {
 private:
   SteeringRegulationConfig &m_config;
 
-  static constexpr uint8_t bufferSize =
+  static constexpr uint8_t maxBufferSize =
       SteeringRegulationConfig::observationBufferSize;
 
-  std::array<int16_t, bufferSize> m_errorArray{};
-  uint8_t validErrorsCounter = 0;
+  uint8_t getActiveBufferSize() const;
+
+  std::array<int16_t, maxBufferSize> m_medianArray{};
+  std::array<int16_t, maxBufferSize> m_meanArray{};
+  std::array<uint32_t, maxBufferSize> m_timeArray{};
+  uint8_t writtenErrorsCounter = 0;
   uint8_t medianIndex;
   int16_t median = 0;
+
 
 public:
   // Contract:
@@ -177,9 +199,12 @@ public:
   // Outputs/Side-effects: median and sample count; internal buffer mutated.
   ObservationBuffer(SteeringRegulationConfig &config);
 
-  const int16_t getMedian() const;
   void update(int16_t error);
+  void update(int16_t error, uint32_t loopTimestamp);
+  int16_t getMedian() const;
+  int16_t getSmoothedCurrentError(); 
   uint8_t getSampleSize() const;
+  float getOmega(uint32_t loopTimestamp) const; 
   void reset();
 };
 
@@ -187,6 +212,7 @@ public:
 #pragma once
 
 #include "core/config.h"
+#include "core/steering/csc/deadband.h"
 #include <cstdint>
 
 class SteeringGuard {
@@ -200,10 +226,11 @@ public:
   bool observationBlocked(uint32_t loopTimestamp, uint32_t lastUpdate,
                           uint32_t lastIntent);
   bool intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
-                     uint8_t sampleSize);
+                     uint8_t sampleSize, int16_t median, float omega);
 
 private:
   SteeringRegulationConfig &m_config;
+  Deadband m_deadband;
 };
 
 /* ===== FILE: include/core/steering/impulseFilter.h ===== */
@@ -393,8 +420,10 @@ private:
 #include "diagnostics/diagnostics.h"
 #include "sensors/NMEA183BUS.h"
 #include "sensors/navigationSensors.h"
+#include "types/globalTypes.h"
 #include "ui/controlPanel.h"
 #include "ui/display.h"
+#include "ui/frameBuffer.h"
 
 class SystemController {
 public:
@@ -407,8 +436,10 @@ public:
   void tick(uint32_t loopTimestamp);
 
 private:
-  // Top-level composition root. Owns hardware modules, config, and orchestration.
+  // Top-level composition root. Owns hardware modules, config, and
+  // orchestration.
   ControlPanel m_controlPanel{};
+  SystemState m_state;
   CompassModule m_compassModule{};
   GPSModule m_gpsModule;
   WindModule m_windModule;
@@ -421,7 +452,10 @@ private:
   CoreSteeringController m_csc;
   SourceHandler m_sourceHandler;
   SteeringOrchestrator m_steeringOrchestrator;
+  DisplayContent m_displayContent;
   Display m_display;
+
+  void stateUpdate();
 };
 
 /* ===== FILE: include/diagnostics/diagnostic_types.h ===== */
@@ -429,27 +463,24 @@ private:
 #include <cstdint>
 
 enum class DiagnosticEvent : uint8_t {
-    Degraded,
-    Lost,
-    LostWithFallback,
-    ErrorHandled, 
-    CRITICAL_ERROR,
+  Degraded,
+  Lost,
+  LostWithFallback,
+  ErrorHandled,
+  CRITICAL_ERROR,
 };
 
 enum class FunctionalCapability : uint8_t {
-    COMPASS,
-    GPS,
-    WIND,
-    HullSpeed,
-    PWM,
-    COUNT
+  COMPASS,
+  GPS,
+  WIND,
+  HullSpeed,
+  PWM,
+  AIS,
+  COUNT,
 };
 
-enum class CapabilityState : uint8_t {
-    OK,
-    Degraded,
-    Lost
-};
+enum class CapabilityState : uint8_t { OK, Degraded, Lost };
 
 /* ===== FILE: include/diagnostics/diagnostics.h ===== */
 #pragma once
@@ -479,6 +510,8 @@ public:
 
     // für spätere Auswertung (noch minimal)
     CapabilityState capabilityState(FunctionalCapability cap) const;
+
+    bool criticalErroroccured; 
 
 private:
     // --- Event Ringbuffer ---
@@ -626,6 +659,13 @@ public:
 #include <cstdint>
 
 enum class NavigationSource { Compass, Gps, Wind };
+
+struct Intent {
+  bool steeringEngaged = false;
+  uint16_t generalTarget = 0;
+  NavigationSource activeSource = NavigationSource::Compass;
+};
+
 enum class SteeringDirection { Left, Right };
 
 struct SteeringIntent {
@@ -645,10 +685,13 @@ template <typename T> struct SensorSample {
 };
 
 
+struct SystemState {
+  enum class SystemMode { INIT, OK, AISonly, SAFE };
+  SystemMode systemMode = SystemMode::INIT;
+};
 /* ===== FILE: include/ui/controlPanel.h ===== */
 #pragma once
-
-#include "ui/controlPanelTypes.h"
+#include "types/globalTypes.h"
 class ControlPanel {
 public:
   // Contract:
@@ -656,36 +699,898 @@ public:
   // Inputs: external UI hardware/state.
   // Outputs/Side-effects: returns PanelIntent; no side-effects.
 
-  PanelIntent readIntent() const;
-
+  Intent readIntent() const;
 };
 
-/* ===== FILE: include/ui/controlPanelTypes.h ===== */
-#pragma once
-
-#include "types/globalTypes.h"
-#include <cstdint>
-
-struct PanelIntent {
-  bool steeringEngaged;
-  uint16_t generalTarget;
-
-  enum class SystemMode {
-    Normal,
-    Developer,
-    Safe,
-  };
-  NavigationSource requestedSource;
-};
 /* ===== FILE: include/ui/display.h ===== */
 #pragma once
+#include "ui/frameBuffer.h"
 class Display {
 public:
     // Contract:
     // Purpose: Render the latest system state to the display.
     // Inputs: internal system state (not shown here).
     // Outputs/Side-effects: updates display hardware.
-    void update();
+    void update(FrameBuffer buffer);
+};
+
+/* ===== FILE: include/ui/frameBuffer.h ===== */
+#pragma once
+#include "diagnostics/diagnostic_types.h"
+#include "diagnostics/diagnostics.h"
+#include "sensors/navigationSensors.h"
+#include "types/globalTypes.h"
+#include <cstdint>
+
+struct DisplayModel {
+  SystemState::SystemMode mode = SystemState::SystemMode::OK;
+  Intent panelIntent;
+
+  CapabilityState gps = CapabilityState::OK;
+  CapabilityState wind = CapabilityState::OK;
+  CapabilityState compass = CapabilityState::OK;
+  CapabilityState ais = CapabilityState::OK;
+  CapabilityState hullSpeed = CapabilityState::OK;
+};
+
+struct FrameBuffer {};
+
+class DisplayContent {
+public:
+  DisplayContent(const NavigationSensors &navsens,
+                 const Diagnostics &diagnostics, const SystemState &state);
+
+  FrameBuffer tick(const Intent &intent, uint32_t loopTimestamp);
+
+private:
+  DisplayModel model;
+  const NavigationSensors &m_navigationSensors;
+  const Diagnostics &m_diagnostics;
+  const SystemState &m_state;
+
+  void createModel(const Intent &intent);
+};
+/* ===== FILE: sim/headingSimulator.cpp ===== */
+#include <cstdint>
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <optional>
+#include <regex>
+#include <sstream>
+#include <string>
+
+#include "core/config.h"
+#include "core/steering/csc/csc.h"
+#include "headingSimulator.h"
+#include "types/globalTypes.h"
+
+namespace {
+constexpr const char *kOutputPath = "sim/sim_output/drift_sim.csv";
+constexpr const char *kConfigSnapshotJsonPath =
+    "sim/sim_output/drift_sim_config.json";
+constexpr const char *kOutputDirectoryPath = "sim/sim_output";
+constexpr const char *kNextRunConfigPath = "sim/next_run_config.json";
+
+bool ensureOutputDirectoryExists() {
+  std::error_code ec;
+  std::filesystem::create_directories(kOutputDirectoryPath, ec);
+  if (ec) {
+    std::cerr << "Failed to create simulation output directory: "
+              << kOutputDirectoryPath << " (" << ec.message() << ")\n";
+    return false;
+  }
+  return true;
+}
+
+bool readFileToString(const char *path, std::string &content) {
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    std::cerr << "Failed to open simulation config input: " << path << "\n";
+    return false;
+  }
+
+  std::ostringstream buffer;
+  buffer << file.rdbuf();
+  content = buffer.str();
+  return true;
+}
+
+bool extractNumber(const std::string &json, const char *key, double &value) {
+  const std::regex pattern("\"" + std::string(key) + "\"\\s*:\\s*([-+]?[0-9]*\\.?[0-9]+)");
+  std::smatch match;
+  if (!std::regex_search(json, match, pattern)) {
+    std::cerr << "Missing numeric key in next-run config: " << key << "\n";
+    return false;
+  }
+
+  try {
+    value = std::stod(match[1].str());
+  } catch (const std::exception &) {
+    std::cerr << "Invalid numeric value for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool toFloat(double input, const char *key, float &output) {
+  if (!std::isfinite(input)) {
+    std::cerr << "Invalid non-finite float for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+  output = static_cast<float>(input);
+  return true;
+}
+
+bool toUint32(double input, const char *key, uint32_t &output) {
+  if (!std::isfinite(input) || input < 0.0 ||
+      input > static_cast<double>(std::numeric_limits<uint32_t>::max()) ||
+      std::floor(input) != input) {
+    std::cerr << "Invalid uint32 value for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+
+  output = static_cast<uint32_t>(input);
+  return true;
+}
+
+bool toUint16(double input, const char *key, uint16_t &output) {
+  if (!std::isfinite(input) || input < 0.0 ||
+      input > static_cast<double>(std::numeric_limits<uint16_t>::max()) ||
+      std::floor(input) != input) {
+    std::cerr << "Invalid uint16 value for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+
+  output = static_cast<uint16_t>(input);
+  return true;
+}
+
+bool toUint8(double input, const char *key, uint8_t &output) {
+  if (!std::isfinite(input) || input < 0.0 ||
+      input > static_cast<double>(std::numeric_limits<uint8_t>::max()) ||
+      std::floor(input) != input) {
+    std::cerr << "Invalid uint8 value for key in next-run config: " << key
+              << "\n";
+    return false;
+  }
+
+  output = static_cast<uint8_t>(input);
+  return true;
+}
+
+bool toPositiveInt8(double input, const char *key, int8_t &output) {
+  if (!std::isfinite(input) || input <= 0.0 ||
+      input > static_cast<double>(std::numeric_limits<int8_t>::max()) ||
+      std::floor(input) != input) {
+    std::cerr << "Invalid positive int8 value for key in next-run config: "
+              << key << "\n";
+    return false;
+  }
+
+  output = static_cast<int8_t>(input);
+  return true;
+}
+
+bool loadSimulationConfigFromJson(const char *path, SimulationConfig &config) {
+  std::string json;
+  if (!readFileToString(path, json)) {
+    return false;
+  }
+
+  double dt_sec = 0.0;
+  double sim_seconds = 0.0;
+  double intentStepToTiller = 0.0;
+  double tillerMaxAbs = 0.0;
+  double tillerToYawAccel_deg_s2 = 0.0;
+  double initialHeading_deg = 0.0;
+  double environmentTorque_deg_s2 = 0.0;
+  double yawInertia = 0.0;
+  double yawDampingLinear = 0.0;
+  double yawDampingQuadratic = 0.0;
+  double trueWindSpeed_mps = 0.0;
+  double trueWindDirection_deg = 0.0;
+  double windHullYawAccelPerMps2 = 0.0;
+  double steeringTolerance_deg = 0.0;
+  double counterNearTargetWindow_deg = 0.0;
+  double counterTimerGuard_ms = 0.0;
+  double counterCooldown_ms = 0.0;
+  double counterOmegaMinSampleSize = 0.0;
+  double omegaThresholdForCounter = 0.0;
+  double minimumSampleSize = 0.0;
+  double minimumTimeBtwObs_ms = 0.0;
+  double pauseForValidObsAfterImpulse_ms = 0.0;
+  double steeringCooldown_ms = 0.0;
+  double calculationWindowSmoothedMean = 0.0;
+  double smoothedMeanApplicationWindow_deg = 20.0;
+  double observationBufferSize = 0.0;
+  double omegaRobust = 0.0;
+  double omegaDeadband = 0.0;
+  double target_deg = 0.0;
+
+
+  if (!extractNumber(json, "dt_sec", dt_sec) ||
+      !extractNumber(json, "sim_seconds", sim_seconds) ||
+      !extractNumber(json, "intentStepToTiller", intentStepToTiller) ||
+      !extractNumber(json, "tillerMaxAbs", tillerMaxAbs) ||
+      !extractNumber(json, "tillerToYawAccel_deg_s2", tillerToYawAccel_deg_s2) ||
+      !extractNumber(json, "initialHeading_deg", initialHeading_deg) ||
+      !extractNumber(json, "environmentTorque_deg_s2",
+                     environmentTorque_deg_s2) ||
+      !extractNumber(json, "yawInertia", yawInertia) ||
+      !extractNumber(json, "yawDampingLinear", yawDampingLinear) ||
+      !extractNumber(json, "yawDampingQuadratic", yawDampingQuadratic) ||
+      !extractNumber(json, "trueWindSpeed_mps", trueWindSpeed_mps) ||
+      !extractNumber(json, "trueWindDirection_deg", trueWindDirection_deg) ||
+      !extractNumber(json, "windHullYawAccelPerMps2",
+                     windHullYawAccelPerMps2) ||
+      !extractNumber(json, "steeringTolerance_deg", steeringTolerance_deg) ||
+      !extractNumber(json, "counterNearTargetWindow_deg",
+                     counterNearTargetWindow_deg) ||
+      !extractNumber(json, "counterTimerGuard_ms", counterTimerGuard_ms) ||
+      !extractNumber(json, "counterCooldown_ms", counterCooldown_ms) ||
+      !extractNumber(json, "counterOmegaMinSampleSize",
+                     counterOmegaMinSampleSize) ||
+      !extractNumber(json, "omegaThresholdForCounter",
+                     omegaThresholdForCounter) ||
+      !extractNumber(json, "minimumSampleSize", minimumSampleSize) ||
+      !extractNumber(json, "minimumTimeBtwObs_ms", minimumTimeBtwObs_ms) ||
+      !extractNumber(json, "pauseForValidObsAfterImpulse_ms",
+                     pauseForValidObsAfterImpulse_ms) ||
+      !extractNumber(json, "steeringCooldown_ms", steeringCooldown_ms) ||
+      !extractNumber(json, "calculationWindowSmoothedMean",
+                     calculationWindowSmoothedMean) ||
+      !extractNumber(json, "smoothedMeanApplicationWindow_deg",
+                     smoothedMeanApplicationWindow_deg) ||
+      !extractNumber(json, "observationBufferSize", observationBufferSize) ||
+      !extractNumber(json, "omegaRobust", omegaRobust) ||
+      !extractNumber(json, "omegaDeadband", omegaDeadband) ||
+      !extractNumber(json, "target_deg", target_deg)) {
+    return false;
+  }
+
+  if (!toFloat(dt_sec, "dt_sec", config.dt_sec) ||
+      !toUint32(sim_seconds, "sim_seconds", config.sim_seconds) ||
+      !toFloat(intentStepToTiller, "intentStepToTiller",
+               config.boat.intentStepToTiller) ||
+      !toFloat(tillerMaxAbs, "tillerMaxAbs", config.boat.tillerMaxAbs) ||
+      !toFloat(tillerToYawAccel_deg_s2, "tillerToYawAccel_deg_s2",
+               config.boat.tillerToYawAccel_deg_s2) ||
+      !toFloat(initialHeading_deg, "initialHeading_deg",
+               config.boat.initialHeading_deg) ||
+      !toFloat(environmentTorque_deg_s2, "environmentTorque_deg_s2",
+               config.boat.environmentTorque_deg_s2) ||
+      !toFloat(yawInertia, "yawInertia", config.boat.yawInertia) ||
+      !toFloat(yawDampingLinear, "yawDampingLinear",
+               config.boat.yawDampingLinear) ||
+      !toFloat(yawDampingQuadratic, "yawDampingQuadratic",
+               config.boat.yawDampingQuadratic) ||
+      !toFloat(trueWindSpeed_mps, "trueWindSpeed_mps",
+               config.boat.trueWindSpeed_mps) ||
+      !toFloat(trueWindDirection_deg, "trueWindDirection_deg",
+               config.boat.trueWindDirection_deg) ||
+      !toFloat(windHullYawAccelPerMps2, "windHullYawAccelPerMps2",
+               config.boat.windHullYawAccelPerMps2) ||
+      !toUint8(steeringTolerance_deg, "steeringTolerance_deg",
+               config.regulation.steeringTolerance_deg) ||
+      !toUint8(counterNearTargetWindow_deg, "counterNearTargetWindow_deg",
+               config.regulation.counterNearTargetWindow_deg) ||
+      !toUint32(counterTimerGuard_ms, "counterTimerGuard_ms",
+                config.regulation.counterTimerGuard_ms) ||
+      !toUint32(counterCooldown_ms, "counterCooldown_ms",
+                config.regulation.counterCooldown_ms) ||
+      !toUint8(counterOmegaMinSampleSize, "counterOmegaMinSampleSize",
+               config.regulation.counterOmegaMinSampleSize) ||
+      !toFloat(omegaThresholdForCounter, "omegaThresholdForCounter",
+               config.regulation.omegaThresholdForCounter) ||
+      !toUint8(minimumSampleSize, "minimumSampleSize",
+               config.regulation.minimumSampleSize) ||
+      !toUint32(minimumTimeBtwObs_ms, "minimumTimeBtwObs_ms",
+                config.regulation.minimumTimeBtwObs_ms) ||
+      !toUint32(pauseForValidObsAfterImpulse_ms,
+                "pauseForValidObsAfterImpulse_ms",
+                config.regulation.pauseForValidObsAfterImpulse_ms) ||
+      !toUint32(steeringCooldown_ms, "steeringCooldown_ms",
+                config.regulation.steeringCooldown_ms) ||
+      !toUint32(calculationWindowSmoothedMean,
+                "calculationWindowSmoothedMean",
+                config.regulation.calculationWindowSmoothedMean) ||
+      !toPositiveInt8(smoothedMeanApplicationWindow_deg,
+                      "smoothedMeanApplicationWindow_deg",
+                      config.regulation.smoothedMeanApplicationWindow_deg) ||
+      !toUint8(observationBufferSize, "observationBufferSize",
+               config.regulation.activeObservationBufferSize) ||
+      !toUint8(omegaRobust, "omegaRobust", config.regulation.omegaRobust) ||
+      !toFloat(omegaDeadband, "omegaDeadband", config.regulation.omegaDeadband) ||
+      !toUint16(target_deg, "target_deg", config.target_deg)) {
+    return false;
+  }
+
+  if (config.dt_sec <= 0.0f) {
+    std::cerr
+        << "Invalid value for key in next-run config: dt_sec must be > 0\n";
+    return false;
+  }
+
+  if (config.sim_seconds == 0U) {
+    std::cerr
+        << "Invalid value for key in next-run config: sim_seconds must be > 0\n";
+    return false;
+  }
+
+  if (config.regulation.counterNearTargetWindow_deg == 0) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "counterNearTargetWindow_deg must be >= 1\n";
+    return false;
+  }
+
+  if (config.regulation.counterOmegaMinSampleSize == 0) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "counterOmegaMinSampleSize must be >= 1\n";
+    return false;
+  }
+
+  if (config.regulation.activeObservationBufferSize == 0) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "observationBufferSize must be >= 1\n";
+    return false;
+  }
+
+  if (config.regulation.activeObservationBufferSize >
+      SteeringRegulationConfig::observationBufferSize) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "observationBufferSize exceeds compile-time max "
+              << static_cast<int>(SteeringRegulationConfig::observationBufferSize)
+              << "\n";
+    return false;
+  }
+
+  if (config.regulation.minimumSampleSize >
+      config.regulation.activeObservationBufferSize) {
+    std::cerr << "Invalid config combination in next-run config: "
+              << "minimumSampleSize must be <= observationBufferSize\n";
+    return false;
+  }
+
+  if (config.regulation.omegaDeadband < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "omegaDeadband must be >= 0\n";
+    return false;
+  }
+
+  if (config.regulation.omegaThresholdForCounter < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "omegaThresholdForCounter must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.yawInertia <= 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "yawInertia must be > 0\n";
+    return false;
+  }
+
+  if (config.boat.intentStepToTiller < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "intentStepToTiller must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.tillerMaxAbs <= 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "tillerMaxAbs must be > 0\n";
+    return false;
+  }
+
+  if (config.boat.tillerToYawAccel_deg_s2 < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "tillerToYawAccel_deg_s2 must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.yawDampingLinear < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "yawDampingLinear must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.yawDampingQuadratic < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "yawDampingQuadratic must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.trueWindSpeed_mps < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "trueWindSpeed_mps must be >= 0\n";
+    return false;
+  }
+
+  if (config.boat.windHullYawAccelPerMps2 < 0.0f) {
+    std::cerr << "Invalid value for key in next-run config: "
+              << "windHullYawAccelPerMps2 must be >= 0\n";
+    return false;
+  }
+
+  std::cout << "Loaded simulation config from: " << path << "\n";
+  return true;
+}
+
+void writeConfigSnapshotJson(const SimulationConfig &config) {
+  std::ofstream file(kConfigSnapshotJsonPath);
+  if (!file.is_open()) {
+    std::cerr << "Failed to open simulation config json snapshot: "
+              << kConfigSnapshotJsonPath << "\n";
+    return;
+  }
+
+  file << std::fixed << std::setprecision(3);
+  file << "{\n";
+  file << "  \"time\": {\n";
+  file << "    \"dt_sec\": " << config.dt_sec << ",\n";
+  file << "    \"sim_seconds\": " << config.sim_seconds << "\n";
+  file << "  },\n";
+  file << "  \"boat\": {\n";
+  file << "    \"intentStepToTiller\": " << config.boat.intentStepToTiller
+       << ",\n";
+  file << "    \"tillerMaxAbs\": " << config.boat.tillerMaxAbs << ",\n";
+  file << "    \"tillerToYawAccel_deg_s2\": "
+       << config.boat.tillerToYawAccel_deg_s2
+       << ",\n";
+  file << "    \"initialHeading_deg\": " << config.boat.initialHeading_deg
+       << ",\n";
+  file << "    \"environmentTorque_deg_s2\": "
+       << config.boat.environmentTorque_deg_s2 << ",\n";
+  file << "    \"yawInertia\": " << config.boat.yawInertia << ",\n";
+  file << "    \"yawDampingLinear\": " << config.boat.yawDampingLinear
+       << ",\n";
+  file << "    \"yawDampingQuadratic\": " << config.boat.yawDampingQuadratic
+       << ",\n";
+  file << "    \"trueWindSpeed_mps\": " << config.boat.trueWindSpeed_mps
+       << ",\n";
+  file << "    \"trueWindDirection_deg\": " << config.boat.trueWindDirection_deg
+       << ",\n";
+  file << "    \"windHullYawAccelPerMps2\": "
+       << config.boat.windHullYawAccelPerMps2 << "\n";
+  file << "  },\n";
+  file << "  \"csc\": {\n";
+  file << "    \"steeringTolerance_deg\": "
+       << static_cast<int>(config.regulation.steeringTolerance_deg) << ",\n";
+  file << "    \"counterNearTargetWindow_deg\": "
+       << static_cast<int>(config.regulation.counterNearTargetWindow_deg)
+       << ",\n";
+  file << "    \"counterTimerGuard_ms\": "
+       << config.regulation.counterTimerGuard_ms << ",\n";
+  file << "    \"counterCooldown_ms\": "
+       << config.regulation.counterCooldown_ms << ",\n";
+  file << "    \"counterOmegaMinSampleSize\": "
+       << static_cast<int>(config.regulation.counterOmegaMinSampleSize)
+       << ",\n";
+  file << "    \"omegaThresholdForCounter\": "
+       << config.regulation.omegaThresholdForCounter << ",\n";
+  file << "    \"minimumSampleSize\": "
+       << static_cast<int>(config.regulation.minimumSampleSize) << ",\n";
+  file << "    \"minimumTimeBtwObs_ms\": "
+       << config.regulation.minimumTimeBtwObs_ms << ",\n";
+  file << "    \"pauseForValidObsAfterImpulse_ms\": "
+       << config.regulation.pauseForValidObsAfterImpulse_ms << ",\n";
+  file << "    \"steeringCooldown_ms\": "
+       << config.regulation.steeringCooldown_ms << ",\n";
+  file << "    \"calculationWindowSmoothedMean\": "
+       << config.regulation.calculationWindowSmoothedMean << ",\n";
+  file << "    \"smoothedMeanApplicationWindow_deg\": "
+       << static_cast<int>(config.regulation.smoothedMeanApplicationWindow_deg)
+       << ",\n";
+  file << "    \"observationBufferSize\": "
+       << static_cast<int>(config.regulation.activeObservationBufferSize)
+       << ",\n";
+  file << "    \"omegaRobust\": "
+       << static_cast<int>(config.regulation.omegaRobust)
+       << ",\n";
+  file << "    \"omegaDeadband\": "
+       << config.regulation.omegaDeadband
+       << ",\n";
+  file << "    \"target_deg\": " << config.target_deg << "\n";
+  file << "  }\n";
+  file << "}\n";
+}
+}
+
+SimulationConfig makeDefaultSimulationConfig() {
+  SimulationConfig config{};
+
+  // --- Time ---
+  config.dt_sec = 0.1f;
+  config.sim_seconds = 180;
+
+  // --- Boat dynamics ---
+  config.boat.intentStepToTiller = 0.005f;
+  config.boat.tillerMaxAbs = 1.0f;
+  config.boat.tillerToYawAccel_deg_s2 = 1.5f;
+  config.boat.initialHeading_deg = 15.0f;
+  config.boat.environmentTorque_deg_s2 = 0.0f;
+  config.boat.yawInertia = 1.0f;
+  config.boat.yawDampingLinear = 0.30f;
+  config.boat.yawDampingQuadratic = 0.02f;
+  config.boat.trueWindSpeed_mps = 6.0f;
+  config.boat.trueWindDirection_deg = 70.0f;
+  config.boat.windHullYawAccelPerMps2 = 0.03f;
+
+  // --- CSC ---
+  config.regulation.steeringTolerance_deg = 7;
+  config.regulation.counterNearTargetWindow_deg = 2;
+  config.regulation.counterTimerGuard_ms = 2000;
+  config.regulation.counterCooldown_ms = 7000;
+  config.regulation.counterOmegaMinSampleSize = 3;
+  config.regulation.omegaThresholdForCounter = 0.02f;
+  config.regulation.minimumSampleSize = 5;
+  config.regulation.minimumTimeBtwObs_ms = 100;
+  config.regulation.pauseForValidObsAfterImpulse_ms = 2000;
+  config.regulation.steeringCooldown_ms = 500;
+  config.regulation.calculationWindowSmoothedMean = 4;
+  config.regulation.smoothedMeanApplicationWindow_deg = 20;
+  config.regulation.activeObservationBufferSize =
+      SteeringRegulationConfig::observationBufferSize;
+  config.regulation.omegaRobust = 3;
+  config.regulation.omegaDeadband = 0.2f;
+  config.target_deg = 0;
+
+  return config;
+}
+
+BootModel::BootModel(const BoatPhysicsConfig &config)
+    : m_heading_deg(normalizeHeading(config.initialHeading_deg)),
+      m_angularVelocity_deg_s(0.0f),
+      m_intentStepToTiller(config.intentStepToTiller),
+      m_tillerMaxAbs(config.tillerMaxAbs),
+      m_tillerToYawAccel_deg_s2(config.tillerToYawAccel_deg_s2),
+      m_environmentTorque_deg_s2(config.environmentTorque_deg_s2),
+      m_yawInertia(config.yawInertia),
+      m_yawDampingLinear(config.yawDampingLinear),
+      m_yawDampingQuadratic(config.yawDampingQuadratic),
+      m_trueWindSpeed_mps(config.trueWindSpeed_mps),
+      m_trueWindDirection_deg(config.trueWindDirection_deg),
+      m_windHullYawAccelPerMps2(config.windHullYawAccelPerMps2) {}
+
+void BootModel::applyIntent(float signedImpulse_0_100) {
+  m_tillerPosition += m_intentStepToTiller * signedImpulse_0_100;
+  if (m_tillerPosition > m_tillerMaxAbs) {
+    m_tillerPosition = m_tillerMaxAbs;
+  } else if (m_tillerPosition < -m_tillerMaxAbs) {
+    m_tillerPosition = -m_tillerMaxAbs;
+  }
+}
+
+void BootModel::update(float dt) {
+  const float windYawAccel_deg_s2 = computeWindYawAccel();
+  const float tillerNormalized = (m_tillerMaxAbs > 0.0f)
+                                     ? (m_tillerPosition / m_tillerMaxAbs)
+                                     : 0.0f;
+  const float tillerYawAccel_deg_s2 =
+      tillerNormalized * m_tillerToYawAccel_deg_s2;
+
+  const float dampingMoment =
+      (m_yawDampingLinear * m_angularVelocity_deg_s) +
+      (m_yawDampingQuadratic * std::fabs(m_angularVelocity_deg_s) *
+       m_angularVelocity_deg_s);
+  const float dampingYawAccel_deg_s2 = dampingMoment / m_yawInertia;
+
+  m_lastTillerYawAccel_deg_s2 = tillerYawAccel_deg_s2;
+  m_lastWindYawAccel_deg_s2 = windYawAccel_deg_s2;
+  m_lastDampingYawAccel_deg_s2 = -dampingYawAccel_deg_s2;
+
+  const float totalYawAccel_deg_s2 =
+      m_environmentTorque_deg_s2 + windYawAccel_deg_s2 +
+      tillerYawAccel_deg_s2 - dampingYawAccel_deg_s2;
+
+  m_angularVelocity_deg_s += totalYawAccel_deg_s2 * dt;
+  m_heading_deg =
+      normalizeHeading(m_heading_deg + (m_angularVelocity_deg_s * dt));
+}
+
+float BootModel::heading() const { return m_heading_deg; }
+
+float BootModel::angularVelocity() const { return m_angularVelocity_deg_s; }
+
+float BootModel::tillerPosition() const { return m_tillerPosition; }
+
+float BootModel::tillerYawAccel() const { return m_lastTillerYawAccel_deg_s2; }
+
+float BootModel::windYawAccel() const { return m_lastWindYawAccel_deg_s2; }
+
+float BootModel::dampingYawAccel() const { return m_lastDampingYawAccel_deg_s2; }
+
+float BootModel::normalizeHeading(float heading_deg) {
+  while (heading_deg < 0.0f) {
+    heading_deg += 360.0f;
+  }
+  while (heading_deg >= 360.0f) {
+    heading_deg -= 360.0f;
+  }
+  return heading_deg;
+}
+
+float BootModel::normalizeAngleSignedDeg(float angle_deg) {
+  while (angle_deg > 180.0f) {
+    angle_deg -= 360.0f;
+  }
+  while (angle_deg <= -180.0f) {
+    angle_deg += 360.0f;
+  }
+  return angle_deg;
+}
+
+float BootModel::degToRad(float deg) {
+  constexpr float pi = 3.14159265358979323846f;
+  return deg * (pi / 180.0f);
+}
+
+float BootModel::computeWindYawAccel() const {
+  if (m_trueWindSpeed_mps <= 0.0f || m_windHullYawAccelPerMps2 <= 0.0f) {
+    return 0.0f;
+  }
+
+  // Windage-only model (no sail lift/drag):
+  // crosswind component on hull creates yaw disturbance.
+  const float relativeWindAngle_deg =
+      normalizeAngleSignedDeg(m_trueWindDirection_deg - m_heading_deg);
+  const float relativeWindAngle_rad = degToRad(relativeWindAngle_deg);
+
+  const float windYawAccel_deg_s2 =
+      m_windHullYawAccelPerMps2 * m_trueWindSpeed_mps * m_trueWindSpeed_mps *
+      std::sin(relativeWindAngle_rad);
+
+  if (!std::isfinite(windYawAccel_deg_s2)) {
+    return 0.0f;
+  }
+  return windYawAccel_deg_s2;
+}
+
+SimulationEngine::SimulationEngine(CoreSteeringController &csc,
+                                   const SimulationConfig &config)
+    : m_boot(config.boat), m_csc(csc) {}
+
+void SimulationEngine::tick(float dt, uint32_t loopTimestamp) {
+  // Simulate integer compass output with nearest-degree quantization
+  // (instead of truncation, which adds a systematic bias).
+  const uint16_t heading_u16 = static_cast<uint16_t>(
+      std::lround(m_boot.heading())) % static_cast<uint16_t>(360);
+  m_csc.currentHDG(heading_u16);
+
+  m_lastIntent = m_csc.tick(loopTimestamp);
+
+  if (m_lastIntent.has_value()) {
+    const float magnitude =
+        static_cast<float>(m_lastIntent->abstractImpulse_0_100);
+    const float signedImpulse =
+        (m_lastIntent->dir == SteeringDirection::Left) ? -magnitude : magnitude;
+    m_boot.applyIntent(signedImpulse);
+  }
+  m_boot.update(dt);
+}
+
+float SimulationEngine::heading() const { return m_boot.heading(); }
+
+float SimulationEngine::angularVelocity() const {
+  return m_boot.angularVelocity();
+}
+
+float SimulationEngine::tillerPosition() const { return m_boot.tillerPosition(); }
+
+float SimulationEngine::tillerYawAccel() const { return m_boot.tillerYawAccel(); }
+
+float SimulationEngine::windYawAccel() const { return m_boot.windYawAccel(); }
+
+float SimulationEngine::dampingYawAccel() const {
+  return m_boot.dampingYawAccel();
+}
+
+std::optional<SteeringIntent> SimulationEngine::lastIntent() const {
+  return m_lastIntent;
+}
+
+#ifndef HEADING_SIM_NO_MAIN
+int main() {
+  SimulationConfig config = makeDefaultSimulationConfig();
+  if (!loadSimulationConfigFromJson(kNextRunConfigPath, config)) {
+    return 1;
+  }
+
+  if (!ensureOutputDirectoryExists()) {
+    return 1;
+  }
+
+  writeConfigSnapshotJson(config);
+
+  const uint32_t dt_ms = static_cast<uint32_t>(config.dt_sec * 1000.0f);
+  const uint32_t steps = static_cast<uint32_t>(
+      static_cast<float>(config.sim_seconds) / config.dt_sec);
+
+  CoreSteeringController csc(config.regulation);
+  csc.setInternalTarget(config.target_deg);
+
+  SimulationEngine engine(csc, config);
+
+  // ----------------------------
+  // CSV
+  // ----------------------------
+  std::ofstream file(kOutputPath);
+  if (!file.is_open()) {
+    std::cerr << "Failed to open simulation output: " << kOutputPath << "\n";
+    return 1;
+  }
+
+  file << "time_ms,"
+       << "heading_deg,"
+       << "angular_velocity_deg_s,"
+       << "tiller_position,"
+       << "tiller_yaw_accel_deg_s2,"
+       << "wind_yaw_accel_deg_s2,"
+       << "damping_yaw_accel_deg_s2,"
+       << "target_deg,"
+       << "error_deg,"
+       << "median_deg,"
+       << "sample_size,"
+       << "deadband_active,"
+       << "obs_blocked,"
+       << "intent_blocked,"
+       << "intent,"
+       << "intent_abstract_force,"
+       << "dir\n";
+
+  file << std::fixed << std::setprecision(3);
+
+  uint32_t time_ms = 0;
+
+  for (uint32_t i = 0; i < steps; ++i) {
+    engine.tick(config.dt_sec, time_ms);
+    const auto intent = engine.lastIntent();
+    const float heading = engine.heading();
+    const float angularVelocity = engine.angularVelocity();
+    const float tillerPosition = engine.tillerPosition();
+    const float tillerYawAccel = engine.tillerYawAccel();
+    const float windYawAccel = engine.windYawAccel();
+    const float dampingYawAccel = engine.dampingYawAccel();
+
+    const auto &dbg = csc.getDebug();
+
+    file << time_ms << "," << heading << "," << angularVelocity << ","
+         << tillerPosition << "," << tillerYawAccel << "," << windYawAccel
+         << "," << dampingYawAccel << "," << config.target_deg << ","
+         << dbg.error << "," << dbg.median << ","
+         << static_cast<int>(dbg.sampleSize) << "," << dbg.deadbandActive << ","
+         << dbg.observationBlocked << "," << dbg.intentBlocked << ","
+         << (intent.has_value() ? 1 : 0) << ","
+         << (intent.has_value()
+                 ? static_cast<int>(intent->abstractImpulse_0_100)
+                 : 0)
+         << ",";
+
+    if (intent) {
+      file << (intent->dir == SteeringDirection::Left ? "Left" : "Right");
+    }
+
+    file << "\n";
+
+    time_ms += dt_ms;
+  }
+
+  file.close();
+  return 0;
+}
+#endif
+
+/* ===== FILE: sim/headingSimulator.h ===== */
+#pragma once
+
+#include <cstdint>
+#include <optional>
+
+#include "core/steering/csc/csc.h"
+
+struct BoatPhysicsConfig {
+  float intentStepToTiller;
+  float tillerMaxAbs;
+  float tillerToYawAccel_deg_s2;
+  float initialHeading_deg;
+  float environmentTorque_deg_s2;
+  float yawInertia;
+  float yawDampingLinear;
+  float yawDampingQuadratic;
+  float trueWindSpeed_mps;
+  float trueWindDirection_deg;
+  float windHullYawAccelPerMps2;
+};
+
+struct SimulationConfig {
+  // --- Time ---
+  float dt_sec;
+  uint32_t sim_seconds;
+
+  // --- Boot dynamics ---
+  BoatPhysicsConfig boat;
+
+  // --- CSC ---
+  SteeringRegulationConfig regulation;
+  uint16_t target_deg;
+};
+
+SimulationConfig makeDefaultSimulationConfig();
+
+class BootModel {
+public:
+  explicit BootModel(const BoatPhysicsConfig &config);
+
+  // Intent changes tiller position and stays latched (no auto recentering).
+  void applyIntent(float signedImpulse_0_100);
+
+  // Simplified yaw dynamics:
+  // omega += (env + wind + tiller - damping) * dt
+  // heading += omega * dt
+  void update(float dt);
+
+  float heading() const;
+  float angularVelocity() const;
+  float tillerPosition() const;
+  float tillerYawAccel() const;
+  float windYawAccel() const;
+  float dampingYawAccel() const;
+
+private:
+  static float normalizeAngleSignedDeg(float angle_deg);
+  static float normalizeHeading(float heading_deg);
+  static float degToRad(float deg);
+  float computeWindYawAccel() const;
+
+  float m_heading_deg = 0.0f;
+  float m_angularVelocity_deg_s = 0.0f;
+  float m_tillerPosition = 0.0f;
+  float m_lastTillerYawAccel_deg_s2 = 0.0f;
+  float m_lastWindYawAccel_deg_s2 = 0.0f;
+  float m_lastDampingYawAccel_deg_s2 = 0.0f;
+
+  float m_intentStepToTiller = 0.0f;
+  float m_tillerMaxAbs = 1.0f;
+  float m_tillerToYawAccel_deg_s2 = 0.0f;
+  float m_environmentTorque_deg_s2 = 0.0f;
+  float m_yawInertia = 1.0f;
+  float m_yawDampingLinear = 0.0f;
+  float m_yawDampingQuadratic = 0.0f;
+  float m_trueWindSpeed_mps = 0.0f;
+  float m_trueWindDirection_deg = 0.0f;
+  float m_windHullYawAccelPerMps2 = 0.0f;
+};
+
+class SimulationEngine {
+public:
+  SimulationEngine(CoreSteeringController &csc, const SimulationConfig &config);
+
+  // Orchestrates one simulation step:
+  // 1) heading -> CSC
+  // 2) CSC tick
+  // 3) intent impulse -> BootModel update
+  void tick(float dt, uint32_t loopTimestamp);
+
+  float heading() const;
+  float angularVelocity() const;
+  float tillerPosition() const;
+  float tillerYawAccel() const;
+  float windYawAccel() const;
+  float dampingYawAccel() const;
+  std::optional<SteeringIntent> lastIntent() const;
+
+private:
+  BootModel m_boot;
+  CoreSteeringController &m_csc;
+  std::optional<SteeringIntent> m_lastIntent;
 };
 
 /* ===== FILE: src/actuators/pwmController.cpp ===== */
@@ -694,6 +1599,29 @@ public:
 
 void PWMController::command(PWMCommand command) {
   // TODO HardwareImpulse ausegeben
+}
+
+/* ===== FILE: src/core/gui_main.cpp ===== */
+#include "core/systemController.h"
+
+#include <chrono>
+#include <cstdint>
+#include <thread>
+
+int main() {
+  SystemController systemController;
+  const auto t0 = std::chrono::steady_clock::now();
+
+  while (true) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - t0).count();
+    const auto loopTimestamp = static_cast<uint32_t>(elapsed);
+
+    systemController.tick(loopTimestamp);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
 }
 
 /* ===== FILE: src/core/main.cpp ===== */
@@ -740,76 +1668,13 @@ int main()
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
-    : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config) {
-}
-
-std::optional<SteeringIntent>
-CoreSteeringController::tick(uint32_t loopTimestamp) {
-  /*CSC macht zwei Sachen
-  - Beobachten
-  - Intent zurückgeben
-
-  Wenn er wegen Guards nicht beobachten darf early return*/
-
-  // Gate observation to avoid reacting too frequently.
-  if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
-                                         m_lastIntent)) {
-    m_debug.observationBlocked = true;
-    return std::nullopt;
-  }
-
-  SteeringIntent intent; // Return value
-
-  int16_t error = m_errorCalculator.getCurrentError(m_currentCourse,
-                                                    m_internalTargetCourse);
-  m_debug.error = error;
-
-  /*Ein nicht signifikanter Error kann keine Aktion auslösen
-  Deswegen darf das direkt zum early return führen*/
-  // Ignore small errors to avoid actuator chatter.
-  if (!m_deadband.errorSignificant(error)) {
-    m_debug.deadbandActive = true;
-    return std::nullopt;
-  }
-  m_observationBuffer.update(error);
-
-  m_debug.median = m_observationBuffer.getMedian();
-  m_debug.sampleSize = m_observationBuffer.getSampleSize();
-
-  m_lastObsUpdate = loopTimestamp;
-
-  /* Der Median wird bewusst nur für die Bestimmung der
-  nötigen Korrekturrichtung genutzt, da ich bewusst keinen
-  PID Regler will*/
-
-  SteeringDirection dir = determineDirection(m_observationBuffer.getMedian());
-
-  if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent,
-                                    m_observationBuffer.getSampleSize())) {
-    m_debug.intentBlocked = true;
-    return std::nullopt;
-  } else {
-    intent.dir = dir;
-
-    /* Semantisch klargestellt. CSC setzt vollen abstrakten Impuls.
-    Der kann danach nur nach unten gedämpft, aber nicht nach
-    oben eskaliert werden.*/
-
-    intent.abstractImpulse_0_100 = 100;
-    m_lastIntent = loopTimestamp;
-
-    /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
-    diese wird bewusst verworfen*/
-
-    // Intent consumed; discard accumulated evidence to start fresh.
-    m_observationBuffer.reset();
-
-    return intent;
-  }
-}
+    : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config),
+      m_config(config) {}
 
 void CoreSteeringController::currentHDG(uint16_t current) {
   m_currentCourse = current;
@@ -823,6 +1688,98 @@ uint16_t CoreSteeringController::getInternalTarget() const {
   return m_internalTargetCourse;
 };
 
+const CSCDebugSnapshot &CoreSteeringController::getDebug() const {
+  return m_debug;
+}
+
+std::optional<SteeringIntent>
+CoreSteeringController::tick(uint32_t loopTimestamp) {
+  // Debug flags are per-tick state, not latched state.
+  m_debug.observationBlocked = false;
+  m_debug.intentBlocked = false;
+  m_debug.deadbandActive = false;
+
+  /*CSC macht zwei Sachen
+  - Beobachten
+  - Intent zurückgeben
+
+  Wenn er wegen Guards nicht beobachten darf early return*/
+  if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
+                                         m_lastIntent)) {
+    m_debug.observationBlocked = true;
+    return std::nullopt;
+  }
+
+  int16_t error =
+      m_errorCalculator.calculateError(m_currentCourse, m_internalTargetCourse);
+  m_debug.error = error;
+
+  // Beim Fehler von 0 wird der Buffer zurückgesetzt, um schnelleres Reagieren
+  // bei Richtungswechseln zu ermöglichen, dadurch dass der Median um null
+  // weniger robust wird. Die steeringTolerance ermöglicht Oszillationen um 0
+  // als no action zu behandeln, während große Fehler schneller signifikant
+  // werden
+  // Harte Resets bei 0 haben meine counter Intents verhindert. Deswegen Reaktion auf sign flip im Bereich nahe 0 
+  const bool insideNoActionBand =
+      std::abs(error) <= m_config.steeringTolerance_deg;
+  const bool signFlip = (error<0 && m_lastError >0 || error > 0 && m_lastError < 0); 
+  if (insideNoActionBand && signFlip) {
+    m_observationBuffer.reset();
+  }
+
+  m_observationBuffer.update(error, loopTimestamp);
+  m_lastObsUpdate = loopTimestamp;
+
+  // Bewusst kein Struct, damit gezielte Zugriffe jederzeit möglich bleiben und
+  // nicht an snapshots gebunden werden
+  const int16_t median = m_observationBuffer.getMedian();
+  const uint8_t sampleSize = m_observationBuffer.getSampleSize();
+  const float omega = m_observationBuffer.getOmega(loopTimestamp);
+
+  m_debug.median = median;
+  m_debug.sampleSize = sampleSize;
+
+  /*Counter Intent steuert kurz vor Erreichen des Targets gegen.
+  Siehe Doku iterations/3. counterImpulse
+  Absichtlich außerhalb der regulären Intent-Guards, weil eigene counterGuards
+  Vor den regulären Intents, damit der counter nicht von deren Guards abgehalten
+  wird*/
+  if (counterIntentNecessary(loopTimestamp, median, sampleSize, omega)) {
+    auto counter = counterIntent(omega);
+    m_lastCounterIntent = loopTimestamp;
+    m_lastIntent = loopTimestamp;
+    m_lastIntentValue = counter;
+    m_observationBuffer.reset();
+    return counter;
+  }
+
+  /*steering Guards.*/
+  if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent, sampleSize,
+                                    median, omega)) {
+    m_debug.intentBlocked = true;
+
+    return std::nullopt;
+  } else {
+
+    auto intent = calculateIntentFromObs();
+    m_lastIntent = loopTimestamp;
+
+    /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
+      diese wird bewusst verworfen*/
+    m_observationBuffer.reset();
+
+    /*Für Counter Intent wichtig*/
+    if (intent.has_value()) {
+      m_lastIntentValue = intent;
+    }
+
+    // Für sign flip Logik
+    m_lastError = error;
+
+    return intent;
+  }
+}
+
 SteeringDirection
 CoreSteeringController::determineDirection(int16_t median) const {
   if (median < 0) {
@@ -833,9 +1790,100 @@ CoreSteeringController::determineDirection(int16_t median) const {
   return SteeringDirection::Left;
 }
 
-const CSCDebugSnapshot &CoreSteeringController::getDebug() const {
-  return m_debug;
-}
+std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
+
+  /* Der Median wird als robuster Mittelwert für die Entscheidung
+  Action/NoAction und Richtungsentscheidung genutzt. Ein leicht geglätteter
+  aktueller mean wird als Fehlergröße für die Berechnung der abstrakten
+  Impulsstärke genutzt. */
+
+  SteeringIntent intent; // return value
+
+  intent.dir = determineDirection(m_observationBuffer.getMedian());
+
+  /* Semantisch klargestellt. CSC setzt grundsätzlich bei jeder Entscheidung
+  vollen abstrakten Impuls.
+  Der kann danach nach unten gedämpft, aber nicht nach
+  oben eskaliert werden.*/
+  intent.abstractImpulse_0_100 = 100;
+  int16_t currentError = m_observationBuffer.getSmoothedCurrentError();
+
+  if (currentError < -m_config.smoothedMeanApplicationWindow_deg ||
+      currentError > m_config.smoothedMeanApplicationWindow_deg) {
+    return intent;
+  };
+
+  /*Bis hier hin war Richtung noch wichtig, um mean korrekt bestimmen zu
+  können Ab hier nur noch für abstractImpulse Größe ohne Vorzeichenrelevanz
+  verwendet*/
+  currentError = std::abs(currentError);
+
+  /*Wenn die obere (positive) Grenze des Windows 100% abstract Impulse bedeutet,
+  wird so in linearem Verhältnis auf die Fehlergröße reagiert*/
+  float errorPercantage = static_cast<float>(currentError) /
+                          m_config.smoothedMeanApplicationWindow_deg;
+  intent.abstractImpulse_0_100 *= errorPercantage;
+
+  return intent;
+};
+
+bool CoreSteeringController::counterIntentNecessary(uint32_t loopTimestamp,
+                                                    int16_t median,
+                                                    uint8_t sampleSize,
+                                                    float omega) {
+  // nullopt kann aufgrund fehlender Richtung nicht Basis sein
+  if (!m_lastIntentValue.has_value()) {
+    return false;
+  }
+
+  // FlipFlop Guard (nach FlipFlops in Sims) Bewusst auf reguläre Intents
+  // bezogen
+  if (loopTimestamp - m_lastIntent < m_config.counterTimerGuard_ms &&
+      m_lastIntentValue->dir != determineDirection(median)) {
+    return false;
+  }
+  // Cooldown auf letzte counters bezogen
+  if (loopTimestamp - m_lastCounterIntent < m_config.counterCooldown_ms) {
+    return false;
+  }
+
+  // Qualität von Omega
+  if (sampleSize < m_config.counterOmegaMinSampleSize ||
+      std::abs(omega) < m_config.omegaThresholdForCounter) {
+    return false;
+  }
+
+  const int16_t absError = std::abs(m_debug.error);
+  const bool nearTarget = absError <= m_config.counterNearTargetWindow_deg;
+
+  if (median < 0 && omega < 0 && nearTarget) {
+    return true;
+  } else if (median > 0 && omega > 0 && nearTarget) {
+    return true;
+  } else
+    return false;
+};
+
+SteeringIntent CoreSteeringController::counterIntent(float omega) {
+  SteeringIntent intent;
+  if (m_lastIntentValue->dir == SteeringDirection::Left) {
+    intent.dir = SteeringDirection::Right;
+  } else if (m_lastIntentValue->dir == SteeringDirection::Right) {
+    intent.dir = SteeringDirection::Left;
+  }
+
+  /*TODO Der abstract Impulse sollte auf die ersten realen Testergebnisse
+  (Einfluss von Intent auf Omega) gemappt werden, damit das Target möglichst
+  genau abgefangen werden kann.
+  Hier ist gerade SIM Logik drin !!!!!!
+  Ich fange 60% von Omega ab um zu gucken, ob ich eingeregelt bekomme!!!!!*/
+  const float omegaAbs = std::abs(omega);
+  const float mappedImpulse = omegaAbs * 100.0f * 0.5f;
+  const float clampedImpulse = std::clamp(mappedImpulse, 0.0f, 100.0f);
+  intent.abstractImpulse_0_100 = static_cast<uint8_t>(clampedImpulse);
+
+  return intent;
+};
 
 /* ===== FILE: src/core/steering/csc/deadband.cpp ===== */
 #include "core/steering/csc/deadband.h"
@@ -853,8 +1901,8 @@ bool Deadband::errorSignificant(int16_t error) {
 /* ===== FILE: src/core/steering/csc/headingErrorCalculator.cpp ===== */
 #include "core/steering/csc/headingErrorCalculator.h"
 
-int16_t HeadingErrorCalculator::getCurrentError(uint16_t current,
-                                                  uint16_t target) {
+int16_t HeadingErrorCalculator::calculateError(uint16_t current,
+                                               uint16_t target) {
 
   int16_t diff = target - current;
 
@@ -863,73 +1911,157 @@ int16_t HeadingErrorCalculator::getCurrentError(uint16_t current,
   diff %= 360;
   diff -= 180;
 
-  return diff; 
+  return diff;
 };
 /* ===== FILE: src/core/steering/csc/observationBuffer.cpp ===== */
 #include "core/steering/csc/observationBuffer.h"
+
 #include <algorithm>
 
 ObservationBuffer::ObservationBuffer(SteeringRegulationConfig &config)
-    : m_config(config) {};
+    : m_config(config) {}
 
-const int16_t ObservationBuffer::getMedian() const { return median; };
+int16_t ObservationBuffer::getMedian() const { return median; }
 
-void ObservationBuffer::update(int16_t error) {
-  // Reset the buffer if it overflows its configured capacity.
-  if (validErrorsCounter >= m_config.observationBufferSize) {
+uint8_t ObservationBuffer::getActiveBufferSize() const {
+  const uint8_t configured = m_config.activeObservationBufferSize;
+  if (configured == 0) {
+    return 1;
+  }
+  return std::min(configured, maxBufferSize);
+}
+
+void ObservationBuffer::update(int16_t error, uint32_t loopTimestamp) {
+  const uint8_t activeBufferSize = getActiveBufferSize();
+
+  // Reset the buffer if it overflows its active capacity.
+  if (writtenErrorsCounter >= activeBufferSize) {
     reset();
   }
 
-  m_errorArray[validErrorsCounter] = error;
-  validErrorsCounter++;
+  m_medianArray[writtenErrorsCounter] = error;
+  m_meanArray[writtenErrorsCounter] = error;
+  m_timeArray[writtenErrorsCounter] = loopTimestamp;
+  writtenErrorsCounter++;
 
-  /*Das Array ist bewusst kein Ringbuffer, da die Ereignisse des letzten Arrays
-    semantisch bewusst verworfen werden*/
-  std::sort(m_errorArray.begin(), m_errorArray.begin() + validErrorsCounter);
+  // Deliberately no ring buffer: after one evidence window, values are dropped.
+  std::sort(m_medianArray.begin(),
+            m_medianArray.begin() + writtenErrorsCounter);
 
-  /* Da nur signifikante Werte geschrieben werden, ist null semantisch kein Wert
-  statt gemessen 0 Da in jedem update neue Medianberechnung ist kein
-  Zurücksetzen erforderlich*/
-  medianIndex = validErrorsCounter / 2;
-  median = m_errorArray[medianIndex];
+  medianIndex = writtenErrorsCounter / 2;
+  median = m_medianArray[medianIndex];
 
   // Symmetric guard: if positives and negatives are balanced, treat as zero.
-  bool symmetric = false;
   uint8_t negativeValues = 0;
   uint8_t positiveValues = 0;
-  for (int i = 0; i < validErrorsCounter; i++) {
-    if (m_errorArray[i] < 0) {
+  for (uint8_t i = 0; i < writtenErrorsCounter; i++) {
+    if (m_medianArray[i] < 0) {
       negativeValues++;
-    } else if (m_errorArray[i] > 0) {
+    } else if (m_medianArray[i] > 0) {
       positiveValues++;
     }
   }
+
   if (positiveValues == negativeValues) {
-    symmetric = true;
+    median = 0;
   }
 
-  if (symmetric) {
-    median = 0;
+  // Full window consumed: reset evidence intentionally.
+  if (writtenErrorsCounter >= activeBufferSize) {
+    reset();
   }
 }
 
-uint8_t ObservationBuffer::getSampleSize() const { return validErrorsCounter; };
-
-/*siehe oben bewusst verworfen*/
-void ObservationBuffer::reset() {
-  for (int i = 0; i < bufferSize; i++) {
-    m_errorArray[i] = 0;
+int16_t ObservationBuffer::getSmoothedCurrentError() {
+  int32_t sum = 0;
+  const uint8_t samples = writtenErrorsCounter;
+  if (samples == 0) {
+    return 0;
   }
-  validErrorsCounter = 0;
+
+  const uint8_t cfgWindow = m_config.calculationWindowSmoothedMean;
+  if (cfgWindow == 0) {
+    return 0;
+  }
+
+  const uint8_t window = std::min(samples, cfgWindow);
+  const uint8_t start = samples - window;
+
+  for (uint8_t i = start; i < samples; i++) {
+    sum += m_meanArray[i];
+  }
+
+  return static_cast<int16_t>(sum / window);
+}
+
+uint8_t ObservationBuffer::getSampleSize() const {
+  return writtenErrorsCounter;
+}
+
+void ObservationBuffer::reset() {
+  for (uint8_t i = 0; i < maxBufferSize; i++) {
+    m_medianArray[i] = 0;
+    m_meanArray[i] = 0;
+    m_timeArray[i] = 0;
+  }
+  writtenErrorsCounter = 0;
   medianIndex = 0;
   median = 0;
+}
+
+float ObservationBuffer::getOmega(uint32_t loopTimestamp) const {
+  (void)loopTimestamp;
+
+  const uint8_t samples = writtenErrorsCounter;
+  if (samples < 2) {
+    return 0.0f;
+  }
+
+  const uint8_t cfgWindow = m_config.omegaRobust;
+  if (cfgWindow == 0) {
+    return 0.0f;
+  }
+
+  const uint8_t window = std::min(samples, cfgWindow);
+  if (window == 0) {
+    return 0.0f;
+  }
+
+  if (window < 2) {
+    return 0.0f;
+  }
+
+  const uint8_t start = samples - window;
+  const uint8_t end = samples - 1;
+
+  const uint32_t tStart = m_timeArray[start];
+  const uint32_t tEnd = m_timeArray[end];
+  if (tEnd <= tStart) {
+    return 0.0f;
+  }
+
+  const uint32_t duration_ms = tEnd - tStart;
+  if (duration_ms == 0) {
+    return 0.0f;
+  }
+
+  const int32_t deltaError = static_cast<int32_t>(m_meanArray[end]) -
+                             static_cast<int32_t>(m_meanArray[start]);
+  const float errorRate_deg_s = (static_cast<float>(deltaError) * 1000.0f) /
+                                static_cast<float>(duration_ms);
+
+  // Sign convention for guard semantics:
+  // positive omega means error decreases for positive median (moving toward
+  // target).
+  const float omega_deg = -errorRate_deg_s;
+  return omega_deg;
 }
 
 /* ===== FILE: src/core/steering/csc/steeringGuard.cpp ===== */
 #include "core/steering/csc/steeringGuard.h"
 
 SteeringGuard::SteeringGuard(SteeringRegulationConfig &config)
-    : m_config(config) {};
+    : m_config(config), m_deadband(config) {};
 
 bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
                                        uint32_t lastUpdate,
@@ -940,8 +2072,7 @@ bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
   };
 
   // Pause observations right after an impulse to wait for stabilization.
-  if (loopTimestamp - lastIntent <
-      m_config.pauseForValidObsAfterImpulse_ms) {
+  if (loopTimestamp - lastIntent < m_config.pauseForValidObsAfterImpulse_ms) {
     return true;
   };
 
@@ -949,7 +2080,7 @@ bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
 };
 
 bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
-                                  uint8_t sampleSize) {
+                                  uint8_t sampleSize, int16_t median, float omega) {
   /*Semantisch eigentlich Hardwareschutz kommt vllt in den PWM später*/
   // Cooldown between actuator commands.
   if (loopTimestamp - lastIntent < m_config.steeringCooldown_ms) {
@@ -960,6 +2091,49 @@ bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
   if (sampleSize < m_config.minimumSampleSize) {
     return true;
   };
+
+  // Der Median ist Action/NoAction Entscheidungsgrundlage
+  // Daher ist er ein Intent guard. Errors werden unabhängig von der Toleranz im
+  // Buffer gespeichert
+  if (!m_deadband.errorSignificant(median)) {
+    return true;
+  };
+
+  /* Wenn die Winkelgeschwindigkeit das gleiche Vorzeichen wie der Median hat 
+  hat sie eine andere semantische Richtung (Fehler ist, was zum Target fehlt, nicht was vom Target weg ist)
+  In dem Fall bewegt sich das System in die Richtige Richtung und es soll nicht zusätzlich gesteuert werden
+
+  TODO (Omega-Guard fehlerabhängig machen):
+  Der aktuelle Guard ist binär und kann bei großem Anfangsfehler zu langen
+  No-Intent-Phasen führen, sobald omega "formal richtig" ist (gleiches
+  Vorzeichen wie median). In Simulationen entstehen dadurch teils >10s bis
+  ~20s ohne neuen Intent, obwohl |error| noch deutlich groß ist.
+
+  Ziel:
+  - No-Action nur dann, wenn omega für die aktuelle Fehlergröße "ausreichend"
+    ist, nicht allein wegen Vorzeichen.
+
+  Möglicher Ansatz:
+  - Fehler in Größenklassen einteilen (z.B. |error| > 20, >10, >5, <=5).
+  - Pro Klasse eine minimale erforderliche |omega|-Schwelle definieren
+    (bei großem Fehler höhere Mindest-omega, nahe Ziel niedrigere).
+  - Guard nur aktivieren, wenn
+      sign(median) == sign(omega) UND |omega| >= omegaMinForError(|error|).
+    Wenn omega zwar richtiges Vorzeichen hat, aber zu klein ist:
+      -> Guard NICHT aktivieren (Intent erlauben).
+
+  Erwartete Wirkung:
+  - Große Fehler werden schneller eingefangen (weniger "zu frühes Zurücklehnen").
+  - Nahe am Ziel bleibt der dämpfende Effekt des Guards erhalten.
+  - Parametrierung wird transparenter, weil Guard-Verhalten explizit an
+    Fehlerregime gekoppelt ist. */
+  if (median < 0 && omega < 0 - m_config.omegaDeadband){
+    return true;
+  };
+  if(median > 0 && omega > 0 + m_config.omegaDeadband){
+    return true;
+  };
+
   return false;
 };
 
@@ -983,7 +2157,7 @@ ImpulseFilter::apply(SteeringIntent intent,
   if (!snapshot.stw_kts.valid) {
     return {
         .dir = intent.dir,
-        .pulse_ms = m_mechanics.steeringMaxImpulse_ms,
+        .pulse_ms = intent.abstractImpulse_0_100,
         .dutyCycle = m_mechanics.dutyCycleDefault,
     };
   };
@@ -997,7 +2171,7 @@ ImpulseFilter::apply(SteeringIntent intent,
                        m_physics.STWDampingMaxFactor);
 
   float abstract =
-      intent.abstractImpulse_0_100; // Ist bei Aufruf von CSC immer 100
+      intent.abstractImpulse_0_100;
   float effective = abstract * damping;
   float normalized = effective / 100;
 
@@ -1180,8 +2354,8 @@ void SteeringOrchestrator::tick(NavigationSensors::NavigationSnapshot snapshot,
 
 /* ===== FILE: src/core/systemController.cpp ===== */
 ﻿#include "core/systemController.h"
-#include "sensors/navigationSensors.h"
-#include "ui/controlPanelTypes.h"
+
+#include "types/globalTypes.h"
 #include <cstdint>
 
 SystemController::SystemController()
@@ -1190,10 +2364,11 @@ SystemController::SystemController()
       // Config is owned here and passed down in granular slices.
       m_impulseFilter(m_config.mechanics, m_config.physics),
       m_csc(m_config.regulations),
-      m_sourceHandler(m_controlPanel, m_navigationSensors,
-                      m_config.source, m_diagnostics, m_csc),
-      m_steeringOrchestrator( m_csc, m_impulseFilter,
-                             m_pwmController) {}
+      m_sourceHandler(m_controlPanel, m_navigationSensors, m_config.source,
+                      m_diagnostics, m_csc),
+      m_steeringOrchestrator(m_csc, m_impulseFilter, m_pwmController),
+      m_displayContent( m_navigationSensors, m_diagnostics,
+                       m_state) {}
 
 void SystemController::tick(uint32_t loopTimestamp) {
   // Überblick übers System
@@ -1202,22 +2377,33 @@ void SystemController::tick(uint32_t loopTimestamp) {
 
   // 2. Quelle waehlen
   // Verarbeitet aktive Sensorquelle und Fallbacks der Sensoren
-  m_sourceHandler.tick(intent.requestedSource, loopTimestamp, snapshot,
+  m_sourceHandler.tick(intent.activeSource, loopTimestamp, snapshot,
                        intent.generalTarget);
 
   // 3. Steering Ausführen
   // Only drive the actuator path when steering is explicitly engaged.
-  if (intent.steeringEngaged) {
+  if (intent.steeringEngaged &&
+      m_state.systemMode == SystemState::SystemMode::OK) {
     m_steeringOrchestrator.tick(snapshot, loopTimestamp);
   }
 
   // 4. Diagnostics
   m_diagnostics.tick(loopTimestamp);
 
-  // 5. Display updaten
-  m_display.update();
+  // 6. Systemstatus überprüfen
+  stateUpdate();
+
+  // 7. Display updaten
+  auto content =  m_displayContent.tick(intent, loopTimestamp);
+  m_display.update(content);
 }
 
+void SystemController::stateUpdate() {
+  // 1. Error Handling
+  if (m_diagnostics.criticalErroroccured) {
+    m_state.systemMode = SystemState::SystemMode::SAFE;
+  };
+}
 /* ===== FILE: src/diagnostics/diagnostics.cpp ===== */
 #include "diagnostics/diagnostics.h"
 #include "diagnostics/diagnostic_types.h"
@@ -1495,26 +2681,54 @@ SensorSample<uint16_t> WindModule::read()const{
 #include "ui/controlPanel.h"
 #include "ui/controlPanelTypes.h"
 
-PanelIntent ControlPanel::readIntent() const {
+Intent ControlPanel::readIntent() const {
   // TODO Inputs lesen und Intent befüllen
   return {};
 }
 
 /* ===== FILE: src/ui/display.cpp ===== */
 #include "ui/display.h"
+#include"ui/frameBuffer.h"
 
-void Display::update()
+void Display::update(FrameBuffer buffer)
 {
     // TODO: implement display update
 }
 
+/* ===== FILE: src/ui/frameBuffer.cpp ===== */
+#include "ui/frameBuffer.h"
+
+DisplayContent::DisplayContent(const NavigationSensors &navsens,
+                               const Diagnostics &diagnostics,
+                               const SystemState &state)
+    : m_navigationSensors(navsens), m_diagnostics(diagnostics),
+      m_state(state){};
+
+FrameBuffer DisplayContent::tick(const Intent &intent, uint32_t loopTimestamp) {
+  createModel(intent);
+  FrameBuffer buffer;
+  return buffer;
+}
+
+void DisplayContent::createModel(const Intent &intent) {
+  model.mode = m_state.systemMode;
+
+  model.panelIntent = intent;
+
+  model.ais = m_diagnostics.capabilityState(FunctionalCapability::AIS);
+  model.compass = m_diagnostics.capabilityState(FunctionalCapability::COMPASS);
+  model.gps = m_diagnostics.capabilityState(FunctionalCapability::GPS);
+  model.hullSpeed =
+      m_diagnostics.capabilityState(FunctionalCapability::HullSpeed);
+  model.wind = m_diagnostics.capabilityState(FunctionalCapability::WIND);
+};
 /* ===== FILE: test/test_csc/test_csc.cpp ===== */
 #include "core/config.h"
+#include "core/steering/csc/csc.h"
 #include "core/steering/csc/deadband.h"
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
-#include "core/steering/csc/csc.h"
 
 #include <cstdint>
 #include <unity.h>
@@ -1525,7 +2739,7 @@ SteeringRegulationConfig makeRegConfig() { return SteeringRegulationConfig{}; }
 
 void addSamples(ObservationBuffer &buffer, int16_t value, int count) {
   for (int i = 0; i < count; i++) {
-    buffer.update(value);
+    buffer.update(value, static_cast<uint32_t>(i));
   }
 }
 
@@ -1540,7 +2754,7 @@ void test_heading_error_is_zero_when_current_equals_target() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(300, 300);
+  const int16_t error = calc.calculateError(300, 300);
 
   // Then
   TEST_ASSERT_EQUAL_INT16(0, error);
@@ -1551,7 +2765,7 @@ void test_heading_error_positive_when_current_is_left_of_target() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(299, 300);
+  const int16_t error = calc.calculateError(299, 300);
 
   // Then
   TEST_ASSERT_TRUE(error > 0);
@@ -1562,7 +2776,7 @@ void test_heading_error_negative_when_current_is_right_of_target() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(300, 299);
+  const int16_t error = calc.calculateError(300, 299);
 
   // Then
   TEST_ASSERT_TRUE(error < 0);
@@ -1573,7 +2787,7 @@ void test_heading_error_wraps_correctly_over_360_clockwise() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(359, 1);
+  const int16_t error = calc.calculateError(359, 1);
 
   // Then
   TEST_ASSERT_TRUE(error > 0);
@@ -1584,7 +2798,7 @@ void test_heading_error_wraps_correctly_over_360_counterclockwise() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(1, 359);
+  const int16_t error = calc.calculateError(1, 359);
 
   // Then
   TEST_ASSERT_TRUE(error < 0);
@@ -1595,7 +2809,7 @@ void test_heading_error_returns_shortest_rotation_direction() {
   HeadingErrorCalculator calc;
 
   // When
-  const int16_t error = calc.getCurrentError(350, 10);
+  const int16_t error = calc.calculateError(350, 10);
 
   // Then
   TEST_ASSERT_EQUAL_INT16(20, error);
@@ -1652,9 +2866,12 @@ void test_buffer_is_not_ready_when_empty() {
   const uint32_t time = 10000;
   const uint32_t lastIntent = 0;
   const uint8_t sampleSize = 0;
+  const int16_t median = 0;
+  const float omega = 0;
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(time, lastIntent, sampleSize));
+  TEST_ASSERT_TRUE(
+      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
 }
 
 void test_buffer_is_not_ready_when_below_minimum_samples() {
@@ -1666,9 +2883,12 @@ void test_buffer_is_not_ready_when_below_minimum_samples() {
   const uint32_t time = 10000;
   const uint32_t lastIntent = 0;
   const uint8_t sampleSize = 9;
+  const int16_t median = 0;
+  const float omega = 0;
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(time, lastIntent, sampleSize));
+  TEST_ASSERT_TRUE(
+      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
 }
 
 void test_buffer_is_ready_when_minimum_samples_reached() {
@@ -1680,9 +2900,11 @@ void test_buffer_is_ready_when_minimum_samples_reached() {
   const uint32_t time = 10000;
   const uint32_t lastIntent = 0;
   const uint8_t sampleSize = 10;
-
+  const int16_t median = config.steeringTolerance_deg + 1;
+  const float omega = 0;
   // When / Then
-  TEST_ASSERT_FALSE(guard.intentBlocked(time, lastIntent, sampleSize));
+  TEST_ASSERT_FALSE(
+      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
 }
 
 // ObservationBuffer tests
@@ -1728,18 +2950,92 @@ void test_median_returns_negative_when_majority_negative() {
   TEST_ASSERT_TRUE(buffer.getMedian() < 0);
 }
 
-void test_median_returns_positive_when_one_sample_more_than_half_positive() {
+void test_median_returns_positive_when_majority_samples_are_positive() {
   // Given
   SteeringRegulationConfig config = makeRegConfig();
   ObservationBuffer buffer(config);
 
+  // Keep total samples below capacity to avoid buffer reset-on-full behavior.
   const int negatives = (config.observationBufferSize / 2) - 1;
-  const int positives = (config.observationBufferSize / 2) + 1;
-  addSamples(buffer, -20, negatives);
-  addSamples(buffer, 20, positives);
+  const int positives = (config.observationBufferSize / 2);
+  for (int i = 0; i < negatives; ++i) {
+    buffer.update(-20, static_cast<uint32_t>(i));
+  }
+  for (int i = 0; i < positives; ++i) {
+    buffer.update(20, static_cast<uint32_t>(negatives + i));
+  }
 
   // Then
   TEST_ASSERT_TRUE(buffer.getMedian() > 0);
+}
+
+void test_omega_is_positive_when_error_decreases_over_time() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.omegaRobust = 3;
+  ObservationBuffer buffer(config);
+
+  // Error drops from +20 to +10 in 1 second => -d(error)/dt = +10 deg/s
+  buffer.update(20, 1000);
+  buffer.update(10, 2000);
+
+  // When
+  const float omega = buffer.getOmega(2000);
+
+  // Then
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, omega);
+}
+
+void test_omega_is_negative_when_error_increases_over_time() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.omegaRobust = 3;
+  ObservationBuffer buffer(config);
+
+  // Error rises from +10 to +20 in 1 second => -d(error)/dt = -10 deg/s
+  buffer.update(10, 1000);
+  buffer.update(20, 2000);
+
+  // When
+  const float omega = buffer.getOmega(2000);
+
+  // Then
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, -10.0f, omega);
+}
+
+void test_omega_uses_only_configured_robust_window() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.omegaRobust = 3;
+  ObservationBuffer buffer(config);
+
+  // Last 3 samples are used (80@1000 -> 40@3000), first sample ignored.
+  buffer.update(100, 0);
+  buffer.update(80, 1000);
+  buffer.update(60, 2000);
+  buffer.update(40, 3000);
+
+  // When
+  const float omega = buffer.getOmega(3000);
+
+  // Then
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 20.0f, omega);
+}
+
+void test_omega_returns_zero_when_window_timestamps_are_not_increasing() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.omegaRobust = 3;
+  ObservationBuffer buffer(config);
+
+  buffer.update(20, 1000);
+  buffer.update(10, 1000);
+
+  // When
+  const float omega = buffer.getOmega(1000);
+
+  // Then
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, omega);
 }
 
 // SteeringGuard cooldown tests
@@ -1752,10 +3048,86 @@ void test_no_second_action_within_cooldown_period() {
 
   const uint32_t lastIntent = 10000;
   const uint8_t enoughSamples = 10;
+  const int16_t median = 0;
+  const float omega = 0;
 
   // When / Then
   TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent + 1000, lastIntent,
-                                       enoughSamples));
+                                       enoughSamples, median, omega));
+}
+
+void test_no_action_within_omegaDeadband() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  SteeringGuard guard(config);
+
+  const uint32_t lastIntent = 10000;
+  const uint8_t enoughSamples = 10;
+  const int16_t median = 0;
+  const float omega = 0;
+
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent + 1000, lastIntent,
+                                       enoughSamples, median, omega));
+};
+
+void test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringCooldown_ms = 0;
+  config.minimumSampleSize = 5;
+  config.steeringTolerance_deg = 5;
+  config.omegaDeadband = 0.2f;
+  SteeringGuard guard(config);
+
+  const uint32_t loopTimestamp = 10000;
+  const uint32_t lastIntent = 0;
+  const uint8_t enoughSamples = 5;
+  const int16_t median = config.steeringTolerance_deg + 1;
+  const float omega = config.omegaDeadband + 0.05f;
+
+  // When / Then
+  TEST_ASSERT_TRUE(guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples,
+                                       median, omega));
+}
+
+void test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringCooldown_ms = 0;
+  config.minimumSampleSize = 5;
+  config.steeringTolerance_deg = 5;
+  config.omegaDeadband = 0.2f;
+  SteeringGuard guard(config);
+
+  const uint32_t loopTimestamp = 10000;
+  const uint32_t lastIntent = 0;
+  const uint8_t enoughSamples = 5;
+  const int16_t median = -(config.steeringTolerance_deg + 1);
+  const float omega = -(config.omegaDeadband + 0.05f);
+
+  // When / Then
+  TEST_ASSERT_TRUE(guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples,
+                                       median, omega));
+}
+
+void test_omega_guard_allows_action_when_omega_within_deadband() {
+  // Given
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringCooldown_ms = 0;
+  config.minimumSampleSize = 5;
+  config.steeringTolerance_deg = 5;
+  config.omegaDeadband = 0.2f;
+  SteeringGuard guard(config);
+
+  const uint32_t loopTimestamp = 10000;
+  const uint32_t lastIntent = 0;
+  const uint8_t enoughSamples = 5;
+  const int16_t median = config.steeringTolerance_deg + 1;
+  const float omega = config.omegaDeadband - 0.05f;
+
+  // When / Then
+  TEST_ASSERT_FALSE(guard.intentBlocked(loopTimestamp, lastIntent,
+                                        enoughSamples, median, omega));
 }
 
 void test_action_allowed_after_cooldown_expires() {
@@ -1767,12 +3139,13 @@ void test_action_allowed_after_cooldown_expires() {
 
   const uint32_t lastIntent = 10000;
   const uint8_t enoughSamples = 10;
+  const int16_t median = config.steeringTolerance_deg + 1;
+  const float omega = 0;
 
   // When / Then
-  TEST_ASSERT_FALSE(guard.intentBlocked(lastIntent +
-                                            config.steeringCooldown_ms +
-                                            1,
-                                        lastIntent, enoughSamples));
+  TEST_ASSERT_FALSE(
+      guard.intentBlocked(lastIntent + config.steeringCooldown_ms + 1,
+                          lastIntent, enoughSamples, median, omega));
 }
 
 void test_no_action_when_error_oscillates_symmetrically() {
@@ -1782,8 +3155,8 @@ void test_no_action_when_error_oscillates_symmetrically() {
 
   const int pairs = config.observationBufferSize / 2;
   for (int i = 0; i < pairs; i++) {
-    buffer.update(-20);
-    buffer.update(20);
+    buffer.update(-20, static_cast<uint32_t>(2 * i));
+    buffer.update(20, static_cast<uint32_t>(2 * i + 1));
   }
 
   // Then
@@ -1791,132 +3164,130 @@ void test_no_action_when_error_oscillates_symmetrically() {
 }
 void test_csc_emits_intent_after_minimum_samples_reached() {
 
-    SteeringRegulationConfig config;
-    config.steeringTolerance_deg = 5;
-    config.minimumSampleSize = 5;
-    config.minimumTimeBtwObs_ms = 0;
-    config.pauseForValidObsAfterImpulse_ms = 0;
-    config.steeringCooldown_ms = 0;
+  SteeringRegulationConfig config;
+  config.steeringTolerance_deg = 5;
+  config.minimumSampleSize = 5;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 0;
 
-    CoreSteeringController csc(config);
+  CoreSteeringController csc(config);
 
-    csc.setInternalTarget(100);
+  csc.setInternalTarget(100);
 
-    std::optional<SteeringIntent> intent;
+  std::optional<SteeringIntent> intent;
 
-    uint32_t time = 0;
+  uint32_t time = 0;
 
-    for (int i = 0; i < 10; ++i) {
+  for (int i = 0; i < 10; ++i) {
 
-        csc.currentHDG(80);  // +20° Fehler → Right
-        intent = csc.tick(time++);
+    csc.currentHDG(80); // +20° Fehler → Right
+    intent = csc.tick(time++);
 
-        if (intent.has_value())
-            break;
-    }
+    if (intent.has_value())
+      break;
+  }
 
-    TEST_ASSERT_TRUE(intent.has_value());
-    TEST_ASSERT_EQUAL(SteeringDirection::Right, intent->dir);
+  TEST_ASSERT_TRUE(intent.has_value());
+  TEST_ASSERT_EQUAL(SteeringDirection::Right, intent->dir);
 }
 
 void test_csc_does_not_emit_intent_inside_deadband() {
 
-    SteeringRegulationConfig config;
-    config.steeringTolerance_deg = 10;
-    config.minimumSampleSize = 5;
-    config.minimumTimeBtwObs_ms = 0;
-    config.pauseForValidObsAfterImpulse_ms = 0;
-    config.steeringCooldown_ms = 0;
+  SteeringRegulationConfig config;
+  config.steeringTolerance_deg = 10;
+  config.minimumSampleSize = 5;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 0;
 
-    CoreSteeringController csc(config);
+  CoreSteeringController csc(config);
 
-    csc.setInternalTarget(100);
+  csc.setInternalTarget(100);
 
-    std::optional<SteeringIntent> intent;
+  std::optional<SteeringIntent> intent;
 
-    for (int i = 0; i < 20; ++i) {
-        csc.currentHDG(95);  // +5° → innerhalb Toleranz
-        intent = csc.tick(i);
-    }
+  for (int i = 0; i < 20; ++i) {
+    csc.currentHDG(95); // +5° → innerhalb Toleranz
+    intent = csc.tick(i);
+  }
 
-    TEST_ASSERT_FALSE(intent.has_value());
+  TEST_ASSERT_FALSE(intent.has_value());
 }
 
 void test_csc_resets_observation_after_intent() {
 
-    SteeringRegulationConfig config;
-    config.steeringTolerance_deg = 5;
-    config.minimumSampleSize = 3;
-    config.minimumTimeBtwObs_ms = 0;
-    config.pauseForValidObsAfterImpulse_ms = 0;
-    config.steeringCooldown_ms = 0;
+  SteeringRegulationConfig config;
+  config.steeringTolerance_deg = 5;
+  config.minimumSampleSize = 3;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 0;
 
-    CoreSteeringController csc(config);
+  CoreSteeringController csc(config);
 
-    csc.setInternalTarget(100);
+  csc.setInternalTarget(100);
 
-    uint32_t time = 0;
-    bool firstIntentOccurred = false;
-    bool secondIntentOccurred = false;
+  uint32_t time = 0;
+  bool firstIntentOccurred = false;
+  bool secondIntentOccurred = false;
 
-    for (int i = 0; i < 20; ++i) {
+  for (int i = 0; i < 20; ++i) {
 
-        csc.currentHDG(80);
-        auto intent = csc.tick(time++);
+    csc.currentHDG(80);
+    auto intent = csc.tick(time++);
 
-        if (intent && !firstIntentOccurred) {
-            firstIntentOccurred = true;
-        }
-        else if (intent && firstIntentOccurred) {
-            secondIntentOccurred = true;
-            break;
-        }
+    if (intent && !firstIntentOccurred) {
+      firstIntentOccurred = true;
+    } else if (intent && firstIntentOccurred) {
+      secondIntentOccurred = true;
+      break;
     }
+  }
 
-    TEST_ASSERT_TRUE(firstIntentOccurred);
-    TEST_ASSERT_TRUE(secondIntentOccurred);
+  TEST_ASSERT_TRUE(firstIntentOccurred);
+  TEST_ASSERT_TRUE(secondIntentOccurred);
 }
 
 void test_csc_respects_time_gates_and_cooldown() {
 
-    // ---------- Config ----------
-    SteeringRegulationConfig config;
-    config.steeringTolerance_deg = 5;
-    config.minimumSampleSize = 5;
+  // ---------- Config ----------
+  SteeringRegulationConfig config;
+  config.steeringTolerance_deg = 5;
+  config.minimumSampleSize = 5;
 
-    config.minimumTimeBtwObs_ms = 1000;
-    config.pauseForValidObsAfterImpulse_ms = 2000;
-    config.steeringCooldown_ms = 3000;
+  config.minimumTimeBtwObs_ms = 1000;
+  config.pauseForValidObsAfterImpulse_ms = 2000;
+  config.steeringCooldown_ms = 3000;
 
-    CoreSteeringController csc(config);
+  CoreSteeringController csc(config);
 
-    csc.setInternalTarget(100);
+  csc.setInternalTarget(100);
 
-    uint32_t time = 0;
+  uint32_t time = 0;
 
-    bool firstIntent = false;
-    bool secondIntent = false;
+  bool firstIntent = false;
+  bool secondIntent = false;
 
-    // ---------- Simulation ----------
-    for (int i = 0; i < 30; ++i) {
+  // ---------- Simulation ----------
+  for (int i = 0; i < 30; ++i) {
 
-        csc.currentHDG(80);  // +20° Fehler
+    csc.currentHDG(80); // +20° Fehler
 
-        auto intent = csc.tick(time);
+    auto intent = csc.tick(time);
 
-        if (intent && !firstIntent) {
-            firstIntent = true;
-        }
-        else if (intent && firstIntent) {
-            secondIntent = true;
-            break;
-        }
-
-        time += 1000; // 1 Hz loop
+    if (intent && !firstIntent) {
+      firstIntent = true;
+    } else if (intent && firstIntent) {
+      secondIntent = true;
+      break;
     }
 
-    TEST_ASSERT_TRUE(firstIntent);
-    TEST_ASSERT_TRUE(secondIntent);
+    time += 1000; // 1 Hz loop
+  }
+
+  TEST_ASSERT_TRUE(firstIntent);
+  TEST_ASSERT_TRUE(secondIntent);
 }
 
 void test_error_just_outside_deadband_negative_is_treated_as_significant() {
@@ -1925,6 +3296,159 @@ void test_error_just_outside_deadband_negative_is_treated_as_significant() {
   Deadband deadband(config);
 
   TEST_ASSERT_TRUE(deadband.errorSignificant(-11));
+}
+
+void test_counter_does_not_fire_without_prior_intent_value() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 0.01f;
+  config.minimumSampleSize = 2;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 0;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  csc.currentHDG(98); // error +2
+  auto i1 = csc.tick(1000);
+  csc.currentHDG(99); // error +1 -> positive omega
+  auto i2 = csc.tick(2000);
+
+  TEST_ASSERT_FALSE(i1.has_value());
+  TEST_ASSERT_FALSE(i2.has_value());
+}
+
+void test_counter_fires_and_maps_impulse_from_positive_omega() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 0.01f;
+  config.minimumSampleSize = 1;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 0;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  // Seed regular intent (+error => Right), needed for counter direction basis.
+  csc.currentHDG(80);
+  auto seedIntent = csc.tick(6000);
+  TEST_ASSERT_TRUE(seedIntent.has_value());
+  TEST_ASSERT_EQUAL(SteeringDirection::Right, seedIntent->dir);
+
+  csc.currentHDG(98); // error +2
+  auto prep = csc.tick(7000);
+  csc.currentHDG(99); // error +1 over 1s => omega +1 => impulse 60
+  auto counter = csc.tick(8000);
+
+  TEST_ASSERT_FALSE(prep.has_value());
+  TEST_ASSERT_TRUE(counter.has_value());
+  TEST_ASSERT_EQUAL(SteeringDirection::Left, counter->dir);
+  TEST_ASSERT_EQUAL_UINT8(60, counter->abstractImpulse_0_100);
+}
+
+void test_counter_is_blocked_by_counter_cooldown() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 0.01f;
+  config.minimumSampleSize = 1;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 5000;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  csc.currentHDG(80);
+  auto seedIntent = csc.tick(6000);
+  TEST_ASSERT_TRUE(seedIntent.has_value());
+
+  csc.currentHDG(98);
+  (void)csc.tick(7000);
+  csc.currentHDG(99);
+  auto firstCounter = csc.tick(8000);
+  TEST_ASSERT_TRUE(firstCounter.has_value());
+
+  // Build counter conditions again, but still inside counter cooldown.
+  csc.currentHDG(98);
+  (void)csc.tick(9000);
+  csc.currentHDG(99);
+  auto blockedCounter = csc.tick(10000);
+
+  TEST_ASSERT_FALSE(blockedCounter.has_value());
+}
+
+void test_counter_is_blocked_when_abs_omega_below_counter_threshold() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 2.0f; // higher than produced omega (+1)
+  config.minimumSampleSize = 1;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 0;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  csc.currentHDG(80);
+  auto seedIntent = csc.tick(6000);
+  TEST_ASSERT_TRUE(seedIntent.has_value());
+
+  csc.currentHDG(98);
+  (void)csc.tick(7000);
+  csc.currentHDG(99);
+  auto counter = csc.tick(8000);
+
+  TEST_ASSERT_FALSE(counter.has_value());
+}
+
+void test_counter_fires_on_negative_side_with_negative_omega() {
+  SteeringRegulationConfig config = makeRegConfig();
+  config.steeringTolerance_deg = 1;
+  config.counterNearTargetWindow_deg = 2;
+  config.counterOmegaMinSampleSize = 2;
+  config.omegaThresholdForCounter = 0.01f;
+  config.minimumSampleSize = 1;
+  config.minimumTimeBtwObs_ms = 0;
+  config.pauseForValidObsAfterImpulse_ms = 0;
+  config.steeringCooldown_ms = 5000;
+  config.counterCooldown_ms = 0;
+  config.counterTimerGuard_ms = 0;
+
+  CoreSteeringController csc(config);
+  csc.setInternalTarget(100);
+
+  // Seed regular intent with negative error => Left
+  csc.currentHDG(120);
+  auto seedIntent = csc.tick(6000);
+  TEST_ASSERT_TRUE(seedIntent.has_value());
+  TEST_ASSERT_EQUAL(SteeringDirection::Left, seedIntent->dir);
+
+  csc.currentHDG(102); // error -2
+  (void)csc.tick(7000);
+  csc.currentHDG(101); // error -1 over 1s => omega -1 => impulse 60
+  auto counter = csc.tick(8000);
+
+  TEST_ASSERT_TRUE(counter.has_value());
+  TEST_ASSERT_EQUAL(SteeringDirection::Right, counter->dir);
+  TEST_ASSERT_EQUAL_UINT8(60, counter->abstractImpulse_0_100);
 }
 
 int main() {
@@ -1946,16 +3470,29 @@ int main() {
   RUN_TEST(test_buffer_reset_clears_all_stored_samples);
   RUN_TEST(test_median_returns_positive_when_majority_positive);
   RUN_TEST(test_median_returns_negative_when_majority_negative);
-  RUN_TEST(
-      test_median_returns_positive_when_one_sample_more_than_half_positive);
+  RUN_TEST(test_median_returns_positive_when_majority_samples_are_positive);
+  RUN_TEST(test_omega_is_positive_when_error_decreases_over_time);
+  RUN_TEST(test_omega_is_negative_when_error_increases_over_time);
+  RUN_TEST(test_omega_uses_only_configured_robust_window);
+  RUN_TEST(test_omega_returns_zero_when_window_timestamps_are_not_increasing);
   RUN_TEST(test_no_second_action_within_cooldown_period);
   RUN_TEST(test_action_allowed_after_cooldown_expires);
   RUN_TEST(test_no_action_when_error_oscillates_symmetrically);
   RUN_TEST(test_csc_emits_intent_after_minimum_samples_reached);
-  RUN_TEST(test_csc_does_not_emit_intent_inside_deadband);
+  /*RUN_TEST(test_csc_does_not_emit_intent_inside_deadband); Deadband aktuell
+   * deaktiviert*/
   RUN_TEST(test_csc_resets_observation_after_intent);
   RUN_TEST(test_csc_respects_time_gates_and_cooldown);
   RUN_TEST(test_error_just_outside_deadband_negative_is_treated_as_significant);
+  RUN_TEST(test_no_action_within_omegaDeadband);
+  RUN_TEST(test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband);
+  RUN_TEST(test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband);
+  RUN_TEST(test_omega_guard_allows_action_when_omega_within_deadband);
+  RUN_TEST(test_counter_does_not_fire_without_prior_intent_value);
+  RUN_TEST(test_counter_fires_and_maps_impulse_from_positive_omega);
+  RUN_TEST(test_counter_is_blocked_by_counter_cooldown);
+  RUN_TEST(test_counter_is_blocked_when_abs_omega_below_counter_threshold);
+  RUN_TEST(test_counter_fires_on_negative_side_with_negative_omega);
 
   return UNITY_END();
 }

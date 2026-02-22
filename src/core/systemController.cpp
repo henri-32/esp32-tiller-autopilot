@@ -12,8 +12,7 @@ SystemController::SystemController()
       m_sourceHandler(m_controlPanel, m_navigationSensors, m_config.source,
                       m_diagnostics, m_csc),
       m_steeringOrchestrator(m_csc, m_impulseFilter, m_pwmController),
-      m_displayContent( m_navigationSensors, m_diagnostics,
-                       m_state) {}
+      m_displayContent(m_navigationSensors, m_diagnostics) {}
 
 void SystemController::tick(uint32_t loopTimestamp) {
   // Überblick übers System
@@ -36,16 +35,19 @@ void SystemController::tick(uint32_t loopTimestamp) {
   m_diagnostics.tick(loopTimestamp);
 
   // 6. Systemstatus überprüfen
-  stateUpdate();
+  m_state = stateUpdate();
 
   // 7. Display updaten
-  auto content =  m_displayContent.tick(intent, loopTimestamp);
+  auto content = m_displayContent.create(intent, m_state, loopTimestamp);
   m_display.update(content);
 }
 
-void SystemController::stateUpdate() {
+SystemState SystemController::stateUpdate() {
+  SystemState state;
   // 1. Error Handling
   if (m_diagnostics.criticalErroroccured) {
-    m_state.systemMode = SystemState::SystemMode::SAFE;
+    state.systemMode = SystemState::SystemMode::SAFE;
   };
+
+  return state;
 }
