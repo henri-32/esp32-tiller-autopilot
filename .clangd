@@ -7,6 +7,16 @@ CompileFlags:
 ---
 If:
   PathMatch:
+    - .*systemController\.cpp$
+    - .*[\\/]include[\\/]core[\\/]systemController\.h$
+    - .*[\\/]src[\\/]ui[\\/].*
+    - .*[\\/]include[\\/]ui[\\/].*
+CompileFlags:
+  CompilationDatabase: .clangd-db/gui
+
+---
+If:
+  PathMatch:
     - .*sim/.*
     - .*sim\\.*
 CompileFlags:

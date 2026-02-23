@@ -35,6 +35,22 @@ function Build-Compiledb([string]$env, [string]$targetDir) {
   Copy-Item compile_commands.json (Join-Path $targetDir "compile_commands.json") -Force
 }
 
+function Test-EnvExists([string]$envName) {
+  if (!(Test-Path "platformio.ini")) {
+    return $false
+  }
+  $pattern = "^\s*\[env:$([regex]::Escape($envName))\]\s*$"
+  return [bool](Select-String -Path "platformio.ini" -Pattern $pattern -Quiet)
+}
+
+function Build-CompiledbIfExists([string]$envName, [string]$targetDir) {
+  if (Test-EnvExists $envName) {
+    Build-Compiledb -env $envName -targetDir $targetDir
+  } else {
+    Write-Host "Skipping missing environment: $envName"
+  }
+}
+
 function Inject-HeaderEntries([string]$dbPath) {
   if (!(Test-Path $dbPath)) {
     return
@@ -124,8 +140,8 @@ function Inject-CscTestEntry {
 Build-Compiledb -env "genericSTM32F411RE" -targetDir ".clangd-db/genericSTM32F411RE"
 Build-Compiledb -env "sim" -targetDir ".clangd-db/sim"
 Build-Compiledb -env "native_csc" -targetDir ".clangd-db/native_csc"
-Build-Compiledb -env "gui" -targetDir ".clangd-db/gui"
-Build-Compiledb -env "gui_sim" -targetDir ".clangd-db/gui_sim"
+Build-CompiledbIfExists -envName "gui" -targetDir ".clangd-db/gui"
+Build-CompiledbIfExists -envName "gui_sim" -targetDir ".clangd-db/gui_sim"
 Inject-HeaderEntries -dbPath ".clangd-db/genericSTM32F411RE/compile_commands.json"
 Inject-HeaderEntries -dbPath ".clangd-db/sim/compile_commands.json"
 Inject-HeaderEntries -dbPath ".clangd-db/native_csc/compile_commands.json"

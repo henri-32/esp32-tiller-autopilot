@@ -30,6 +30,21 @@ build_compiledb() {
   cp compile_commands.json "$target_dir/compile_commands.json"
 }
 
+env_exists() {
+  local env="$1"
+  grep -Eq "^[[:space:]]*\\[env:${env}\\][[:space:]]*$" platformio.ini
+}
+
+build_compiledb_if_exists() {
+  local env="$1"
+  local target_dir="$2"
+  if env_exists "$env"; then
+    build_compiledb "$env" "$target_dir"
+  else
+    echo "Skipping missing environment: $env"
+  fi
+}
+
 unity_test_flags() {
   local flags="-DPIO_UNIT_TESTING -DUNIT_TEST -I.pio/libdeps/native_csc/Unity/src -Itest/test_csc -Itest"
   if [[ -f ".pio/build/native_csc/unity_config/unity_config.h" || -f ".pio/build/native_csc/unity_config/UnityConfig.h" ]]; then
@@ -80,7 +95,7 @@ inject_native_csc_test_entries() {
     . as $db
     | [ .[]
         | select(
-            .file != "src/core/steering/csc.cpp"
+            .file != "src/core/steering/csc/csc.cpp"
             and .file != "test/test_csc/test_csc.cpp"
             and .file != "test\\test_csc\\test_csc.cpp"
           )
@@ -107,8 +122,8 @@ inject_native_csc_test_entries() {
 build_compiledb "genericSTM32F411RE" ".clangd-db/genericSTM32F411RE"
 build_compiledb "sim" ".clangd-db/sim"
 build_compiledb "native_csc" ".clangd-db/native_csc"
-build_compiledb "gui" ".clangd-db/gui"
-build_compiledb "gui_sim" ".clangd-db/gui_sim"
+build_compiledb_if_exists "gui" ".clangd-db/gui"
+build_compiledb_if_exists "gui_sim" ".clangd-db/gui_sim"
 
 mapfile -t cmds < <(capture_test_compile_commands)
 inject_native_csc_test_entries "${cmds[0]}" "${cmds[1]}"
