@@ -3,7 +3,6 @@ CompileFlags:
   Add:
     - -Iinclude
     - -Isrc
-    - -std=gnu++17
 
 ---
 If:
@@ -20,14 +19,6 @@ If:
     - (^|.*/|.*\\\\)include[\\\\/]core[\\\\/]steering[\\\\/]csc[\\\\/].*
 CompileFlags:
   CompilationDatabase: .clangd-db/native_csc
-
----
-If:
-  PathMatch:
-    - (^|.*/|.*\\\\)include[\\\\/]core[\\\\/]steering[\\\\/]csc[\\\\/].*\\.h
-CompileFlags:
-  Add:
-    - -xc++
 
 ---
 If:

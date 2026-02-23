@@ -1,0 +1,428 @@
+﻿%% Produktiv-Klassendiagramm (ohne sim/*, ohne core/gui_main.cpp)
+classDiagram
+  direction LR
+
+  %% ===== Typen =====
+  class Type_NavigationSource {
+    <<enumeration>>
+    Compass
+    Gps
+    Wind
+  }
+
+  class Type_SteeringDirection {
+    <<enumeration>>
+    Left
+    Right
+  }
+
+  class Type_SystemMode {
+    <<enumeration>>
+    INIT
+    OK
+    AISonly
+    SAFE
+  }
+
+  class Type_Intent {
+    +steeringEngaged: bool
+    +generalTarget: uint16_t
+    +activeSource: Type_NavigationSource
+    +requestedState: Type_SystemState
+  }
+
+  class Type_SteeringIntent {
+    +dir: Type_SteeringDirection
+    +abstractImpulse_0_100: uint8_t
+  }
+
+  class Type_PWMCommand {
+    +dir: Type_SteeringDirection
+    +pulse_ms: uint32_t
+    +dutyCycle: uint8_t
+  }
+
+  class Type_SensorSample_u16 {
+    +value: uint16_t
+    +valid: bool
+  }
+
+  class Type_SensorSample_f32 {
+    +value: float
+    +valid: bool
+  }
+
+  class Type_SystemState {
+    +systemMode: Type_SystemMode
+  }
+
+  %% ===== Konfiguration =====
+  class Cfg_SteeringMechanicsConfig {
+    +dutyCycleDefault: uint8_t
+    +steeringMinImpulse_ms: uint32_t
+    +steeringMaxImpulse_ms: uint32_t
+  }
+
+  class Cfg_SteeringRegulationConfig {
+    +steeringTolerance_deg: uint8_t
+    +counterNearTargetWindow_deg: uint8_t
+    +smoothedMeanApplicationWindow_deg: int8_t
+    +calculationWindowSmoothedMean: uint32_t
+    +omegaDeadband: float
+    +observationBufferSize: uint8_t
+    +activeObservationBufferSize: uint8_t
+    +minimumSampleSize: uint8_t
+    +omegaRobust: uint8_t
+    +omegaThresholdForCounter: float
+    +counterOmegaMinSampleSize: uint8_t
+    +minimumTimeBtwObs_ms: uint32_t
+    +pauseForValidObsAfterImpulse_ms: uint32_t
+    +steeringCooldown_ms: uint32_t
+    +counterTimerGuard_ms: uint32_t
+    +counterCooldown_ms: uint32_t
+  }
+
+  class Cfg_SteeringSourceHandlingConfig {
+    +minGpsSpeedForUse: float
+    +minTimeBetweenCorrection_ms: uint32_t
+    +observationBufferSize: uint8_t
+  }
+
+  class Cfg_SteeringPhysicsConfig {
+    +STWDampingRegulator: float
+    +STWDampingMinFactor: float
+    +STWDampingMaxFactor: float
+  }
+
+  class Cfg_SteeringControllerConfig {
+    +mechanics: Cfg_SteeringMechanicsConfig
+    +regulations: Cfg_SteeringRegulationConfig
+    +physics: Cfg_SteeringPhysicsConfig
+    +source: Cfg_SteeringSourceHandlingConfig
+  }
+
+  %% ===== Diagnostics =====
+  class Diag_DiagnosticEvent {
+    <<enumeration>>
+    Degraded
+    Lost
+    LostWithFallback
+    ErrorHandled
+    CRITICAL_ERROR
+  }
+
+  class Diag_FunctionalCapability {
+    <<enumeration>>
+    COMPASS
+    GPS
+    WIND
+    STW
+    PWM
+    AIS
+    COUNT
+  }
+
+  class Diag_CapabilityState {
+    <<enumeration>>
+    OK
+    Degraded
+    Lost
+    LostWithFallback
+    ErrorHandled
+    CRITICAL_ERROR
+  }
+
+  class Diag_DiagnosticEntry {
+    +event: Diag_DiagnosticEvent
+    +capability: Diag_FunctionalCapability
+    +timestamp_ms: uint32_t
+  }
+
+  class Diag_DiagnosticSnapshot {
+    +criticalErrorOccured: bool
+    +criticalCapability: Diag_FunctionalCapability
+    +compassState: Diag_CapabilityState
+    +gpsState: Diag_CapabilityState
+    +windState: Diag_CapabilityState
+    +stwState: Diag_CapabilityState
+    +pwmState: Diag_CapabilityState
+    +aisState: Diag_CapabilityState
+    +countState: Diag_CapabilityState
+  }
+
+  class Diag_Diagnostics {
+    +kEventBufferSize: uint8_t
+    +emit(event, capability, loopTimestamp): void
+    +tick(loopTimestamp): void
+    +capabilityState(capability): Diag_CapabilityState
+    +snapshot(): Diag_DiagnosticSnapshot
+    -pushEvent(event, capability, ts): void
+    -updateCapabilityState(event, capability): void
+  }
+
+  %% ===== Sensorik =====
+  class Sens_CompassModule {
+    +read(): Type_SensorSample_u16
+  }
+
+  class Sens_GPSModule {
+    +readCOG(): Type_SensorSample_u16
+    +readSOG(): Type_SensorSample_f32
+  }
+
+  class Sens_WindModule {
+    +read(): Type_SensorSample_u16
+  }
+
+  class Sens_NMEA183BUS {
+    +readSTW(): Type_SensorSample_f32
+  }
+
+  class Sens_SensorActivation {
+    +compass: bool
+    +gps: bool
+    +wind: bool
+  }
+
+  class Sens_NavigationSnapshot {
+    +compass_hdg_dg: Type_SensorSample_u16
+    +gps_cog_dg: Type_SensorSample_u16
+    +gps_sog_kts: Type_SensorSample_f32
+    +wind_angle_dg: Type_SensorSample_u16
+    +stw_kts: Type_SensorSample_f32
+  }
+
+  class Sens_NavigationSensors {
+    +createSnapshot(): Sens_NavigationSnapshot
+    +setSensorActivations(source, setTo): void
+    +setLeadSource(src): void
+    +getLeadSource(): Type_NavigationSource
+    -m_leadSource: Type_NavigationSource
+  }
+
+  %% ===== Steering Source Handling =====
+  class Steer_GPSModel {
+    +applyFilter(target): uint16_t
+  }
+
+  class Steer_WindModel {
+    +applyFilter(target): uint16_t
+  }
+
+  class Steer_SourcePolicyEngine {
+    +evaluate(requested, snapshot, loopTimestamp): Type_NavigationSource
+    -m_config: Cfg_SteeringSourceHandlingConfig
+    -m_diagnostics: Diag_Diagnostics
+  }
+
+  class Steer_SourceTargetInterpreter {
+    +applySourceFilters(generalTarget, effective): uint16_t
+    -m_gpsModel: Steer_GPSModel
+    -m_windModel: Steer_WindModel
+  }
+
+  class Steer_SourceExecutor {
+    +execute(effective): void
+    -m_navigationSensors: Sens_NavigationSensors
+  }
+
+  class Steer_SourceHandler {
+    +tick(requestedSource, loopTimestamp, snapshot, generalTarget): uint16_t
+    -m_panel: UI_ControlPanel
+    -m_navigationSensors: Sens_NavigationSensors
+    -m_diagnostics: Diag_Diagnostics
+    -m_gpsModel: Steer_GPSModel
+    -m_windModel: Steer_WindModel
+    -m_sourcePolicy: Steer_SourcePolicyEngine
+    -m_targetInterpreter: Steer_SourceTargetInterpreter
+    -m_sourceExecutor: Steer_SourceExecutor
+  }
+
+  %% ===== CSC =====
+  class Steer_HeadingErrorCalculator {
+    +calculateError(current, target): int16_t
+  }
+
+  class Steer_Deadband {
+    +errorSignificant(error): bool
+    -m_config: Cfg_SteeringRegulationConfig
+  }
+
+  class Steer_ObservationBuffer {
+    +update(error): void
+    +update(error, loopTimestamp): void
+    +getMedian(): int16_t
+    +getSmoothedCurrentError(): int16_t
+    +getSampleSize(): uint8_t
+    +getOmega(loopTimestamp): float
+    +reset(): void
+    -m_config: Cfg_SteeringRegulationConfig
+  }
+
+  class Steer_SteeringGuard {
+    +observationBlocked(loopTimestamp, lastUpdate, lastIntent): bool
+    +intentBlocked(loopTimestamp, lastIntent, sampleSize, median, omega): bool
+    -m_config: Cfg_SteeringRegulationConfig
+    -m_deadband: Steer_Deadband
+  }
+
+  class Steer_CSCDebugSnapshot {
+    +error: int16_t
+    +median: int16_t
+    +sampleSize: uint8_t
+    +deadbandActive: bool
+    +observationBlocked: bool
+    +intentBlocked: bool
+  }
+
+  class Steer_CoreSteeringController {
+    +currentHDG(current): void
+    +setInternalTarget(target): void
+    +getInternalTarget(): uint16_t
+    +getDebug(): Steer_CSCDebugSnapshot
+    +tick(loopTimestamp): Type_SteeringIntent
+    -determineDirection(median): Type_SteeringDirection
+    -calculateIntentFromObs(): Type_SteeringIntent
+    -counterIntent(omega): Type_SteeringIntent
+    -counterIntentNecessary(loopTimestamp, median, sampleSize, omega): bool
+  }
+
+  class Steer_ImpulseFilter {
+    +apply(intent, snapshot): Type_PWMCommand
+    -m_mechanics: Cfg_SteeringMechanicsConfig
+    -m_physics: Cfg_SteeringPhysicsConfig
+  }
+
+  class Act_PWMController {
+    +command(command): void
+  }
+
+  class Steer_SteeringOrchestrator {
+    +tick(snapshot, cscInternalTarget, loopTimestamp): void
+    -m_config: Cfg_SteeringControllerConfig
+    -m_impulsefilter: Steer_ImpulseFilter
+    -m_csc: Steer_CoreSteeringController
+    -m_pwm: Act_PWMController
+    -m_steeringIntent: Type_SteeringIntent
+  }
+
+  %% ===== UI Schicht (im Produktivpfad vorhanden, GUI-Main ausgeschlossen) =====
+  class UI_ControlPanel {
+    +readIntent(): Type_Intent
+  }
+
+  class UI_DisplayModel {
+    +mode: Type_SystemMode
+    +panelIntent: Type_Intent
+    +gps: Diag_CapabilityState
+    +wind: Diag_CapabilityState
+    +compass: Diag_CapabilityState
+    +ais: Diag_CapabilityState
+    +stw: Diag_CapabilityState
+  }
+
+  class UI_FrameBuffer
+
+  class UI_DisplayContent {
+    +create(panel, navigation, diagnostics, state, loopTimestamp): UI_FrameBuffer
+    -createModel(panel, navigation, diagnostics, state): UI_DisplayModel
+  }
+
+  class UI_Display {
+    +update(buffer): void
+  }
+
+  %% ===== System =====
+  class Core_SystemController {
+    +tick(loopTimestamp): void
+    -m_state: Type_SystemState
+    -m_config: Cfg_SteeringControllerConfig
+    -m_controlPanel: UI_ControlPanel
+    -m_navigationSensors: Sens_NavigationSensors
+    -m_diagnostics: Diag_Diagnostics
+    -m_sourceHandler: Steer_SourceHandler
+    -m_steeringOrchestrator: Steer_SteeringOrchestrator
+    -m_displayContent: UI_DisplayContent
+    -m_display: UI_Display
+    -stateUpdate(snapshot): Type_SystemState
+  }
+
+  %% ===== Beziehungen =====
+  Cfg_SteeringControllerConfig *-- Cfg_SteeringMechanicsConfig
+  Cfg_SteeringControllerConfig *-- Cfg_SteeringRegulationConfig
+  Cfg_SteeringControllerConfig *-- Cfg_SteeringPhysicsConfig
+  Cfg_SteeringControllerConfig *-- Cfg_SteeringSourceHandlingConfig
+
+  Diag_Diagnostics *-- Diag_DiagnosticEntry
+  Diag_Diagnostics ..> Diag_DiagnosticSnapshot
+
+  Sens_NavigationSensors *-- Sens_CompassModule
+  Sens_NavigationSensors *-- Sens_GPSModule
+  Sens_NavigationSensors *-- Sens_WindModule
+  Sens_NavigationSensors *-- Sens_NMEA183BUS
+  Sens_NavigationSensors *-- Sens_SensorActivation
+  Sens_NavigationSensors ..> Sens_NavigationSnapshot
+  Sens_NavigationSensors ..> Type_NavigationSource
+
+  Sens_NavigationSnapshot *-- Type_SensorSample_u16
+  Sens_NavigationSnapshot *-- Type_SensorSample_f32
+
+  Steer_SourcePolicyEngine --> Cfg_SteeringSourceHandlingConfig
+  Steer_SourcePolicyEngine --> Diag_Diagnostics
+  Steer_SourceTargetInterpreter --> Steer_GPSModel
+  Steer_SourceTargetInterpreter --> Steer_WindModel
+  Steer_SourceExecutor --> Sens_NavigationSensors
+
+  Steer_SourceHandler *-- Steer_GPSModel
+  Steer_SourceHandler *-- Steer_WindModel
+  Steer_SourceHandler *-- Steer_SourcePolicyEngine
+  Steer_SourceHandler *-- Steer_SourceTargetInterpreter
+  Steer_SourceHandler *-- Steer_SourceExecutor
+  Steer_SourceHandler --> UI_ControlPanel
+  Steer_SourceHandler --> Sens_NavigationSensors
+  Steer_SourceHandler --> Diag_Diagnostics
+  Steer_SourceHandler ..> Type_NavigationSource
+  Steer_SourceHandler ..> Sens_NavigationSnapshot
+
+  Steer_Deadband --> Cfg_SteeringRegulationConfig
+  Steer_ObservationBuffer --> Cfg_SteeringRegulationConfig
+  Steer_SteeringGuard --> Cfg_SteeringRegulationConfig
+  Steer_SteeringGuard *-- Steer_Deadband
+
+  Steer_CoreSteeringController *-- Steer_HeadingErrorCalculator
+  Steer_CoreSteeringController *-- Steer_ObservationBuffer
+  Steer_CoreSteeringController *-- Steer_Deadband
+  Steer_CoreSteeringController *-- Steer_SteeringGuard
+  Steer_CoreSteeringController *-- Steer_CSCDebugSnapshot
+  Steer_CoreSteeringController *-- Cfg_SteeringRegulationConfig
+  Steer_CoreSteeringController ..> Type_SteeringIntent
+  Steer_CoreSteeringController ..> Type_SteeringDirection
+
+  Steer_ImpulseFilter --> Cfg_SteeringMechanicsConfig
+  Steer_ImpulseFilter --> Cfg_SteeringPhysicsConfig
+  Steer_ImpulseFilter ..> Type_SteeringIntent
+  Steer_ImpulseFilter ..> Sens_NavigationSnapshot
+  Steer_ImpulseFilter ..> Type_PWMCommand
+
+  Steer_SteeringOrchestrator --> Cfg_SteeringControllerConfig
+  Steer_SteeringOrchestrator *-- Steer_ImpulseFilter
+  Steer_SteeringOrchestrator *-- Steer_CoreSteeringController
+  Steer_SteeringOrchestrator *-- Act_PWMController
+  Steer_SteeringOrchestrator ..> Sens_NavigationSnapshot
+
+  UI_DisplayContent ..> Type_Intent
+  UI_DisplayContent ..> Sens_NavigationSnapshot
+  UI_DisplayContent ..> Diag_DiagnosticSnapshot
+  UI_DisplayContent ..> Type_SystemMode
+  UI_DisplayContent ..> UI_DisplayModel
+  UI_Display ..> UI_FrameBuffer
+
+  Core_SystemController *-- Type_SystemState
+  Core_SystemController *-- Cfg_SteeringControllerConfig
+  Core_SystemController *-- UI_ControlPanel
+  Core_SystemController *-- Sens_NavigationSensors
+  Core_SystemController *-- Diag_Diagnostics
+  Core_SystemController *-- Steer_SourceHandler
+  Core_SystemController *-- Steer_SteeringOrchestrator
+  Core_SystemController *-- UI_DisplayContent
+  Core_SystemController *-- UI_Display

@@ -9,7 +9,9 @@
 
   // --- Dateizuordnungen ---
   "files.associations": {
-    "*.ino": "cpp"
+    "*.ino": "cpp",
+    "*.h": "cpp",
+    "*.hpp": "cpp"
   },
 
   // --- C++ / clangd ---
@@ -19,13 +21,15 @@
   },
 
   "clangd.arguments": [
-    "--query-driver=C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@*/bin/arm-none-eabi-*",
+    "--query-driver=*arm-none-eabi-g++*",
+    "--query-driver=*arm-none-eabi-gcc*",
+    "--query-driver=C:/*/.platformio/packages/toolchain-gccarmnoneeabi@*/bin/arm-none-eabi-*",
     "--query-driver=C:/Repositorys/Arduino_Projekte/Autopilot_git/.pio-core/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-*",
-    "--query-driver=C:/Repositorys/Arduino_Projekte/Autopilot_git/.pio-core/packages/toolchain-gccmingw32/bin/*g++*",
+    "--query-driver=*/.pio-core/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-*",
+    "--query-driver=C:/*/.platformio/packages/toolchain-gccmingw32/bin/*g++*",
+    "--query-driver=*/.pio-core/packages/toolchain-gccmingw32/bin/*g++*",
     "--query-driver=C:/msys64/mingw64/bin/g++*",
     "--query-driver=/home/*/.platformio/packages/toolchain-gccarmnoneeabi@*/bin/arm-none-eabi-*",
-    "--query-driver=*/.pio-core/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-*",
-    "--query-driver=*/.pio-core/packages/toolchain-gccmingw32/bin/*g++*",
     "--query-driver=/usr/bin/g++*",
     "--background-index",
     "--header-insertion=never",
@@ -37,9 +41,9 @@
   },
 
   // --- Microsoft C/C++ Extension vollstaendig deaktiviert ---
-  "C_Cpp.intelliSenseEngine": "disabled",
-  "C_Cpp.autocomplete": "disabled",
-  "C_Cpp.errorSquiggles": "disabled",
+  "C_Cpp.intelliSenseEngine": "Disabled",
+  "C_Cpp.autocomplete": "Disabled",
+  "C_Cpp.errorSquiggles": "Disabled",
   "[json]": {
     "editor.defaultFormatter": "vscode.json-language-features"
   }

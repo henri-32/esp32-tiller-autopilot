@@ -13,21 +13,22 @@ struct DisplayModel {
   CapabilityState wind = CapabilityState::OK;
   CapabilityState compass = CapabilityState::OK;
   CapabilityState ais = CapabilityState::OK;
-  CapabilityState hullSpeed = CapabilityState::OK;
+  CapabilityState stw = CapabilityState::OK;
 };
 
 struct FrameBuffer {};
 
 class DisplayContent {
 public:
-  DisplayContent(const NavigationSensors &navsens,
-                 const Diagnostics &diagnostics);
+  DisplayContent() = default;
 
-  FrameBuffer create(const Intent &intent, const SystemState & state, uint32_t loopTimestamp);
+  FrameBuffer create(Intent panel,
+                     NavigationSensors::NavigationSnapshot navigation,
+                     DiagnosticSnapshot diagnostics, SystemState::SystemMode state,
+                     uint32_t loopTimestamp);
 
 private:
-  const NavigationSensors &m_navigationSensors;
-  const Diagnostics &m_diagnostics;
-
-  DisplayModel createModel(const Intent &intent, const SystemState& state);
+  DisplayModel createModel(Intent panel,
+                           NavigationSensors::NavigationSnapshot navigation,
+                           DiagnosticSnapshot diagnostics, SystemState::SystemMode state);
 };

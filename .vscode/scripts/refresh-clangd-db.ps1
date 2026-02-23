@@ -35,6 +35,46 @@ function Build-Compiledb([string]$env, [string]$targetDir) {
   Copy-Item compile_commands.json (Join-Path $targetDir "compile_commands.json") -Force
 }
 
+function Inject-HeaderEntries([string]$dbPath) {
+  if (!(Test-Path $dbPath)) {
+    return
+  }
+
+  $db = Get-Content $dbPath -Raw | ConvertFrom-Json
+  $baseEntry = $db | Where-Object { $_.file -match '\.cpp$' } | Select-Object -First 1
+  if (-not $baseEntry -or -not $baseEntry.command) {
+    return
+  }
+
+  $baseCmd = $baseEntry.command.Trim()
+  $baseNoSrc = $baseCmd -replace '(\s+)([^ \t]+\.cpp)$', ''
+
+  $headers = Get-ChildItem -Path "include" -Recurse -File -Include *.h, *.hpp
+  if (-not $headers) {
+    return
+  }
+
+  $headerEntries = foreach ($h in $headers) {
+    $rel = Resolve-Path -Relative $h.FullName
+    $rel = $rel -replace '^\.[\\/]', ''
+    $cmd = "$baseNoSrc -x c++ $rel"
+    [pscustomobject]@{
+      command   = $cmd
+      directory = (Get-Location).Path
+      file      = $rel
+      output    = ".pio\build\clangd\headers\$($h.BaseName).o"
+    }
+  }
+
+  $filtered = @(
+    $db | Where-Object {
+      $_.file -notmatch '(^|[\\/])include[\\/].*\.(h|hpp)$'
+    }
+  )
+  $finalDb = $filtered + $headerEntries
+  $finalDb | ConvertTo-Json -Depth 8 | Set-Content $dbPath -Encoding UTF8
+}
+
 function Get-UnityTestFlags {
   $flags = "-DPIO_UNIT_TESTING -DUNIT_TEST -I.pio\libdeps\native_csc\Unity\src -Itest\test_csc -Itest"
   if ((Test-Path ".pio\build\native_csc\unity_config\unity_config.h") -or (Test-Path ".pio\build\native_csc\unity_config\UnityConfig.h")) {
@@ -86,7 +126,13 @@ Build-Compiledb -env "sim" -targetDir ".clangd-db/sim"
 Build-Compiledb -env "native_csc" -targetDir ".clangd-db/native_csc"
 Build-Compiledb -env "gui" -targetDir ".clangd-db/gui"
 Build-Compiledb -env "gui_sim" -targetDir ".clangd-db/gui_sim"
+Inject-HeaderEntries -dbPath ".clangd-db/genericSTM32F411RE/compile_commands.json"
+Inject-HeaderEntries -dbPath ".clangd-db/sim/compile_commands.json"
+Inject-HeaderEntries -dbPath ".clangd-db/native_csc/compile_commands.json"
+Inject-HeaderEntries -dbPath ".clangd-db/gui/compile_commands.json"
+Inject-HeaderEntries -dbPath ".clangd-db/gui_sim/compile_commands.json"
 Inject-CscTestEntry
 
 # Keep the root compile_commands.json focused on the main firmware env.
 & $pio run -t compiledb -e genericSTM32F411RE
+Inject-HeaderEntries -dbPath "compile_commands.json"
