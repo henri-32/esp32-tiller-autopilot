@@ -13,15 +13,15 @@ public:
   // Purpose: Connect CSC intent to actuator command execution.
   // Inputs: navigation snapshot + loop timestamp.
   // Outputs/Side-effects: issues PWM commands when intent exists.
-  SteeringOrchestrator(CoreSteeringController &csc, ImpulseFilter &filter,
-                       PWMController &pwm);
+  explicit SteeringOrchestrator(SteeringControllerConfig &config);
 
-  void tick(NavigationSensors::NavigationSnapshot snapshot,
+  void tick(NavigationSensors::NavigationSnapshot snapshot, uint16_t cscInternalTarget,
             uint32_t loopTimestamp);
 
 private:
-  CoreSteeringController &m_csc;
-  ImpulseFilter &m_impulsefilter;
-  PWMController &m_pwm;
+  SteeringControllerConfig &m_config;
+  ImpulseFilter m_impulsefilter;
+  CoreSteeringController m_csc;
+  PWMController m_pwm;
   SteeringIntent m_steeringIntent;
 };

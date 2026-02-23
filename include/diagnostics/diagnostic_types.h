@@ -13,10 +13,10 @@ enum class FunctionalCapability : uint8_t {
   COMPASS,
   GPS,
   WIND,
-  HullSpeed,
+  STW,
   PWM,
   AIS,
   COUNT,
 };
 
-enum class CapabilityState : uint8_t { OK, Degraded, Lost };
+enum class CapabilityState : uint8_t { OK, Degraded, Lost, LostWithFallback, ErrorHandled,CRITICAL_ERROR };

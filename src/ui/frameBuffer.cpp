@@ -24,7 +24,7 @@ DisplayModel DisplayContent::createModel(const Intent &intent,
   model.compass = m_diagnostics.capabilityState(FunctionalCapability::COMPASS);
   model.gps = m_diagnostics.capabilityState(FunctionalCapability::GPS);
   model.hullSpeed =
-      m_diagnostics.capabilityState(FunctionalCapability::HullSpeed);
+      m_diagnostics.capabilityState(FunctionalCapability::STW);
   model.wind = m_diagnostics.capabilityState(FunctionalCapability::WIND);
   return model;
 };

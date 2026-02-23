@@ -27,7 +27,6 @@ template <typename T> struct SensorSample {
   bool valid{false};
 };
 
-
 struct SystemState {
   enum class SystemMode { INIT, OK, AISonly, SAFE };
   SystemMode systemMode = SystemMode::INIT;

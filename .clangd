@@ -1,5 +1,5 @@
 CompileFlags:
-  CompilationDatabase: .clangd-db/gui
+  CompilationDatabase: .clangd-db/genericSTM32F411RE
   Add:
     - -Iinclude
     - -Isrc

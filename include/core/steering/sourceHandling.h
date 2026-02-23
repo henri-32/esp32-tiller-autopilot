@@ -1,6 +1,5 @@
 #pragma once
 #include "core/config.h"
-#include "core/steering/csc/csc.h"
 #include "core/steering/sourceModels/gpsModel.h"
 #include "core/steering/sourceModels/windModel.h"
 #include "diagnostics/diagnostics.h"
@@ -8,6 +7,7 @@
 #include "ui/controlPanel.h"
 #include <array>
 #include <cstdint>
+
 
 class SourcePolicyEngine {
 public:
@@ -46,16 +46,15 @@ class SourceExecutor {
 
 public:
   // Contract:
-  // Purpose: Apply effective source and target to the steering stack.
+  // Purpose: Apply effective source 
   // Inputs: effective source + filtered target.
-  // Outputs/Side-effects: updates NavigationSensors and CSC state.
-  SourceExecutor(NavigationSensors &navsens, CoreSteeringController &csc);
+  // Outputs/Side-effects: updates NavigationSensors 
+  SourceExecutor(NavigationSensors &navsens);
 
-  void execute(NavigationSource effective, uint16_t filteredTarget);
+  void execute(NavigationSource effective);
 
 private:
   NavigationSensors &m_navigationSensors;
-  CoreSteeringController &m_csc;
 };
 
 class SourceHandler {
@@ -66,9 +65,9 @@ public:
   // Outputs/Side-effects: updates CSC target, navigation lead source, diagnostics.
   explicit SourceHandler(const ControlPanel &panel, NavigationSensors &navsens,
                         SteeringSourceHandlingConfig &config,
-                         Diagnostics &diagnostics, CoreSteeringController &csc);
+                         Diagnostics &diagnostics);
 
-  void tick(NavigationSource requestedSource, uint32_t loopTimestamp,
+ uint16_t tick(NavigationSource requestedSource, uint32_t loopTimestamp,
             NavigationSensors::NavigationSnapshot snapshot,
             uint16_t generalTarget);
 
@@ -76,7 +75,6 @@ private:
   const ControlPanel &m_panel;
   NavigationSensors &m_navigationSensors;
   Diagnostics &m_diagnostics;
-  CoreSteeringController &m_csc;
 
   GPSModel m_gpsModel;
   WindModel m_windModel;

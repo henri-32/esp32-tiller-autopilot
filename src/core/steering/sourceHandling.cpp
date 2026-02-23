@@ -3,18 +3,15 @@
 SourceHandler::SourceHandler(const ControlPanel &panel,
                              NavigationSensors &navsens,
                              SteeringSourceHandlingConfig &config,
-                             Diagnostics &diagnostics,
-                             CoreSteeringController &csc)
-    : m_panel(panel), m_navigationSensors(navsens),
-      m_diagnostics(diagnostics),
-      m_csc(csc), m_sourcePolicy(config, diagnostics),
-      m_targetInterpreter(m_gpsModel, m_windModel),
-      m_sourceExecutor(navsens, csc) {}
+                             Diagnostics &diagnostics)
+    : m_panel(panel), m_navigationSensors(navsens), m_diagnostics(diagnostics),
+      m_sourcePolicy(config, diagnostics),
+      m_targetInterpreter(m_gpsModel, m_windModel), m_sourceExecutor(navsens) {}
 
-void SourceHandler::tick(NavigationSource requestedSource,
-                         uint32_t loopTimestamp,
-                         NavigationSensors::NavigationSnapshot snapshot,
-                         uint16_t generalTarget) {
+uint16_t SourceHandler::tick(NavigationSource requestedSource,
+                             uint32_t loopTimestamp,
+                             NavigationSensors::NavigationSnapshot snapshot,
+                             uint16_t generalTarget) {
   // Apply source policy and fallback rules.
   NavigationSource effective =
       m_sourcePolicy.evaluate(requestedSource, snapshot, loopTimestamp);
@@ -24,7 +21,9 @@ void SourceHandler::tick(NavigationSource requestedSource,
       m_targetInterpreter.applySourceFilters(generalTarget, effective);
 
   // Propagate the effective source and filtered target to the steering stack.
-  m_sourceExecutor.execute(effective, filteredTarget);
+  m_sourceExecutor.execute(effective);
+
+  return filteredTarget;
 };
 
 //__________SOURCE_POLICY_______________________________________________
@@ -45,8 +44,7 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
       m_diagnostics.emit(DiagnosticEvent::LostWithFallback,
                          FunctionalCapability::GPS, loopTimestamp);
 
-    } else if (snapshot.gps_sog_kts.value <
-               m_config.minGpsSpeedForUse) {
+    } else if (snapshot.gps_sog_kts.value < m_config.minGpsSpeedForUse) {
       effective = NavigationSource::Compass;
       m_diagnostics.emit(DiagnosticEvent::Degraded, FunctionalCapability::GPS,
                          loopTimestamp);
@@ -101,13 +99,10 @@ SourceTargetInterpreter::applySourceFilters(uint16_t generalTarget,
 
 //____________________________EXECUTOR_______________________________
 
-SourceExecutor::SourceExecutor(NavigationSensors &navsens,
-                               CoreSteeringController &csc)
-    : m_navigationSensors(navsens), m_csc(csc) {}
+SourceExecutor::SourceExecutor(NavigationSensors &navsens)
+    : m_navigationSensors(navsens) {}
 
-void SourceExecutor::execute(NavigationSource effective,
-                             uint16_t filteredTarget) {
+void SourceExecutor::execute(NavigationSource effective) {
 
   m_navigationSensors.setLeadSource(effective);
-  m_csc.setInternalTarget(filteredTarget);
 }

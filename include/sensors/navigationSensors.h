@@ -12,11 +12,7 @@ public:
   // Purpose: Read and aggregate navigation sensor data into a snapshot.
   // Inputs: hardware modules + lead source selection.
   // Outputs/Side-effects: returns snapshot; updates lead source state.
-  explicit NavigationSensors(const CompassModule &compass, const GPSModule &gps,
-                             const WindModule &wind,
-                             const NMEA183BUS &nmea183Bus)
-      : m_compass(compass), m_gps(gps), m_wind(wind),
-        m_nmea183Bus(nmea183Bus) {};
+  explicit NavigationSensors() = default; 
 
   struct NavigationSnapshot {
     SensorSample<uint16_t> compass_hdg_dg;
@@ -43,9 +39,9 @@ public:
 
 private:
   NavigationSource m_leadSource = NavigationSource::Compass;
-  const CompassModule &m_compass;
-  const GPSModule &m_gps;
-  const WindModule &m_wind;
-  const NMEA183BUS &m_nmea183Bus;
+  CompassModule m_compass;
+  GPSModule m_gps;
+  WindModule m_wind;
+  NMEA183BUS m_nmea183Bus;
   SensorActivation m_sensorActivation;
 };

@@ -18,7 +18,6 @@
     "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
   },
 
-  "clangd.path": "/usr/bin/clangd-17",
   "clangd.arguments": [
     "--query-driver=C:/Users/henri/.platformio/packages/toolchain-gccarmnoneeabi@*/bin/arm-none-eabi-*",
     "--query-driver=C:/Repositorys/Arduino_Projekte/Autopilot_git/.pio-core/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-*",

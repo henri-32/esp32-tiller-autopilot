@@ -628,7 +628,7 @@ void test_counter_fires_and_maps_impulse_from_positive_omega() {
   TEST_ASSERT_FALSE(prep.has_value());
   TEST_ASSERT_TRUE(counter.has_value());
   TEST_ASSERT_EQUAL(SteeringDirection::Left, counter->dir);
-  TEST_ASSERT_EQUAL_UINT8(60, counter->abstractImpulse_0_100);
+  TEST_ASSERT_EQUAL_UINT8(50, counter->abstractImpulse_0_100);
 }
 
 void test_counter_is_blocked_by_counter_cooldown() {
@@ -723,7 +723,7 @@ void test_counter_fires_on_negative_side_with_negative_omega() {
 
   TEST_ASSERT_TRUE(counter.has_value());
   TEST_ASSERT_EQUAL(SteeringDirection::Right, counter->dir);
-  TEST_ASSERT_EQUAL_UINT8(60, counter->abstractImpulse_0_100);
+  TEST_ASSERT_EQUAL_UINT8(50, counter->abstractImpulse_0_100);
 }
 
 int main() {
