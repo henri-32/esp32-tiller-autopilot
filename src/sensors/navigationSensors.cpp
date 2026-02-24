@@ -1,6 +1,5 @@
 #include "sensors/navigationSensors.h"
-
-#include "sensors/NMEA183BUS.h"
+#include "sensors/NASA_Duo.h"
 #include "types/globalTypes.h"
 #include <cstdlib>
 

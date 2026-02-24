@@ -4,18 +4,17 @@ Dieses Dokument beschreibt ausschließlich die **Konfigurationsparameter**
 des Core Steering Controllers (CSC) und deren **Auswirkungen auf Verhalten,
 Robustheit und Energieverbrauch**.
 
-Architektur, Rollen und Systemgrenzen sind in `ARCHITECTURE.md` definiert
+Architektur, Rollen und Systemgrenzen sind in `Architektur.md` definiert
 und werden hier **nicht wiederholt**.
 
 ---
 
-## Config-Lifecycle (Hot-Reload)
+## Config-Lifecycle (aktueller Stand)
 
-Die Konfiguration wird im SystemController gehalten und ist zur Laufzeit
-hot-reload faehig. Updates kommen ueber das Control-Interface, werden in
-eine pending-Struktur geschrieben und am Ende des SystemController-Ticks
-atomar uebernommen. Alle Module halten Referenzen auf die benoetigten
-Config-Slices und sehen die neuen Werte ab dem naechsten Tick konsistent.
+Die Konfiguration wird im `SystemController` gehalten und beim Bau der
+Module als `const`-Referenzen auf die benoetigten Config-Slices verdrahtet.
+Ein Runtime-Hot-Reload ueber pending-Struktur ist im aktuellen Code noch
+nicht implementiert.
 
 ---
 
@@ -31,8 +30,8 @@ Config-Slices und sehen die neuen Werte ab dem naechsten Tick konsistent.
 
 - `steeringTolerance_deg`
 - `counterNearTargetWindow_deg`
-- `SteeringMinImpulse_ms`
-- `SteeringMaxImpulse_ms`
+- `steeringMinImpulse_ms`
+- `steeringMaxImpulse_ms`
 - `steeringCooldown_ms`
 - `minimumTimeBtwObs_ms`
 - `observationBufferSize`
@@ -76,7 +75,7 @@ gilt das System als ausreichend getrimmt.
 
 ---
 
-### `SteeringMinImpulse_ms`
+### `steeringMinImpulse_ms`
 
 **Bedeutung**  
 Untergrenze für einen Trimmimpuls.  
@@ -96,7 +95,7 @@ Stellt sicher, dass ein Impuls mechanisch wirksam ist
 
 ---
 
-### `SteeringMaxImpulse_ms`
+### `steeringMaxImpulse_ms`
 
 **Bedeutung**  
 Obergrenze für einen einzelnen Trimmimpuls.

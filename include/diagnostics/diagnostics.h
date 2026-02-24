@@ -10,8 +10,8 @@ struct DiagnosticEntry {
 };
 
 struct DiagnosticSnapshot {
-  bool criticalErrorOccured;
-  FunctionalCapability criticalCapability;
+  bool criticalErrorOccured = false;
+  FunctionalCapability criticalCapability = FunctionalCapability::COUNT;
   CapabilityState compassState = CapabilityState::OK;
   CapabilityState gpsState = CapabilityState::OK;
   CapabilityState windState = CapabilityState::OK;
@@ -48,6 +48,10 @@ private:
   uint8_t m_count = 0;
 
   // --- Capability-Zustände (latched) ---
+  // TODO(Architektur):
+  // Event->State-Mapping vollstaendig halten (z. B. CRITICAL_ERROR,
+  // LostWithFallback, ErrorHandled), damit Snapshot und Policy dieselbe
+  // Semantik sehen.
   std::array<CapabilityState, static_cast<uint8_t>(FunctionalCapability::COUNT)>
       m_states;
 

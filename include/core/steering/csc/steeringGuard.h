@@ -10,14 +10,14 @@ public:
   // Purpose: Gate observation/intent by timing and sample thresholds.
   // Inputs: timestamps, sample size, regulation config slice.
   // Outputs/Side-effects: boolean decisions, no side-effects.
-  SteeringGuard(SteeringRegulationConfig &config);
+  SteeringGuard(const SteeringRegulationConfig &config);
 
-  bool observationBlocked(uint32_t loopTimestamp, uint32_t lastUpdate,
-                          uint32_t lastIntent);
-  bool intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
-                     uint8_t sampleSize, int16_t median, float omega);
+  bool observationBlocked(uint32_t lastUpdate, uint32_t lastIntent,
+                          uint32_t loopTimestamp);
+  bool intentBlocked(uint32_t lastIntent, int16_t median, uint8_t sampleSize,
+                     float omega, uint32_t loopTimestamp);
 
 private:
-  SteeringRegulationConfig &m_config;
+  const SteeringRegulationConfig &m_config;
   Deadband m_deadband;
 };

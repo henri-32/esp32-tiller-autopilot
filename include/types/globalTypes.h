@@ -22,9 +22,9 @@ struct SteeringIntent {
   uint8_t abstractImpulse_0_100;
 };
 
-struct PWMCommand {
+struct PWMIntent {
   SteeringDirection dir;
-  uint32_t pulse_ms;
+  uint16_t filteredAbstractImpulse_0_100;
   uint8_t dutyCycle;
 };
 

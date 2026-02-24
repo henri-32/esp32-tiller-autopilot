@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-ObservationBuffer::ObservationBuffer(SteeringRegulationConfig &config)
+ObservationBuffer::ObservationBuffer(const SteeringRegulationConfig &config)
     : m_config(config) {}
 
 int16_t ObservationBuffer::getMedian() const { return median; }

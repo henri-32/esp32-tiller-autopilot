@@ -1,6 +1,6 @@
-#include "sensors/NMEA183BUS.h"
+#include "sensors/NASA_Duo.h"
 
-SensorSample<float> NMEA183BUS::readSTW() const {
+SensorSample<float> NASA_Duo::readSTW() const {
   SensorSample<float> sample;
   sample.value = 0.0f;
   sample.valid = false;

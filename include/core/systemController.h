@@ -39,5 +39,8 @@ private:
   UIContent m_displayContent;
   Display m_display;
 
-  SystemState stateUpdate(DiagnosticSnapshot snapshot);
+  // TODO(Architektur):
+  // Als reine Transition-Funktion ausbauen (prevState + Inputs -> nextState).
+  // So bleibt die Zustandslogik testbar und vom Tick-Ablauf entkoppelt.
+  SystemState stateUpdate(const DiagnosticSnapshot &snapshot);
 };

@@ -21,7 +21,7 @@ public:
   // Purpose: Decide if a steering impulse should be issued.
   // Inputs: current heading, internal target, regulation config slice.
   // Outputs/Side-effects: optional SteeringIntent; updates internal state.
-  explicit CoreSteeringController(SteeringRegulationConfig &config);
+  explicit CoreSteeringController(const SteeringRegulationConfig &config);
 
   void currentHDG(uint16_t current);
   void setInternalTarget(uint16_t target);
@@ -35,8 +35,8 @@ private:
   SteeringDirection determineDirection(int16_t median) const;
   std::optional<SteeringIntent> calculateIntentFromObs();
   SteeringIntent counterIntent(float omega);
-  bool counterIntentNecessary(uint32_t loopTimestamp, int16_t median,
-                              uint8_t sampleSize, float omega);
+  bool counterIntentNecessary(int16_t median, uint8_t sampleSize, float omega,
+                              uint32_t loopTimestamp);
 
   // --- State ---
   uint16_t m_currentCourse{0};
@@ -51,7 +51,7 @@ private:
   HeadingErrorCalculator m_errorCalculator;
   ObservationBuffer m_observationBuffer;
   SteeringGuard m_steeringGuard;
-  SteeringRegulationConfig m_config;
+  const SteeringRegulationConfig &m_config;
 
   // --- Debug ---
   CSCDebugSnapshot m_debug;

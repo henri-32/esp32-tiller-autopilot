@@ -56,6 +56,9 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
 {
     auto& state = m_states[static_cast<uint8_t>(capability)];
 
+    // TODO(Architektur):
+    // Mapping bewusst zentral in dieser Funktion pflegen. Wenn neue Events
+    // dazukommen, hier sofort in einen CapabilityState uebersetzen.
     switch (event) {
         case DiagnosticEvent::Lost:
             state = CapabilityState::Lost; // latched

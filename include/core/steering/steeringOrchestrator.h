@@ -11,11 +11,14 @@ class SteeringOrchestrator {
 public:
   // Contract:
   // Purpose: Connect CSC intent to actuator command execution.
-  // Inputs: navigation snapshot + loop timestamp.
+  // Inputs: navigation snapshot + filtered CSC target + loop timestamp.
   // Outputs/Side-effects: issues PWM commands when intent exists.
-  explicit SteeringOrchestrator(SteeringControllerConfig &config);
+  explicit SteeringOrchestrator(const SteeringControllerConfig &config);
 
-  void tick(NavigationSensors::NavigationSnapshot snapshot,
+  // TODO(Architektur):
+  // Bei Einfuehrung eines GuidanceOutput diese Signatur auf einen expliziten
+  // Input-Typ umstellen, statt Snapshot + getrenntem Target.
+  void tick(const NavigationSensors::NavigationSnapshot &snapshot,
             uint16_t cscInternalTarget, uint32_t loopTimestamp);
 
 private:

@@ -22,14 +22,16 @@ class UIContent {
 public:
   UIContent() = default;
 
-  FrameBuffer create(Intent panel,
-                     NavigationSensors::NavigationSnapshot navigation,
-                     DiagnosticSnapshot diagnostics,
+  FrameBuffer create(const Intent &panel,
+                     const NavigationSensors::NavigationSnapshot &navigation,
+                     const DiagnosticSnapshot &diagnostics,
                      SystemState::SystemMode state, uint32_t loopTimestamp);
 
 private:
-  DisplayModel createModel(Intent panel,
-                           NavigationSensors::NavigationSnapshot navigation,
-                           DiagnosticSnapshot diagnostics,
+  DisplayModel createModel(const Intent &panel,
+                           const NavigationSensors::NavigationSnapshot &navigation,
+                           const DiagnosticSnapshot &diagnostics,
                            SystemState::SystemMode state);
+
+  FrameBuffer createBuffer(const DisplayModel& model);
 };

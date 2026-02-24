@@ -146,7 +146,7 @@ void test_buffer_is_not_ready_when_empty() {
 
   // When / Then
   TEST_ASSERT_TRUE(
-      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
+      guard.intentBlocked(lastIntent, median, sampleSize, omega, time));
 }
 
 void test_buffer_is_not_ready_when_below_minimum_samples() {
@@ -163,7 +163,7 @@ void test_buffer_is_not_ready_when_below_minimum_samples() {
 
   // When / Then
   TEST_ASSERT_TRUE(
-      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
+      guard.intentBlocked(lastIntent, median, sampleSize, omega, time));
 }
 
 void test_buffer_is_ready_when_minimum_samples_reached() {
@@ -179,7 +179,7 @@ void test_buffer_is_ready_when_minimum_samples_reached() {
   const float omega = 0;
   // When / Then
   TEST_ASSERT_FALSE(
-      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
+      guard.intentBlocked(lastIntent, median, sampleSize, omega, time));
 }
 
 // ObservationBuffer tests
@@ -327,8 +327,8 @@ void test_no_second_action_within_cooldown_period() {
   const float omega = 0;
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent + 1000, lastIntent,
-                                       enoughSamples, median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                       lastIntent + 1000));
 }
 
 void test_no_action_within_omegaDeadband() {
@@ -341,8 +341,8 @@ void test_no_action_within_omegaDeadband() {
   const int16_t median = 0;
   const float omega = 0;
 
-  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent + 1000, lastIntent,
-                                       enoughSamples, median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                       lastIntent + 1000));
 };
 
 void test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband() {
@@ -361,8 +361,8 @@ void test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband() {
   const float omega = config.omegaDeadband + 0.05f;
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples,
-                                       median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                       loopTimestamp));
 }
 
 void test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband() {
@@ -381,8 +381,8 @@ void test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband() {
   const float omega = -(config.omegaDeadband + 0.05f);
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples,
-                                       median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                       loopTimestamp));
 }
 
 void test_omega_guard_allows_action_when_omega_within_deadband() {
@@ -401,8 +401,8 @@ void test_omega_guard_allows_action_when_omega_within_deadband() {
   const float omega = config.omegaDeadband - 0.05f;
 
   // When / Then
-  TEST_ASSERT_FALSE(guard.intentBlocked(loopTimestamp, lastIntent,
-                                        enoughSamples, median, omega));
+  TEST_ASSERT_FALSE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                        loopTimestamp));
 }
 
 void test_action_allowed_after_cooldown_expires() {
@@ -419,8 +419,8 @@ void test_action_allowed_after_cooldown_expires() {
 
   // When / Then
   TEST_ASSERT_FALSE(
-      guard.intentBlocked(lastIntent + config.steeringCooldown_ms + 1,
-                          lastIntent, enoughSamples, median, omega));
+      guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                          lastIntent + config.steeringCooldown_ms + 1));
 }
 
 void test_no_action_when_error_oscillates_symmetrically() {

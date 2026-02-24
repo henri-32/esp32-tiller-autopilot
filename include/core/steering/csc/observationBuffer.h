@@ -6,7 +6,7 @@
 
 class ObservationBuffer {
 private:
-  SteeringRegulationConfig &m_config;
+  const SteeringRegulationConfig &m_config;
 
   static constexpr uint8_t maxBufferSize =
       SteeringRegulationConfig::observationBufferSize;
@@ -26,7 +26,7 @@ public:
   // Purpose: Store recent errors and compute a median for direction decision.
   // Inputs: error samples + regulation config slice.
   // Outputs/Side-effects: median and sample count; internal buffer mutated.
-  ObservationBuffer(SteeringRegulationConfig &config);
+  ObservationBuffer(const SteeringRegulationConfig &config);
 
   void update(int16_t error);
   void update(int16_t error, uint32_t loopTimestamp);

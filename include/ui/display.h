@@ -6,5 +6,5 @@ public:
     // Purpose: Render the latest system state to the display.
     // Inputs: internal system state (not shown here).
     // Outputs/Side-effects: updates display hardware.
-    void update(FrameBuffer buffer);
+    void update(const FrameBuffer &buffer);
 };

@@ -708,12 +708,15 @@ int main() {
     const float dampingYawAccel = engine.dampingYawAccel();
 
     const auto &dbg = csc.getDebug();
+    const bool deadbandActive =
+        std::abs(dbg.median) <= config.regulation.steeringTolerance_deg;
 
     file << time_ms << "," << heading << "," << angularVelocity << ","
          << tillerPosition << "," << tillerYawAccel << "," << windYawAccel
          << "," << dampingYawAccel << "," << config.target_deg << ","
          << dbg.error << "," << dbg.median << ","
-         << static_cast<int>(dbg.sampleSize) << "," << dbg.deadbandActive << ","
+         << static_cast<int>(dbg.sampleSize) << ","
+         << static_cast<int>(deadbandActive) << ","
          << dbg.observationBlocked << "," << dbg.intentBlocked << ","
          << (intent.has_value() ? 1 : 0) << ","
          << (intent.has_value()

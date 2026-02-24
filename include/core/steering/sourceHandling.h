@@ -12,15 +12,15 @@ public:
   // Purpose: Select the effective navigation source with fallbacks.
   // Inputs: requested source + sensor snapshot + policy config slice.
   // Outputs/Side-effects: effective source; may emit diagnostics.
-  SourcePolicyEngine(SteeringSourceHandlingConfig &config,
+  SourcePolicyEngine(const SteeringSourceHandlingConfig &config,
                      Diagnostics &Diagnostics);
 
   NavigationSource evaluate(NavigationSource requested,
-                            NavigationSensors::NavigationSnapshot snapshot,
+                            const NavigationSensors::NavigationSnapshot &snapshot,
                             uint32_t loopTimestamp);
 
 private:
-  SteeringSourceHandlingConfig &m_config;
+  const SteeringSourceHandlingConfig &m_config;
   Diagnostics &m_diagnostics;
 };
 
@@ -44,7 +44,7 @@ class SourceExecutor {
 public:
   // Contract:
   // Purpose: Apply effective source
-  // Inputs: effective source + filtered target.
+  // Inputs: effective source.
   // Outputs/Side-effects: updates NavigationSensors
   SourceExecutor(NavigationSensors &navsens);
 
@@ -58,16 +58,24 @@ class SourceHandler {
 public:
   // Contract:
   // Purpose: Orchestrate policy, filtering, and execution for sources.
-  // Inputs: requested source, snapshot, target, and config slice.
-  // Outputs/Side-effects: updates CSC target, navigation lead source,
+  // Inputs: snapshot, requested source, target, and config slice.
+  // Outputs/Side-effects: returns filtered CSC target; updates lead source and
   // diagnostics.
   explicit SourceHandler(NavigationSensors &navsens,
-                         SteeringSourceHandlingConfig &config,
+                         const SteeringSourceHandlingConfig &config,
                          Diagnostics &diagnostics);
 
-  uint16_t tick(NavigationSource requestedSource, uint32_t loopTimestamp,
-                NavigationSensors::NavigationSnapshot snapshot,
-                uint16_t generalTarget);
+  // TODO(Architektur):
+  // Mittelfristig statt nur uint16_t einen Guidance-Output liefern, z. B.:
+  // - effectiveSource
+  // - currentHDG (bereits validiert)
+  // - internalTargetHDG
+  // - valid/blocked-Flag
+  // Damit bleibt die Verantwortung "Kursableitung + Validierung" in einer
+  // Schicht und der Orchestrator muss keine Sensorfelder direkt kennen.
+  uint16_t tick(const NavigationSensors::NavigationSnapshot &snapshot,
+                NavigationSource requestedSource, uint16_t generalTarget,
+                uint32_t loopTimestamp);
 
 private:
   SourcePolicyEngine m_sourcePolicy;

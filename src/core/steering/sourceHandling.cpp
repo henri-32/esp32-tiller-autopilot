@@ -1,15 +1,16 @@
 #include "core/steering/sourceHandling.h"
 
 SourceHandler::SourceHandler(NavigationSensors &navsens,
-                             SteeringSourceHandlingConfig &config,
+                             const SteeringSourceHandlingConfig &config,
                              Diagnostics &diagnostics)
     : m_sourcePolicy(config, diagnostics), m_targetInterpreter(),
       m_sourceExecutor(navsens) {}
 
-uint16_t SourceHandler::tick(NavigationSource requestedSource,
-                             uint32_t loopTimestamp,
-                             NavigationSensors::NavigationSnapshot snapshot,
-                             uint16_t generalTarget) {
+uint16_t SourceHandler::tick(
+    const NavigationSensors::NavigationSnapshot &snapshot,
+                             NavigationSource requestedSource,
+                             uint16_t generalTarget,
+                             uint32_t loopTimestamp) {
   // Apply source policy and fallback rules.
   NavigationSource effective =
       m_sourcePolicy.evaluate(requestedSource, snapshot, loopTimestamp);
@@ -25,18 +26,27 @@ uint16_t SourceHandler::tick(NavigationSource requestedSource,
 };
 
 //__________SOURCE_POLICY_______________________________________________
-SourcePolicyEngine::SourcePolicyEngine(SteeringSourceHandlingConfig &config,
+SourcePolicyEngine::SourcePolicyEngine(
+    const SteeringSourceHandlingConfig &config,
                                        Diagnostics &diagnostics)
     : m_config(config), m_diagnostics(diagnostics) {}
 
 NavigationSource
 SourcePolicyEngine::evaluate(NavigationSource requested,
-                             NavigationSensors::NavigationSnapshot snapshot,
+                             const NavigationSensors::NavigationSnapshot &snapshot,
                              uint32_t loopTimestamp) {
+  // TODO(Architektur):
+  // Compass wird fuer den aktuellen CSC-Pfad als harte Voraussetzung behandelt.
+  // Wenn das spaeter geaendert wird, muss diese Policy gemeinsam mit dem
+  // Orchestrator/CSC-Input angepasst werden.
   NavigationSource effective = requested;
 
   switch (requested) {
   case NavigationSource::Gps:
+    if (!snapshot.compass_hdg_dg.valid) {
+      m_diagnostics.emit(DiagnosticEvent::CRITICAL_ERROR,
+                         FunctionalCapability::COMPASS, loopTimestamp);
+    };
     if (!snapshot.gps_cog_dg.valid || !snapshot.gps_sog_kts.valid) {
       effective = NavigationSource::Compass;
       m_diagnostics.emit(DiagnosticEvent::LostWithFallback,
@@ -52,6 +62,10 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
     };
     break;
   case NavigationSource::Wind:
+    if (!snapshot.compass_hdg_dg.valid) {
+      m_diagnostics.emit(DiagnosticEvent::CRITICAL_ERROR,
+                         FunctionalCapability::COMPASS, loopTimestamp);
+    };
     if (!snapshot.wind_angle_dg.valid) {
       effective = NavigationSource::Compass;
       m_diagnostics.emit(DiagnosticEvent::LostWithFallback,
@@ -71,7 +85,7 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
   return effective;
 };
 
-//_____________________TARFGE_INTERPRETER________________________
+//_____________________TARGET_INTERPRETER________________________
 
 uint16_t
 SourceTargetInterpreter::applySourceFilters(uint16_t generalTarget,

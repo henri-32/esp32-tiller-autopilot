@@ -8,7 +8,7 @@
 #include <cmath>
 #include <cstdint>
 
-CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
+CoreSteeringController::CoreSteeringController(const SteeringRegulationConfig &config)
     : m_observationBuffer(config),m_steeringGuard(config),
       m_config(config) {}
 
@@ -39,8 +39,8 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   - Intent zurückgeben
 
   Wenn er wegen Guards nicht beobachten darf early return*/
-  if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
-                                         m_lastIntent)) {
+  if (m_steeringGuard.observationBlocked(m_lastObsUpdate, m_lastIntent,
+                                         loopTimestamp)) {
     m_debug.observationBlocked = true;
     return std::nullopt;
   }
@@ -79,7 +79,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   Absichtlich außerhalb der regulären Intent-Guards, weil eigene counterGuards
   Vor den regulären Intents, damit der counter nicht von deren Guards abgehalten
   wird*/
-  if (counterIntentNecessary(loopTimestamp, median, sampleSize, omega)) {
+  if (counterIntentNecessary(median, sampleSize, omega, loopTimestamp)) {
     auto counter = counterIntent(omega);
     m_lastCounterIntent = loopTimestamp;
     m_lastIntent = loopTimestamp;
@@ -89,8 +89,8 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   }
 
   /*steering Guards.*/
-  if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent, sampleSize,
-                                    median, omega)) {
+  if (m_steeringGuard.intentBlocked(m_lastIntent, median, sampleSize, omega,
+                                    loopTimestamp)) {
     m_debug.intentBlocked = true;
 
     return std::nullopt;
@@ -162,10 +162,10 @@ std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
   return intent;
 };
 
-bool CoreSteeringController::counterIntentNecessary(uint32_t loopTimestamp,
-                                                    int16_t median,
+bool CoreSteeringController::counterIntentNecessary(int16_t median,
                                                     uint8_t sampleSize,
-                                                    float omega) {
+                                                    float omega,
+                                                    uint32_t loopTimestamp) {
   // nullopt kann aufgrund fehlender Richtung nicht Basis sein
   if (!m_lastIntentValue.has_value()) {
     return false;
