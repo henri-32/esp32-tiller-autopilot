@@ -15,11 +15,10 @@ public:
   // Outputs/Side-effects: issues PWM commands when intent exists.
   explicit SteeringOrchestrator(SteeringControllerConfig &config);
 
-  void tick(NavigationSensors::NavigationSnapshot snapshot, uint16_t cscInternalTarget,
-            uint32_t loopTimestamp);
+  void tick(NavigationSensors::NavigationSnapshot snapshot,
+            uint16_t cscInternalTarget, uint32_t loopTimestamp);
 
 private:
-  SteeringControllerConfig &m_config;
   ImpulseFilter m_impulsefilter;
   CoreSteeringController m_csc;
   PWMController m_pwm;

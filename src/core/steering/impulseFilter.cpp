@@ -3,6 +3,14 @@
 #include <algorithm>
 #include <cstdint>
 
+/*Diese Klasse bekommt die abstrakte gewünschte Impulsstärke vom CSC 
+Die wird in dieser Klasse abhängig vom Speed through water intepretiert und 
+als pwm command an den pwm Regler übergeben 
+TODO 
+Semantisch müsste dann eigentlich noch der abstrakte Impuls weiter gefiltert werden 
+und erst der PWM Controller rechnet das in Impulszeiten um*/
+
+
 /*Für mein zukünftiges Ich. Die Syntax mit return .x ist ziemlich cool, weil ich
 damit keine lokale Variable des Rückgabewerts zwischenspeichern muss, sondern
 direkt auf die Argumente des Rückgabewerts schreibe */

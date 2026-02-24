@@ -2,7 +2,7 @@
 
 
 
-FrameBuffer DisplayContent::create(Intent panel, NavigationSensors::NavigationSnapshot navigation,
+FrameBuffer UIContent::create(Intent panel, NavigationSensors::NavigationSnapshot navigation,
                                    DiagnosticSnapshot diagnostics, SystemState::SystemMode mode,
                                    uint32_t loopTimestamp) {
   createModel(panel, navigation, diagnostics, mode);
@@ -11,7 +11,7 @@ FrameBuffer DisplayContent::create(Intent panel, NavigationSensors::NavigationSn
   return buffer;
 }
 
-DisplayModel DisplayContent::createModel(Intent panel, NavigationSensors::NavigationSnapshot navigation,
+DisplayModel UIContent::createModel(Intent panel, NavigationSensors::NavigationSnapshot navigation,
                                  DiagnosticSnapshot diagnostics, SystemState::SystemMode mode) {
   DisplayModel model; 
   

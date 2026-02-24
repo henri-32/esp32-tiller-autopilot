@@ -1,6 +1,6 @@
 ﻿#include "core/steering/csc/csc.h"
 
-#include "core/steering/csc/deadband.h"
+
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
@@ -9,7 +9,7 @@
 #include <cstdint>
 
 CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
-    : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config),
+    : m_observationBuffer(config),m_steeringGuard(config),
       m_config(config) {}
 
 void CoreSteeringController::currentHDG(uint16_t current) {
@@ -33,7 +33,6 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   // Debug flags are per-tick state, not latched state.
   m_debug.observationBlocked = false;
   m_debug.intentBlocked = false;
-  m_debug.deadbandActive = false;
 
   /*CSC macht zwei Sachen
   - Beobachten

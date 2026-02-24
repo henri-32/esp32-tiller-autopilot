@@ -18,17 +18,18 @@ struct DisplayModel {
 
 struct FrameBuffer {};
 
-class DisplayContent {
+class UIContent {
 public:
-  DisplayContent() = default;
+  UIContent() = default;
 
   FrameBuffer create(Intent panel,
                      NavigationSensors::NavigationSnapshot navigation,
-                     DiagnosticSnapshot diagnostics, SystemState::SystemMode state,
-                     uint32_t loopTimestamp);
+                     DiagnosticSnapshot diagnostics,
+                     SystemState::SystemMode state, uint32_t loopTimestamp);
 
 private:
   DisplayModel createModel(Intent panel,
                            NavigationSensors::NavigationSnapshot navigation,
-                           DiagnosticSnapshot diagnostics, SystemState::SystemMode state);
+                           DiagnosticSnapshot diagnostics,
+                           SystemState::SystemMode state);
 };

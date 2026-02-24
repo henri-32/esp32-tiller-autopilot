@@ -32,11 +32,11 @@ private:
 
   // Control and supervision pipeline
   Diagnostics m_diagnostics;
-  SourceHandler m_sourceHandler; 
+  SourceHandler m_sourceHandler;
   SteeringOrchestrator m_steeringOrchestrator;
 
   // Presentation
-  DisplayContent m_displayContent;
+  UIContent m_displayContent;
   Display m_display;
 
   SystemState stateUpdate(DiagnosticSnapshot snapshot);

@@ -1,7 +1,7 @@
 #include "core/steering/csc/steeringGuard.h"
 
 SteeringGuard::SteeringGuard(SteeringRegulationConfig &config)
-    : m_config(config), m_deadband(config) {};
+    : m_config(config), m_deadband(config){};
 
 bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
                                        uint32_t lastUpdate,

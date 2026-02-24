@@ -4,7 +4,7 @@
 
 SystemController::SystemController()
     : m_navigationSensors(),
-      m_sourceHandler(m_controlPanel, m_navigationSensors, m_config.source,
+      m_sourceHandler( m_navigationSensors, m_config.source,
                       m_diagnostics),
       m_steeringOrchestrator(m_config) {}
 
@@ -33,7 +33,7 @@ void SystemController::tick(uint32_t loopTimestamp) {
   const auto diagnostics_snapshot = m_diagnostics.snapshot();
 
   // 6. Systemstatus überprüfen
-  const auto m_state = stateUpdate(diagnostics_snapshot);
+ m_state = stateUpdate(diagnostics_snapshot);
 
   // 7. Display updaten
   auto content = m_displayContent.create(

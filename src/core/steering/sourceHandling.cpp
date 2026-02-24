@@ -1,12 +1,10 @@
 #include "core/steering/sourceHandling.h"
 
-SourceHandler::SourceHandler(const ControlPanel &panel,
-                             NavigationSensors &navsens,
+SourceHandler::SourceHandler(NavigationSensors &navsens,
                              SteeringSourceHandlingConfig &config,
                              Diagnostics &diagnostics)
-    : m_panel(panel), m_navigationSensors(navsens), m_diagnostics(diagnostics),
-      m_sourcePolicy(config, diagnostics),
-      m_targetInterpreter(m_gpsModel, m_windModel), m_sourceExecutor(navsens) {}
+    : m_sourcePolicy(config, diagnostics), m_targetInterpreter(),
+      m_sourceExecutor(navsens) {}
 
 uint16_t SourceHandler::tick(NavigationSource requestedSource,
                              uint32_t loopTimestamp,
@@ -73,10 +71,7 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
   return effective;
 };
 
-//_____________________SOURCE_INTERPRETER________________________
-SourceTargetInterpreter::SourceTargetInterpreter(GPSModel &gpsModel,
-                                                 WindModel &windModel)
-    : m_gpsModel(gpsModel), m_windModel(windModel) {}
+//_____________________TARFGE_INTERPRETER________________________
 
 uint16_t
 SourceTargetInterpreter::applySourceFilters(uint16_t generalTarget,

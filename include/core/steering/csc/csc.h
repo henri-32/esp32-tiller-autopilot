@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/config.h"
-#include "core/steering/csc/deadband.h"
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
@@ -12,7 +11,6 @@ struct CSCDebugSnapshot {
   int16_t error = 0;
   int16_t median = 0;
   uint8_t sampleSize = 0;
-  bool deadbandActive = false;
   bool observationBlocked = false;
   bool intentBlocked = false;
 };
@@ -43,7 +41,7 @@ private:
   // --- State ---
   uint16_t m_currentCourse{0};
   uint16_t m_internalTargetCourse{0};
-  int16_t m_lastError;
+  int16_t m_lastError = 0;
   uint32_t m_lastObsUpdate = 0;
   uint32_t m_lastIntent = 0;
   uint32_t m_lastCounterIntent = 0;
@@ -52,7 +50,6 @@ private:
   // --- Subsystems ---
   HeadingErrorCalculator m_errorCalculator;
   ObservationBuffer m_observationBuffer;
-  Deadband m_deadband;
   SteeringGuard m_steeringGuard;
   SteeringRegulationConfig m_config;
 
