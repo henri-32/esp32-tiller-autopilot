@@ -3,6 +3,18 @@ CompileFlags:
   Add:
     - -Iinclude
     - -Isrc
+    - -isystem
+    - .pio-core/packages/toolchain-gccarmnoneeabi/arm-none-eabi/include/c++/7.2.1
+    - -isystem
+    - .pio-core/packages/toolchain-gccarmnoneeabi/arm-none-eabi/include/c++/7.2.1/arm-none-eabi
+    - -isystem
+    - .pio-core/packages/toolchain-gccarmnoneeabi/arm-none-eabi/include/c++/7.2.1/backward
+    - -isystem
+    - .pio-core/packages/toolchain-gccarmnoneeabi/lib/gcc/arm-none-eabi/7.2.1/include
+    - -isystem
+    - .pio-core/packages/toolchain-gccarmnoneeabi/lib/gcc/arm-none-eabi/7.2.1/include-fixed
+    - -isystem
+    - .pio-core/packages/toolchain-gccarmnoneeabi/arm-none-eabi/include
 
 ---
 If:

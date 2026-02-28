@@ -45,6 +45,50 @@ build_compiledb_if_exists() {
   fi
 }
 
+inject_header_entries() {
+  local db_path="$1"
+  if [[ ! -f "$db_path" ]]; then
+    return
+  fi
+
+  local base_cmd
+  base_cmd="$(jq -r 'first(.[] | select(.file | test("\\.(cpp|cc|cxx)$")) | .command) // empty' "$db_path")"
+  if [[ -z "$base_cmd" || "$base_cmd" == "null" ]]; then
+    return
+  fi
+
+  local base_no_src
+  base_no_src="$(sed -E 's/[[:space:]]+[^[:space:]]+\.(cpp|cc|cxx)$//' <<< "$base_cmd")"
+  if [[ -z "$base_no_src" ]]; then
+    return
+  fi
+
+  local tmp_entries
+  tmp_entries="$(mktemp)"
+  find include -type f \( -name '*.h' -o -name '*.hpp' \) | sort | while IFS= read -r header; do
+    jq -n \
+      --arg cmd "$base_no_src -x c++ $header" \
+      --arg dir "$repo_root" \
+      --arg file "$header" \
+      --arg out ".pio/build/clangd/headers/$(basename "${header%.*}").o" \
+      '{command:$cmd,directory:$dir,file:$file,output:$out}'
+  done > "$tmp_entries"
+
+  if [[ ! -s "$tmp_entries" ]]; then
+    rm -f "$tmp_entries"
+    return
+  fi
+
+  jq -s '
+    .[0] as $db
+    | .[1:] as $newEntries
+    | [ $db[] | select(.file | test("(^|[\\\\/])include[\\\\/].*\\.(h|hpp)$") | not) ] + $newEntries
+  ' "$db_path" "$tmp_entries" > "${db_path}.tmp"
+
+  mv "${db_path}.tmp" "$db_path"
+  rm -f "$tmp_entries"
+}
+
 unity_test_flags() {
   local flags="-DPIO_UNIT_TESTING -DUNIT_TEST -I.pio/libdeps/native_csc/Unity/src -Itest/test_csc -Itest"
   if [[ -f ".pio/build/native_csc/unity_config/unity_config.h" || -f ".pio/build/native_csc/unity_config/UnityConfig.h" ]]; then
@@ -124,9 +168,15 @@ build_compiledb "sim" ".clangd-db/sim"
 build_compiledb "native_csc" ".clangd-db/native_csc"
 build_compiledb_if_exists "gui" ".clangd-db/gui"
 build_compiledb_if_exists "gui_sim" ".clangd-db/gui_sim"
+inject_header_entries ".clangd-db/genericSTM32F411RE/compile_commands.json"
+inject_header_entries ".clangd-db/sim/compile_commands.json"
+inject_header_entries ".clangd-db/native_csc/compile_commands.json"
+inject_header_entries ".clangd-db/gui/compile_commands.json"
+inject_header_entries ".clangd-db/gui_sim/compile_commands.json"
 
 mapfile -t cmds < <(capture_test_compile_commands)
 inject_native_csc_test_entries "${cmds[0]}" "${cmds[1]}"
 
 # Keep root compile_commands.json focused on firmware env.
 pio run -t compiledb -e genericSTM32F411RE
+inject_header_entries "compile_commands.json"

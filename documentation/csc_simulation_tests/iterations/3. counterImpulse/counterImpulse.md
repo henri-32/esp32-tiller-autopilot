@@ -29,6 +29,4 @@ Wenn schneller reagiert wird, wäre die Energie (die aktuell noch nicht prävent
 
 
 
-
-
 ### Sonstiges
