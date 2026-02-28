@@ -1,5 +1,5 @@
 ### On Branch 
-simulation
+Simulation
 ae0c1fe
 
 ### Beobachtung 
@@ -24,9 +24,10 @@ Implementierung eines Gegenimpulses kurz vor Erreichen des Targets
 ### Ergebnis 
 Stufe 1: 
 Das Ergebnis wird bei gleicher Config leicht schlechter. Es lässt sich kein großer Einfluss auf die ersten Intents nach Richtungswechsel erkennen. 
-Das schlechtere Ergebnis könnte durch schnellere Reaktion hervorgerufen sein. Die Guards limitieren die maximalen intents pro zyklus der Sim. 
-Wenn schneller reagiert wird, wäre die Energie (die aktuell noch nicht präventiv abgefangen wird.)größer und die Oszillation größer. 
+Das schlechtere Ergebnis könnte durch schnellere Reaktion hervorgerufen sein. Die Guards limitieren die maximalen Intents pro Zyklus der Sim. 
+Wenn schneller reagiert wird, wäre die Energie (die aktuell noch nicht präventiv abgefangen wird.) größer und die Oszillation größer. 
 
-
+Stufe 2: 
+Die Implementierung des Gegenimpulses hat wie gewünscht dazu geführt, dass die Winkelgeschwindigkeit beim Überschreiten des Fehlers 0 geringer wird und damit insgesamt eine geringere Oszillation erreicht wird. 
 
 ### Sonstiges

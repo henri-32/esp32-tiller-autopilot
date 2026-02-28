@@ -6,6 +6,9 @@
   "editor.autoClosingBrackets": "languageDefined",
   "editor.autoClosingQuotes": "languageDefined",
   "editor.autoSurround": "never",
+  "editor.renderLineHighlight": "none",
+  "vim.hlsearch": false,
+  "vim.incsearch": false,
 
   // --- Dateizuordnungen ---
   "files.associations": {

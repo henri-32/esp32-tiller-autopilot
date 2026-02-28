@@ -2,7 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
-#include <thread>
+
 
 int main() {
   SystemController systemController;
@@ -16,6 +16,6 @@ int main() {
 
     systemController.tick(loopTimestamp);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
   }
 }

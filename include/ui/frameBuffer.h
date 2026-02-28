@@ -28,10 +28,12 @@ public:
                      SystemState::SystemMode state, uint32_t loopTimestamp);
 
 private:
-  DisplayModel createModel(const Intent &panel,
-                           const NavigationSensors::NavigationSnapshot &navigation,
-                           const DiagnosticSnapshot &diagnostics,
-                           SystemState::SystemMode state);
+  DisplayModel
+  createModel(const Intent &panel,
+              const NavigationSensors::NavigationSnapshot &navigation,
+              const DiagnosticSnapshot &diagnostics,
+              SystemState::SystemMode state);
 
-  FrameBuffer createBuffer(const DisplayModel& model);
+  FrameBuffer createBuffer(const DisplayModel &model);
 };
+

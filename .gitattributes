@@ -1,0 +1,13 @@
+# Force LF for source files
+*.cpp text eol=lf
+*.h   text eol=lf
+*.hpp text eol=lf
+*.c   text eol=lf
+
+# Config / build
+*.json text eol=lf
+*.txt  text eol=lf
+*.md   text eol=lf
+
+# Default: treat all text as LF
+* text=auto eol=lf
