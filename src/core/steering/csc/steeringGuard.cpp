@@ -52,7 +52,9 @@ bool SteeringGuard::intentBlocked(uint32_t lastIntent, int16_t median,
   Der Guard ist aktuell binaer und kann bei grossem Fehler zu langen
   No-Intent-Phasen fuehren. Sinnvoll waere eine Mindest-|omega|, die von der
   Fehlergroesse abhaengt, damit bei grossem Fehler frueher wieder Intents
-  erlaubt werden. */
+  erlaubt werden. 
+  Um das sinnvoll zu implementieren müssten reale omega werte aus den Praxistests
+  herausgefunden werden. */
   if (median < 0 && omega < 0 - m_config.omegaDeadband) {
     return true;
   };

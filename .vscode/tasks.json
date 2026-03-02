@@ -124,13 +124,13 @@
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "$out = '.\\all_sources.txt'; Set-Content -Path $out -Value '' -Encoding UTF8; Get-ChildItem -Recurse -Path .\\include, .\\src, .\\test, .\\sim -Include *.h,*.hpp,*.cpp | Sort-Object FullName | ForEach-Object { Add-Content -Path $out -Value \"`n/* ===== FILE: $($_.FullName) ===== */`n\" -Encoding UTF8; Add-Content -Path $out -Value (Get-Content -Raw $_.FullName) -Encoding UTF8 }"
+        "$out = '.\\all_sources.txt'; Set-Content -Path $out -Value '' -Encoding UTF8; Get-ChildItem -Recurse -Path .\\include, .\\src, .\\test, .\\sim -Include *.h,*.hpp,*.cpp | Sort-Object FullName | ForEach-Object { Add-Content -Path $out -Value \"`n/* ===== FILE: $($_.FullName) ===== */`n\" -Encoding UTF8; Add-Content -Path $out -Value (Get-Content -Raw $_.FullName) -Encoding UTF8 }; $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'; Add-Content -Path $out -Value \"`n/* ===== EXPORTED AT: $ts ===== */\" -Encoding UTF8"
       ],
       "linux": {
         "command": "bash",
         "args": [
           "-lc",
-          "set -euo pipefail; : > all_sources.txt; find include src test sim -type f \\( -name \"*.h\" -o -name \"*.hpp\" -o -name \"*.cpp\" \\) | sort | while IFS= read -r f; do printf \"\\n/* ===== FILE: %s ===== */\\n\" \"$f\" >> all_sources.txt; cat \"$f\" >> all_sources.txt; done"
+          "set -euo pipefail; : > all_sources.txt; find include src test sim -type f \\( -name \"*.h\" -o -name \"*.hpp\" -o -name \"*.cpp\" \\) | sort | while IFS= read -r f; do printf \"\\n/* ===== FILE: %s ===== */\\n\" \"$f\" >> all_sources.txt; cat \"$f\" >> all_sources.txt; done; printf \"\\n/* ===== EXPORTED AT: %s ===== */\\n\" \"$(date '+%Y-%m-%d %H:%M:%S %z')\" >> all_sources.txt"
         ]
       },
       "presentation": {

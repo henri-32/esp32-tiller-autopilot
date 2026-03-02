@@ -57,3 +57,16 @@ CompileFlags:
     - -Itest/test_csc
     - -I.pio/libdeps/native_csc/Unity/src
     - -I.pio/build/native_csc/unity_config
+
+Index: 
+  Background: Skip
+
+Diagnostics:
+  ClangTidy : false 
+
+InlayHints: 
+  Enabled: No
+
+Completion: 
+  AllScopes: No
+

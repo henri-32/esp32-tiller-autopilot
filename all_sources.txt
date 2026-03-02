@@ -1,23 +1,30 @@
 
 /* ===== FILE: include/actuators/pwmController.h ===== */
 #pragma once
+#include "core/config.h"
 #include "types/globalTypes.h"
+
 
 class PWMController {
 public:
   // Contract:
-  // Purpose: Drive the steering actuator via PWM commands.
-  // Inputs: PWMCommand with direction and pulse info.
+  // Purpose: Drive the steering actuator from a filtered PWM intent.
+  // Inputs: PWMIntent with direction + filtered abstract impulse + duty cycle.
   // Outputs/Side-effects: updates actuator state (hardware output).
-  enum class Force { Low, Medium, High }; // gerade noch Platzhalter, das wird der duty cycle. 
+  enum class Force {
+    Low,
+    Medium,
+    High
+  }; // gerade noch Platzhalter, das wird der duty cycle.
 
-  PWMController() = default;
+  PWMController(const SteeringMechanicsConfig& config);
   PWMController(const PWMController &) = delete;
   PWMController &operator=(const PWMController &) = delete;
 
-  void command(PWMCommand command);
+  void command(const PWMIntent &command);
 
 private:
+  const SteeringMechanicsConfig &m_config;
   SteeringDirection m_lastDir;
   Force m_lastFrc = Force::Low;
 };
@@ -78,7 +85,6 @@ struct SteeringControllerConfig {
 #pragma once
 
 #include "core/config.h"
-#include "core/steering/csc/deadband.h"
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
@@ -89,7 +95,6 @@ struct CSCDebugSnapshot {
   int16_t error = 0;
   int16_t median = 0;
   uint8_t sampleSize = 0;
-  bool deadbandActive = false;
   bool observationBlocked = false;
   bool intentBlocked = false;
 };
@@ -100,7 +105,7 @@ public:
   // Purpose: Decide if a steering impulse should be issued.
   // Inputs: current heading, internal target, regulation config slice.
   // Outputs/Side-effects: optional SteeringIntent; updates internal state.
-  explicit CoreSteeringController(SteeringRegulationConfig &config);
+  explicit CoreSteeringController(const SteeringRegulationConfig &config);
 
   void currentHDG(uint16_t current);
   void setInternalTarget(uint16_t target);
@@ -114,13 +119,13 @@ private:
   SteeringDirection determineDirection(int16_t median) const;
   std::optional<SteeringIntent> calculateIntentFromObs();
   SteeringIntent counterIntent(float omega);
-  bool counterIntentNecessary(uint32_t loopTimestamp, int16_t median,
-                              uint8_t sampleSize, float omega);
+  bool counterIntentNecessary(int16_t median, uint8_t sampleSize, float omega,
+                              uint32_t loopTimestamp);
 
   // --- State ---
   uint16_t m_currentCourse{0};
   uint16_t m_internalTargetCourse{0};
-  int16_t m_lastError;
+  int16_t m_lastError = 0;
   uint32_t m_lastObsUpdate = 0;
   uint32_t m_lastIntent = 0;
   uint32_t m_lastCounterIntent = 0;
@@ -129,9 +134,8 @@ private:
   // --- Subsystems ---
   HeadingErrorCalculator m_errorCalculator;
   ObservationBuffer m_observationBuffer;
-  Deadband m_deadband;
   SteeringGuard m_steeringGuard;
-  SteeringRegulationConfig m_config;
+  const SteeringRegulationConfig &m_config;
 
   // --- Debug ---
   CSCDebugSnapshot m_debug;
@@ -149,12 +153,12 @@ public:
   // Purpose: Reject small errors as noise.
   // Inputs: error + regulation config slice.
   // Outputs/Side-effects: boolean decision, no side-effects.
-  Deadband(SteeringRegulationConfig &config);
+  Deadband(const SteeringRegulationConfig &config);
 
   bool errorSignificant(int16_t error);
 
 private:
-  SteeringRegulationConfig &m_config;
+  const SteeringRegulationConfig &m_config;
 };
 
 /* ===== FILE: include/core/steering/csc/headingErrorCalculator.h ===== */
@@ -177,7 +181,7 @@ public:
 
 class ObservationBuffer {
 private:
-  SteeringRegulationConfig &m_config;
+  const SteeringRegulationConfig &m_config;
 
   static constexpr uint8_t maxBufferSize =
       SteeringRegulationConfig::observationBufferSize;
@@ -197,7 +201,7 @@ public:
   // Purpose: Store recent errors and compute a median for direction decision.
   // Inputs: error samples + regulation config slice.
   // Outputs/Side-effects: median and sample count; internal buffer mutated.
-  ObservationBuffer(SteeringRegulationConfig &config);
+  ObservationBuffer(const SteeringRegulationConfig &config);
 
   void update(int16_t error);
   void update(int16_t error, uint32_t loopTimestamp);
@@ -221,15 +225,15 @@ public:
   // Purpose: Gate observation/intent by timing and sample thresholds.
   // Inputs: timestamps, sample size, regulation config slice.
   // Outputs/Side-effects: boolean decisions, no side-effects.
-  SteeringGuard(SteeringRegulationConfig &config);
+  SteeringGuard(const SteeringRegulationConfig &config);
 
-  bool observationBlocked(uint32_t loopTimestamp, uint32_t lastUpdate,
-                          uint32_t lastIntent);
-  bool intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
-                     uint8_t sampleSize, int16_t median, float omega);
+  bool observationBlocked(uint32_t lastUpdate, uint32_t lastIntent,
+                          uint32_t loopTimestamp);
+  bool intentBlocked(uint32_t lastIntent, int16_t median, uint8_t sampleSize,
+                     float omega, uint32_t loopTimestamp);
 
 private:
-  SteeringRegulationConfig &m_config;
+  const SteeringRegulationConfig &m_config;
   Deadband m_deadband;
 };
 
@@ -242,30 +246,27 @@ private:
 class ImpulseFilter {
 public:
   // Contract:
-  // Purpose: Shape an abstract steering intent into a PWM command.
+  // Purpose: Shape an abstract steering intent into a filtered PWM intent.
   // Inputs: intent + navigation snapshot + mechanics/physics config slices.
-  // Outputs/Side-effects: returns PWMCommand, no hardware side-effects.
-  ImpulseFilter(SteeringMechanicsConfig &mechanicsConfig,
-                SteeringPhysicsConfig &physicsConfig);
+  // Outputs/Side-effects: returns PWMIntent, no hardware side-effects.
+  ImpulseFilter(const SteeringMechanicsConfig &mechanicsConfig,
+                const SteeringPhysicsConfig &physicsConfig);
 
-  PWMCommand apply(SteeringIntent intent,
-                   NavigationSensors::NavigationSnapshot snapshot);
+  PWMIntent apply(const SteeringIntent &intent,
+                  const NavigationSensors::NavigationSnapshot &snapshot);
 
 private:
-  SteeringMechanicsConfig &m_mechanics;
-  SteeringPhysicsConfig &m_physics;
+  const SteeringMechanicsConfig &m_mechanics;
+  const SteeringPhysicsConfig &m_physics;
 };
 
 /* ===== FILE: include/core/steering/sourceHandling.h ===== */
 #pragma once
 #include "core/config.h"
-#include "core/steering/csc/csc.h"
 #include "core/steering/sourceModels/gpsModel.h"
 #include "core/steering/sourceModels/windModel.h"
 #include "diagnostics/diagnostics.h"
 #include "sensors/navigationSensors.h"
-#include "ui/controlPanel.h"
-#include <array>
 #include <cstdint>
 
 class SourcePolicyEngine {
@@ -274,15 +275,15 @@ public:
   // Purpose: Select the effective navigation source with fallbacks.
   // Inputs: requested source + sensor snapshot + policy config slice.
   // Outputs/Side-effects: effective source; may emit diagnostics.
-  SourcePolicyEngine(SteeringSourceHandlingConfig &config,
-                     Diagnostics &diagnostics);
+  SourcePolicyEngine(const SteeringSourceHandlingConfig &config,
+                     Diagnostics &Diagnostics);
 
   NavigationSource evaluate(NavigationSource requested,
-                            NavigationSensors::NavigationSnapshot snapshot,
+                            const NavigationSensors::NavigationSnapshot &snapshot,
                             uint32_t loopTimestamp);
 
 private:
-  SteeringSourceHandlingConfig &m_config;
+  const SteeringSourceHandlingConfig &m_config;
   Diagnostics &m_diagnostics;
 };
 
@@ -292,60 +293,57 @@ public:
   // Purpose: Filter a target based on the effective source.
   // Inputs: general target + effective source + source models.
   // Outputs/Side-effects: filtered target; no side-effects.
-  SourceTargetInterpreter(GPSModel &gpsModel, WindModel &windmodel);
+  SourceTargetInterpreter() = default;
   uint16_t applySourceFilters(uint16_t generalTarget,
                               NavigationSource effective);
 
 private:
-  GPSModel &m_gpsModel;
-  WindModel &m_windModel;
+  GPSModel m_gpsModel;
+  WindModel m_windModel;
 };
 
 class SourceExecutor {
 
 public:
   // Contract:
-  // Purpose: Apply effective source and target to the steering stack.
-  // Inputs: effective source + filtered target.
-  // Outputs/Side-effects: updates NavigationSensors and CSC state.
-  SourceExecutor(NavigationSensors &navsens, CoreSteeringController &csc);
+  // Purpose: Apply effective source
+  // Inputs: effective source.
+  // Outputs/Side-effects: updates NavigationSensors
+  SourceExecutor(NavigationSensors &navsens);
 
-  void execute(NavigationSource effective, uint16_t filteredTarget);
+  void execute(NavigationSource effective);
 
 private:
   NavigationSensors &m_navigationSensors;
-  CoreSteeringController &m_csc;
 };
 
 class SourceHandler {
 public:
   // Contract:
   // Purpose: Orchestrate policy, filtering, and execution for sources.
-  // Inputs: requested source, snapshot, target, and config slice.
-  // Outputs/Side-effects: updates CSC target, navigation lead source, diagnostics.
-  explicit SourceHandler(const ControlPanel &panel, NavigationSensors &navsens,
-                        SteeringSourceHandlingConfig &config,
-                         Diagnostics &diagnostics, CoreSteeringController &csc);
+  // Inputs: snapshot, requested source, target, and config slice.
+  // Outputs/Side-effects: returns filtered CSC target; updates lead source and
+  // diagnostics.
+  explicit SourceHandler(NavigationSensors &navsens,
+                         const SteeringSourceHandlingConfig &config,
+                         Diagnostics &diagnostics);
 
-  void tick(NavigationSource requestedSource, uint32_t loopTimestamp,
-            NavigationSensors::NavigationSnapshot snapshot,
-            uint16_t generalTarget);
+  // TODO(Architektur):
+  // Mittelfristig statt nur uint16_t einen Guidance-Output liefern, z. B.:
+  // - effectiveSource
+  // - currentHDG (bereits validiert)
+  // - internalTargetHDG
+  // - valid/blocked-Flag
+  // Damit bleibt die Verantwortung "Kursableitung + Validierung" in einer
+  // Schicht und der Orchestrator muss keine Sensorfelder direkt kennen.
+  uint16_t tick(const NavigationSensors::NavigationSnapshot &snapshot,
+                NavigationSource requestedSource, uint16_t generalTarget,
+                uint32_t loopTimestamp);
 
 private:
-  const ControlPanel &m_panel;
-  NavigationSensors &m_navigationSensors;
-  Diagnostics &m_diagnostics;
-  CoreSteeringController &m_csc;
-
-  GPSModel m_gpsModel;
-  WindModel m_windModel;
   SourcePolicyEngine m_sourcePolicy;
   SourceTargetInterpreter m_targetInterpreter;
   SourceExecutor m_sourceExecutor;
-
-  static constexpr uint8_t OBSERVATION_BUFFER_SIZE =
-      SteeringSourceHandlingConfig::observationBufferSize;
-  std::array<uint16_t, OBSERVATION_BUFFER_SIZE> m_observationBuffer;
 };
 
 /* ===== FILE: include/core/steering/sourceModels/gpsModel.h ===== */
@@ -394,31 +392,30 @@ class SteeringOrchestrator {
 public:
   // Contract:
   // Purpose: Connect CSC intent to actuator command execution.
-  // Inputs: navigation snapshot + loop timestamp.
+  // Inputs: navigation snapshot + filtered CSC target + loop timestamp.
   // Outputs/Side-effects: issues PWM commands when intent exists.
-  SteeringOrchestrator(CoreSteeringController &csc, ImpulseFilter &filter,
-                       PWMController &pwm);
+  explicit SteeringOrchestrator(const SteeringControllerConfig &config);
 
-  void tick(NavigationSensors::NavigationSnapshot snapshot,
-            uint32_t loopTimestamp);
+  // TODO(Architektur):
+  // Bei Einfuehrung eines GuidanceOutput diese Signatur auf einen expliziten
+  // Input-Typ umstellen, statt Snapshot + getrenntem Target.
+  void tick(const NavigationSensors::NavigationSnapshot &snapshot,
+            uint16_t cscInternalTarget, uint32_t loopTimestamp);
 
 private:
-  CoreSteeringController &m_csc;
-  ImpulseFilter &m_impulsefilter;
-  PWMController &m_pwm;
+  ImpulseFilter m_impulsefilter;
+  CoreSteeringController m_csc;
+  PWMController m_pwm;
   SteeringIntent m_steeringIntent;
 };
 
 /* ===== FILE: include/core/systemController.h ===== */
 #pragma once
-#include "actuators/pwmController.h"
 #include "core/config.h"
-#include "core/steering/csc/csc.h"
-#include "core/steering/impulseFilter.h"
+
 #include "core/steering/sourceHandling.h"
 #include "core/steering/steeringOrchestrator.h"
 #include "diagnostics/diagnostics.h"
-#include "sensors/NMEA183BUS.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 #include "ui/controlPanel.h"
@@ -436,26 +433,28 @@ public:
   void tick(uint32_t loopTimestamp);
 
 private:
-  // Top-level composition root. Owns hardware modules, config, and
+  // Top-level composition root. Owns partly hardware, config and
   // orchestration.
-  ControlPanel m_controlPanel{};
   SystemState m_state;
-  CompassModule m_compassModule{};
-  GPSModule m_gpsModule;
-  WindModule m_windModule;
-  NMEA183BUS m_nmea183Bus;
-  NavigationSensors m_navigationSensors;
-  PWMController m_pwmController{};
   SteeringControllerConfig m_config;
+
+  // Inputs and UI intent
+  ControlPanel m_controlPanel{};
+  NavigationSensors m_navigationSensors;
+
+  // Control and supervision pipeline
   Diagnostics m_diagnostics;
-  ImpulseFilter m_impulseFilter;
-  CoreSteeringController m_csc;
   SourceHandler m_sourceHandler;
   SteeringOrchestrator m_steeringOrchestrator;
-  DisplayContent m_displayContent;
+
+  // Presentation
+  UIContent m_displayContent;
   Display m_display;
 
-  void stateUpdate();
+  // TODO(Architektur):
+  // Als reine Transition-Funktion ausbauen (prevState + Inputs -> nextState).
+  // So bleibt die Zustandslogik testbar und vom Tick-Ablauf entkoppelt.
+  SystemState stateUpdate(const DiagnosticSnapshot &snapshot);
 };
 
 /* ===== FILE: include/diagnostics/diagnostic_types.h ===== */
@@ -474,83 +473,102 @@ enum class FunctionalCapability : uint8_t {
   COMPASS,
   GPS,
   WIND,
-  HullSpeed,
+  STW,
   PWM,
   AIS,
   COUNT,
 };
 
-enum class CapabilityState : uint8_t { OK, Degraded, Lost };
+enum class CapabilityState : uint8_t { OK, Degraded, Lost, LostWithFallback, ErrorHandled,CRITICAL_ERROR };
 
 /* ===== FILE: include/diagnostics/diagnostics.h ===== */
 #pragma once
-#include <cstdint>
 #include "diagnostics/diagnostic_types.h"
+#include <array>
+#include <cstdint>
 
 struct DiagnosticEntry {
-    DiagnosticEvent event;
-    FunctionalCapability capability;
-    uint32_t timestamp_ms;
+  DiagnosticEvent event;
+  FunctionalCapability capability;
+  uint32_t timestamp_ms;
 };
+
+struct DiagnosticSnapshot {
+  bool criticalErrorOccured = false;
+  FunctionalCapability criticalCapability = FunctionalCapability::COUNT;
+  CapabilityState compassState = CapabilityState::OK;
+  CapabilityState gpsState = CapabilityState::OK;
+  CapabilityState windState = CapabilityState::OK;
+  CapabilityState stwState = CapabilityState::OK;
+  CapabilityState pwmState = CapabilityState::OK;
+  CapabilityState aisState = CapabilityState::OK;
+  CapabilityState countState = CapabilityState::OK;
+};
+
 class Diagnostics {
 public:
-    // Contract:
-    // Purpose: Capture and expose diagnostic events and capability states.
-    // Inputs: events emitted by domain code + loop timestamps.
-    // Outputs/Side-effects: internal event buffer and latched states.
-    static constexpr uint8_t kEventBufferSize = 32;
+  // Contract:
+  // Purpose: Capture and expose diagnostic events and capability states.
+  // Inputs: events emitted by domain code + loop timestamps.
+  // Outputs/Side-effects: internal event buffer and latched states.
+  static constexpr uint8_t kEventBufferSize = 32;
 
-    // vom Domain-Code aufgerufen
-    void emit(DiagnosticEvent event,
-              FunctionalCapability capability,
-              uint32_t loopTimestamp);
+  // vom Domain-Code aufgerufen
+  void emit(DiagnosticEvent event, FunctionalCapability capability,
+            uint32_t loopTimestamp);
 
-    // vom SystemController im Tick aufgerufen
-    void tick(uint32_t loopTimestamp);
+  // vom SystemController im Tick aufgerufen
+  void tick(uint32_t loopTimestamp);
 
-    // für spätere Auswertung (noch minimal)
-    CapabilityState capabilityState(FunctionalCapability cap) const;
+  // für spätere gezielte Auswertung (noch minimal)
+  CapabilityState capabilityState(FunctionalCapability cap) const;
 
-    bool criticalErroroccured; 
+  DiagnosticSnapshot snapshot();
 
 private:
-    // --- Event Ringbuffer ---
-    DiagnosticEntry m_events[kEventBufferSize];
-    uint8_t m_writeIndex = 0;
-    uint8_t m_count = 0;
+  // --- Event Ringbuffer ---
+  DiagnosticEntry m_events[kEventBufferSize];
+  uint8_t m_writeIndex = 0;
+  uint8_t m_count = 0;
 
-    // --- Capability-Zustände (latched) ---
-    CapabilityState m_states[
-        static_cast<uint8_t>(FunctionalCapability::COUNT)
-    ];
+  // --- Capability-Zustände (latched) ---
+  // TODO(Architektur):
+  // Event->State-Mapping vollstaendig halten (z. B. CRITICAL_ERROR,
+  // LostWithFallback, ErrorHandled), damit Snapshot und Policy dieselbe
+  // Semantik sehen.
+  std::array<CapabilityState, static_cast<uint8_t>(FunctionalCapability::COUNT)>
+      m_states;
 
-    void pushEvent(DiagnosticEvent event,
-                   FunctionalCapability capability,
-                   uint32_t ts);
+  void pushEvent(DiagnosticEvent event, FunctionalCapability capability,
+                 uint32_t ts);
 
-    void updateCapabilityState(DiagnosticEvent event,
-                               FunctionalCapability capability);
+  void updateCapabilityState(DiagnosticEvent event,
+                             FunctionalCapability capability);
 };
 
+/* ===== FILE: include/diagnostics/diagnostics_types.h ===== */
+#pragma once
 
-/* ===== FILE: include/sensors/NMEA183BUS.h ===== */
-#pragma once 
+// Backward-compatible alias for legacy include name.
+#include "diagnostic_types.h"
 
+/* ===== FILE: include/sensors/NASA_Duo.h ===== */
+#pragma once
 
-/* Holt sich Geschwindigkeit durchs Wasser von NASA Clipper über 
+/* Holt sich Geschwindigkeit durchs Wasser von NASA Clipper über
 NMEA183 Protokoll
 Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
 
 #include "types/globalTypes.h"
-class NMEA183BUS {
-    public:
-// Contract:
-// Purpose: Read speed through water (STW) via NMEA.
-// Inputs: NMEA bus messages.
-// Outputs/Side-effects: returns SensorSample; no side-effects.
-NMEA183BUS() = default; 
+class NASA_Duo {
+public:
+  // Contract:
+  // Purpose: Read speed through water (STW) via NMEA.
+  // Inputs: NMEA bus messages.
+  // Outputs/Side-effects: returns SensorSample; no side-effects.
+  NASA_Duo() = default;
 
-SensorSample<float> readSTW() const;
+  SensorSample<float> readSTW() const;
 };
 
 /* ===== FILE: include/sensors/compassModule.h ===== */
@@ -572,7 +590,7 @@ public:
 #pragma once
 #include "types/globalTypes.h"
 #include <cstdint>
-#include <cstdlib>
+
 
 class GPSModule {
 public:
@@ -588,7 +606,7 @@ SensorSample<float> readSOG() const;
 
 /* ===== FILE: include/sensors/navigationSensors.h ===== */
 #pragma once
-#include "sensors/NMEA183BUS.h"
+#include "sensors/NASA_Duo.h"
 #include "sensors/compassModule.h"
 #include "sensors/gpsModule.h"
 #include "sensors/windModule.h"
@@ -600,12 +618,8 @@ public:
   // Contract:
   // Purpose: Read and aggregate navigation sensor data into a snapshot.
   // Inputs: hardware modules + lead source selection.
-  // Outputs/Side-effects: returns snapshot; updates lead source state.
-  explicit NavigationSensors(const CompassModule &compass, const GPSModule &gps,
-                             const WindModule &wind,
-                             const NMEA183BUS &nmea183Bus)
-      : m_compass(compass), m_gps(gps), m_wind(wind),
-        m_nmea183Bus(nmea183Bus) {};
+  // Outputs/Side-effects: returns snapshot; no hardware write side-effects.
+  explicit NavigationSensors() = default;
 
   struct NavigationSnapshot {
     SensorSample<uint16_t> compass_hdg_dg;
@@ -626,16 +640,20 @@ public:
   };
 
   NavigationSnapshot createSnapshot();
+  // TODO(Architektur):
+  // SensorActivation spaeter in createSnapshot() wirksam machen
+  // (z. B. Sensor gezielt nicht lesen), damit Modi tatsaechlich
+  // Energie sparen und nicht nur Status-Flags setzen.
   void setSensorActivations(NavigationSource source, bool setTo);
   void setLeadSource(NavigationSource src);
   NavigationSource getLeadSource() const;
 
 private:
   NavigationSource m_leadSource = NavigationSource::Compass;
-  const CompassModule &m_compass;
-  const GPSModule &m_gps;
-  const WindModule &m_wind;
-  const NMEA183BUS &m_nmea183Bus;
+  CompassModule m_compass;
+  GPSModule m_gps;
+  WindModule m_wind;
+  NASA_Duo m_nmea183Bus;
   SensorActivation m_sensorActivation;
 };
 
@@ -660,10 +678,16 @@ public:
 
 enum class NavigationSource { Compass, Gps, Wind };
 
+struct SystemState {
+  enum class SystemMode { INIT, OK, AISonly, SAFE };
+  SystemMode systemMode = SystemMode::INIT;
+};
+
 struct Intent {
   bool steeringEngaged = false;
   uint16_t generalTarget = 0;
   NavigationSource activeSource = NavigationSource::Compass;
+  SystemState requestedState;
 };
 
 enum class SteeringDirection { Left, Right };
@@ -673,9 +697,9 @@ struct SteeringIntent {
   uint8_t abstractImpulse_0_100;
 };
 
-struct PWMCommand {
+struct PWMIntent {
   SteeringDirection dir;
-  uint32_t pulse_ms;
+  uint16_t filteredAbstractImpulse_0_100;
   uint8_t dutyCycle;
 };
 
@@ -685,10 +709,6 @@ template <typename T> struct SensorSample {
 };
 
 
-struct SystemState {
-  enum class SystemMode { INIT, OK, AISonly, SAFE };
-  SystemMode systemMode = SystemMode::INIT;
-};
 /* ===== FILE: include/ui/controlPanel.h ===== */
 #pragma once
 #include "types/globalTypes.h"
@@ -697,7 +717,7 @@ public:
   // Contract:
   // Purpose: Read user intent from the control interface.
   // Inputs: external UI hardware/state.
-  // Outputs/Side-effects: returns PanelIntent; no side-effects.
+  // Outputs/Side-effects: returns Intent; no side-effects.
 
   Intent readIntent() const;
 };
@@ -711,8 +731,57 @@ public:
     // Purpose: Render the latest system state to the display.
     // Inputs: internal system state (not shown here).
     // Outputs/Side-effects: updates display hardware.
-    void update(FrameBuffer buffer);
+    void update(const FrameBuffer &buffer);
 };
+
+/* ===== FILE: include/ui/fonts.h ===== */
+#pragma once 
+#include <cstdint>
+
+
+constexpr uint8_t fontDigits[10][8] = {
+
+    // '0'
+    {0b00111100, 0b01000010, 0b01000110, 0b01001010, 0b01010010, 0b01100010, 0b00111100,
+     0b00000000},
+
+    // '1'
+    {0b00011000, 0b00101000, 0b01001000, 0b00001000, 0b00001000, 0b00001000, 0b01111110,
+     0b00000000},
+
+    // '2'
+    {0b00111100, 0b01000010, 0b00000010, 0b00001100, 0b00110000, 0b01000000, 0b01111110,
+     0b00000000},
+
+    // '3'
+    {0b00111100, 0b01000010, 0b00000010, 0b00011100, 0b00000010, 0b01000010, 0b00111100,
+     0b00000000},
+
+    // '4'
+    {0b00000100, 0b00001100, 0b00010100, 0b00100100, 0b01000100, 0b01111110, 0b00000100,
+     0b00000000},
+
+    // '5'
+    {0b01111110, 0b01000000, 0b01111100, 0b00000010, 0b00000010, 0b01000010, 0b00111100,
+     0b00000000},
+
+    // '6'
+    {0b00111100, 0b01000000, 0b01111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100,
+     0b00000000},
+
+    // '7'
+    {0b01111110, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00010000, 0b00010000,
+     0b00000000},
+
+    // '8'
+    {0b00111100, 0b01000010, 0b01000010, 0b00111100, 0b01000010, 0b01000010, 0b00111100,
+     0b00000000},
+
+    // '9'
+    {0b00111100, 0b01000010, 0b01000010, 0b00111110, 0b00000010, 0b00000100, 0b00111000,
+     0b00000000}};
+
+constexpr uint8_t fontSpace[8] = {0,0,0,0,0,0,0,0}; 
 
 /* ===== FILE: include/ui/frameBuffer.h ===== */
 #pragma once
@@ -721,35 +790,57 @@ public:
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
 #include <cstdint>
+#include <vector>
 
-struct DisplayModel {
-  SystemState::SystemMode mode = SystemState::SystemMode::OK;
-  Intent panelIntent;
+struct DisplayModel
+{
+    SystemState::SystemMode mode = SystemState::SystemMode::OK;
+    Intent panelIntent;
 
-  CapabilityState gps = CapabilityState::OK;
-  CapabilityState wind = CapabilityState::OK;
-  CapabilityState compass = CapabilityState::OK;
-  CapabilityState ais = CapabilityState::OK;
-  CapabilityState hullSpeed = CapabilityState::OK;
+    CapabilityState gps = CapabilityState::OK;
+    CapabilityState wind = CapabilityState::OK;
+    CapabilityState compass = CapabilityState::OK;
+    CapabilityState ais = CapabilityState::OK;
+    CapabilityState stw = CapabilityState::OK;
 };
 
-struct FrameBuffer {};
-
-class DisplayContent {
-public:
-  DisplayContent(const NavigationSensors &navsens,
-                 const Diagnostics &diagnostics, const SystemState &state);
-
-  FrameBuffer tick(const Intent &intent, uint32_t loopTimestamp);
-
-private:
-  DisplayModel model;
-  const NavigationSensors &m_navigationSensors;
-  const Diagnostics &m_diagnostics;
-  const SystemState &m_state;
-
-  void createModel(const Intent &intent);
+struct FrameBuffer
+{
 };
+
+class UIContent
+{
+  public:
+    UIContent() = default;
+
+    FrameBuffer create(const Intent& panel, const NavigationSensors::NavigationSnapshot& navigation,
+                       const DiagnosticSnapshot& diagnostics, SystemState::SystemMode state,
+                       uint32_t loopTimestamp);
+
+  private:
+    DisplayModel createModel(const Intent& panel,
+                             const NavigationSensors::NavigationSnapshot& navigation,
+                             const DiagnosticSnapshot& diagnostics, SystemState::SystemMode state);
+
+    FrameBuffer createBuffer(const DisplayModel& model);
+};
+
+class BufferBuilderTEST
+{
+  public:
+    BufferBuilderTEST(uint16_t width, uint16_t height);
+
+    void setPixel(int x, int y, bool on);
+    void clear();
+    void drawChar(int startX, int startY, const uint8_t glyph[8]);
+    void drawText(int startX, int startY, char* text);
+
+  private:
+    uint16_t m_width;
+    uint16_t m_height;
+    std::vector<uint8_t> m_buffer;
+};
+
 /* ===== FILE: sim/headingSimulator.cpp ===== */
 #include <cstdint>
 #include <cmath>
@@ -1461,12 +1552,15 @@ int main() {
     const float dampingYawAccel = engine.dampingYawAccel();
 
     const auto &dbg = csc.getDebug();
+    const bool deadbandActive =
+        std::abs(dbg.median) <= config.regulation.steeringTolerance_deg;
 
     file << time_ms << "," << heading << "," << angularVelocity << ","
          << tillerPosition << "," << tillerYawAccel << "," << windYawAccel
          << "," << dampingYawAccel << "," << config.target_deg << ","
          << dbg.error << "," << dbg.median << ","
-         << static_cast<int>(dbg.sampleSize) << "," << dbg.deadbandActive << ","
+         << static_cast<int>(dbg.sampleSize) << ","
+         << static_cast<int>(deadbandActive) << ","
          << dbg.observationBlocked << "," << dbg.intentBlocked << ","
          << (intent.has_value() ? 1 : 0) << ","
          << (intent.has_value()
@@ -1597,8 +1691,19 @@ private:
 #include "actuators/pwmController.h"
 #include "types/globalTypes.h"
 
-void PWMController::command(PWMCommand command) {
-  // TODO HardwareImpulse ausegeben
+PWMController::PWMController(const SteeringMechanicsConfig &config)
+    : m_config(config) {};
+
+void PWMController::command(const PWMIntent &command) {
+  // TODO HardwareImpulse ausgeben
+  //Auskommentiert um clangd Warnungen zu ignorieren
+  
+  //const auto dir = command.dir;
+
+  /*uint32_t pulse_ms =
+      m_config.steeringMinImpulse_ms +
+      (command.filteredAbstractImpulse_0_100 / 100.0f) *
+          (m_config.steeringMaxImpulse_ms - m_config.steeringMinImpulse_ms);*/
 }
 
 /* ===== FILE: src/core/gui_main.cpp ===== */
@@ -1606,7 +1711,7 @@ void PWMController::command(PWMCommand command) {
 
 #include <chrono>
 #include <cstdint>
-#include <thread>
+
 
 int main() {
   SystemController systemController;
@@ -1620,7 +1725,7 @@ int main() {
 
     systemController.tick(loopTimestamp);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
   }
 }
 
@@ -1651,6 +1756,13 @@ int main()
         FatalError("SysTick not running");
     }
 
+    //---------------------------------------------------------
+    //HardwareInit 
+    //---------------------------------------------------------
+
+    //TODO
+    //Meine Hardware
+    
     // --------------------------------------------------------
     // Main loop
     // --------------------------------------------------------
@@ -1664,7 +1776,7 @@ int main()
 /* ===== FILE: src/core/steering/csc/csc.cpp ===== */
 ﻿#include "core/steering/csc/csc.h"
 
-#include "core/steering/csc/deadband.h"
+
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
@@ -1672,8 +1784,8 @@ int main()
 #include <cmath>
 #include <cstdint>
 
-CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
-    : m_observationBuffer(config), m_deadband(config), m_steeringGuard(config),
+CoreSteeringController::CoreSteeringController(const SteeringRegulationConfig &config)
+    : m_observationBuffer(config),m_steeringGuard(config),
       m_config(config) {}
 
 void CoreSteeringController::currentHDG(uint16_t current) {
@@ -1697,15 +1809,14 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   // Debug flags are per-tick state, not latched state.
   m_debug.observationBlocked = false;
   m_debug.intentBlocked = false;
-  m_debug.deadbandActive = false;
 
   /*CSC macht zwei Sachen
   - Beobachten
   - Intent zurückgeben
 
   Wenn er wegen Guards nicht beobachten darf early return*/
-  if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
-                                         m_lastIntent)) {
+  if (m_steeringGuard.observationBlocked(m_lastObsUpdate, m_lastIntent,
+                                         loopTimestamp)) {
     m_debug.observationBlocked = true;
     return std::nullopt;
   }
@@ -1744,7 +1855,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   Absichtlich außerhalb der regulären Intent-Guards, weil eigene counterGuards
   Vor den regulären Intents, damit der counter nicht von deren Guards abgehalten
   wird*/
-  if (counterIntentNecessary(loopTimestamp, median, sampleSize, omega)) {
+  if (counterIntentNecessary(median, sampleSize, omega, loopTimestamp)) {
     auto counter = counterIntent(omega);
     m_lastCounterIntent = loopTimestamp;
     m_lastIntent = loopTimestamp;
@@ -1754,8 +1865,8 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   }
 
   /*steering Guards.*/
-  if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent, sampleSize,
-                                    median, omega)) {
+  if (m_steeringGuard.intentBlocked(m_lastIntent, median, sampleSize, omega,
+                                    loopTimestamp)) {
     m_debug.intentBlocked = true;
 
     return std::nullopt;
@@ -1827,10 +1938,10 @@ std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
   return intent;
 };
 
-bool CoreSteeringController::counterIntentNecessary(uint32_t loopTimestamp,
-                                                    int16_t median,
+bool CoreSteeringController::counterIntentNecessary(int16_t median,
                                                     uint8_t sampleSize,
-                                                    float omega) {
+                                                    float omega,
+                                                    uint32_t loopTimestamp) {
   // nullopt kann aufgrund fehlender Richtung nicht Basis sein
   if (!m_lastIntentValue.has_value()) {
     return false;
@@ -1889,7 +2000,7 @@ SteeringIntent CoreSteeringController::counterIntent(float omega) {
 #include "core/steering/csc/deadband.h"
 #include <cstdint>
 
-Deadband::Deadband(SteeringRegulationConfig &config) : m_config(config) {};
+Deadband::Deadband(const SteeringRegulationConfig &config) : m_config(config) {};
 
 bool Deadband::errorSignificant(int16_t error) {
   if (error >  m_config.steeringTolerance_deg) return true;
@@ -1918,7 +2029,7 @@ int16_t HeadingErrorCalculator::calculateError(uint16_t current,
 
 #include <algorithm>
 
-ObservationBuffer::ObservationBuffer(SteeringRegulationConfig &config)
+ObservationBuffer::ObservationBuffer(const SteeringRegulationConfig &config)
     : m_config(config) {}
 
 int16_t ObservationBuffer::getMedian() const { return median; }
@@ -2060,18 +2171,18 @@ float ObservationBuffer::getOmega(uint32_t loopTimestamp) const {
 /* ===== FILE: src/core/steering/csc/steeringGuard.cpp ===== */
 #include "core/steering/csc/steeringGuard.h"
 
-SteeringGuard::SteeringGuard(SteeringRegulationConfig &config)
-    : m_config(config), m_deadband(config) {};
+SteeringGuard::SteeringGuard(const SteeringRegulationConfig &config)
+    : m_config(config), m_deadband(config){};
 
-bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
-                                       uint32_t lastUpdate,
-                                       uint32_t lastIntent) {
-  // Minimum time between observations.
+bool SteeringGuard::observationBlocked(uint32_t lastUpdate,
+                                       uint32_t lastIntent,
+                                       uint32_t loopTimestamp) {
+  // Mindestabstand zwischen zwei Beobachtungen.
   if (loopTimestamp - lastUpdate < m_config.minimumTimeBtwObs_ms) {
     return true;
   };
 
-  // Pause observations right after an impulse to wait for stabilization.
+  // Nach einem Intent kurz nicht beobachten, bis sich das System beruhigt hat.
   if (loopTimestamp - lastIntent < m_config.pauseForValidObsAfterImpulse_ms) {
     return true;
   };
@@ -2079,58 +2190,46 @@ bool SteeringGuard::observationBlocked(uint32_t loopTimestamp,
   return false;
 };
 
-bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
-                                  uint8_t sampleSize, int16_t median, float omega) {
-  /*Semantisch eigentlich Hardwareschutz kommt vllt in den PWM später*/
-  // Cooldown between actuator commands.
+bool SteeringGuard::intentBlocked(uint32_t lastIntent, int16_t median,
+                                  uint8_t sampleSize, float omega,
+                                  uint32_t loopTimestamp) {
+  // Guard-Ebene ist hier Takt-/Stabilitaetsschutz der Regelung.
+  // Ein zusaetzlicher, rein hardwarebezogener Schutz kann spaeter im
+  // PWM-Controller ergaenzt werden.
+
+  // Cooldown zwischen zwei Intents.
   if (loopTimestamp - lastIntent < m_config.steeringCooldown_ms) {
     return true;
   };
 
-  // Require a minimum number of samples before commanding.
+  // Vor einer Aktion muss genug Evidenz im Buffer sein.
   if (sampleSize < m_config.minimumSampleSize) {
     return true;
   };
 
-  // Der Median ist Action/NoAction Entscheidungsgrundlage
-  // Daher ist er ein Intent guard. Errors werden unabhängig von der Toleranz im
-  // Buffer gespeichert
+  // Der Median ist die Action/NoAction-Entscheidungsbasis.
+  // Einzelwerte bleiben zwar im Buffer, aber der Intent wird nur bei
+  // signifikantem Median freigegeben.
   if (!m_deadband.errorSignificant(median)) {
     return true;
   };
 
-  /* Wenn die Winkelgeschwindigkeit das gleiche Vorzeichen wie der Median hat 
-  hat sie eine andere semantische Richtung (Fehler ist, was zum Target fehlt, nicht was vom Target weg ist)
-  In dem Fall bewegt sich das System in die Richtige Richtung und es soll nicht zusätzlich gesteuert werden
+  /* Omega-Guard:
+  Haben median und omega das gleiche Vorzeichen und liegt |omega| ausserhalb
+  des Deadbands, bewegt sich der Fehler bereits in die richtige Richtung.
+  Dann wird kein zusaetzlicher Intent ausgeloest.
 
-  TODO (Omega-Guard fehlerabhängig machen):
-  Der aktuelle Guard ist binär und kann bei großem Anfangsfehler zu langen
-  No-Intent-Phasen führen, sobald omega "formal richtig" ist (gleiches
-  Vorzeichen wie median). In Simulationen entstehen dadurch teils >10s bis
-  ~20s ohne neuen Intent, obwohl |error| noch deutlich groß ist.
-
-  Ziel:
-  - No-Action nur dann, wenn omega für die aktuelle Fehlergröße "ausreichend"
-    ist, nicht allein wegen Vorzeichen.
-
-  Möglicher Ansatz:
-  - Fehler in Größenklassen einteilen (z.B. |error| > 20, >10, >5, <=5).
-  - Pro Klasse eine minimale erforderliche |omega|-Schwelle definieren
-    (bei großem Fehler höhere Mindest-omega, nahe Ziel niedrigere).
-  - Guard nur aktivieren, wenn
-      sign(median) == sign(omega) UND |omega| >= omegaMinForError(|error|).
-    Wenn omega zwar richtiges Vorzeichen hat, aber zu klein ist:
-      -> Guard NICHT aktivieren (Intent erlauben).
-
-  Erwartete Wirkung:
-  - Große Fehler werden schneller eingefangen (weniger "zu frühes Zurücklehnen").
-  - Nahe am Ziel bleibt der dämpfende Effekt des Guards erhalten.
-  - Parametrierung wird transparenter, weil Guard-Verhalten explizit an
-    Fehlerregime gekoppelt ist. */
-  if (median < 0 && omega < 0 - m_config.omegaDeadband){
+  TODO (fehlerabhaengige Omega-Schwelle):
+  Der Guard ist aktuell binaer und kann bei grossem Fehler zu langen
+  No-Intent-Phasen fuehren. Sinnvoll waere eine Mindest-|omega|, die von der
+  Fehlergroesse abhaengt, damit bei grossem Fehler frueher wieder Intents
+  erlaubt werden. 
+  Um das sinnvoll zu implementieren müssten reale omega werte aus den Praxistests
+  herausgefunden werden. */
+  if (median < 0 && omega < 0 - m_config.omegaDeadband) {
     return true;
   };
-  if(median > 0 && omega > 0 + m_config.omegaDeadband){
+  if (median > 0 && omega > 0 + m_config.omegaDeadband) {
     return true;
   };
 
@@ -2143,49 +2242,42 @@ bool SteeringGuard::intentBlocked(uint32_t loopTimestamp, uint32_t lastIntent,
 #include <algorithm>
 #include <cstdint>
 
+
 /*Für mein zukünftiges Ich. Die Syntax mit return .x ist ziemlich cool, weil ich
 damit keine lokale Variable des Rückgabewerts zwischenspeichern muss, sondern
 direkt auf die Argumente des Rückgabewerts schreibe */
 
-ImpulseFilter::ImpulseFilter(SteeringMechanicsConfig& mechanicsConfig, SteeringPhysicsConfig& physicsConfig)
+ImpulseFilter::ImpulseFilter(const SteeringMechanicsConfig &mechanicsConfig,
+                             const SteeringPhysicsConfig &physicsConfig)
     : m_mechanics(mechanicsConfig), m_physics(physicsConfig) {};
 
-PWMCommand
-ImpulseFilter::apply(SteeringIntent intent,
-                     NavigationSensors::NavigationSnapshot snapshot) {
+PWMIntent
+ImpulseFilter::apply(const SteeringIntent &intent,
+                     const NavigationSensors::NavigationSnapshot &snapshot) {
 
   if (!snapshot.stw_kts.valid) {
     return {
         .dir = intent.dir,
-        .pulse_ms = intent.abstractImpulse_0_100,
+        .filteredAbstractImpulse_0_100 = intent.abstractImpulse_0_100,
         .dutyCycle = m_mechanics.dutyCycleDefault,
     };
   };
 
   const float v = snapshot.stw_kts.value;
 
-  float damping = 1.0f / (1.0f + m_physics.STWDampingRegulator * v *
-                                     v); // Physik Bruder
+  float damping =
+      1.0f / (1.0f + m_physics.STWDampingRegulator * v * v); // Physik Bruder
 
   damping = std::clamp(damping, m_physics.STWDampingMinFactor,
                        m_physics.STWDampingMaxFactor);
 
-  float abstract =
-      intent.abstractImpulse_0_100;
+  float abstract = intent.abstractImpulse_0_100;
   float effective = abstract * damping;
   float normalized = effective / 100;
 
-  // pulse is mapped into [min, max].
-  // Zero pulse is not a valid hardware state.
-  // "No action" is modeled via std::nullopt at CSC level.
-
-  uint32_t pulse_ms = m_mechanics.steeringMinImpulse_ms +
-                      normalized * (m_mechanics.steeringMaxImpulse_ms -
-                                    m_mechanics.steeringMinImpulse_ms);
-
   return {
       .dir = intent.dir,
-      .pulse_ms = pulse_ms,
+      .filteredAbstractImpulse_0_100 = static_cast<uint16_t>(normalized*100),
       .dutyCycle = m_mechanics.dutyCycleDefault,
 
   };
@@ -2194,21 +2286,17 @@ ImpulseFilter::apply(SteeringIntent intent,
 /* ===== FILE: src/core/steering/sourceHandling.cpp ===== */
 #include "core/steering/sourceHandling.h"
 
-SourceHandler::SourceHandler(const ControlPanel &panel,
-                             NavigationSensors &navsens,
-                             SteeringSourceHandlingConfig &config,
-                             Diagnostics &diagnostics,
-                             CoreSteeringController &csc)
-    : m_panel(panel), m_navigationSensors(navsens),
-      m_diagnostics(diagnostics),
-      m_csc(csc), m_sourcePolicy(config, diagnostics),
-      m_targetInterpreter(m_gpsModel, m_windModel),
-      m_sourceExecutor(navsens, csc) {}
+SourceHandler::SourceHandler(NavigationSensors &navsens,
+                             const SteeringSourceHandlingConfig &config,
+                             Diagnostics &diagnostics)
+    : m_sourcePolicy(config, diagnostics), m_targetInterpreter(),
+      m_sourceExecutor(navsens) {}
 
-void SourceHandler::tick(NavigationSource requestedSource,
-                         uint32_t loopTimestamp,
-                         NavigationSensors::NavigationSnapshot snapshot,
-                         uint16_t generalTarget) {
+uint16_t SourceHandler::tick(
+    const NavigationSensors::NavigationSnapshot &snapshot,
+                             NavigationSource requestedSource,
+                             uint16_t generalTarget,
+                             uint32_t loopTimestamp) {
   // Apply source policy and fallback rules.
   NavigationSource effective =
       m_sourcePolicy.evaluate(requestedSource, snapshot, loopTimestamp);
@@ -2218,29 +2306,39 @@ void SourceHandler::tick(NavigationSource requestedSource,
       m_targetInterpreter.applySourceFilters(generalTarget, effective);
 
   // Propagate the effective source and filtered target to the steering stack.
-  m_sourceExecutor.execute(effective, filteredTarget);
+  m_sourceExecutor.execute(effective);
+
+  return filteredTarget;
 };
 
 //__________SOURCE_POLICY_______________________________________________
-SourcePolicyEngine::SourcePolicyEngine(SteeringSourceHandlingConfig &config,
+SourcePolicyEngine::SourcePolicyEngine(
+    const SteeringSourceHandlingConfig &config,
                                        Diagnostics &diagnostics)
     : m_config(config), m_diagnostics(diagnostics) {}
 
 NavigationSource
 SourcePolicyEngine::evaluate(NavigationSource requested,
-                             NavigationSensors::NavigationSnapshot snapshot,
+                             const NavigationSensors::NavigationSnapshot &snapshot,
                              uint32_t loopTimestamp) {
+  // TODO(Architektur):
+  // Compass wird fuer den aktuellen CSC-Pfad als harte Voraussetzung behandelt.
+  // Wenn das spaeter geaendert wird, muss diese Policy gemeinsam mit dem
+  // Orchestrator/CSC-Input angepasst werden.
   NavigationSource effective = requested;
 
   switch (requested) {
   case NavigationSource::Gps:
+    if (!snapshot.compass_hdg_dg.valid) {
+      m_diagnostics.emit(DiagnosticEvent::CRITICAL_ERROR,
+                         FunctionalCapability::COMPASS, loopTimestamp);
+    };
     if (!snapshot.gps_cog_dg.valid || !snapshot.gps_sog_kts.valid) {
       effective = NavigationSource::Compass;
       m_diagnostics.emit(DiagnosticEvent::LostWithFallback,
                          FunctionalCapability::GPS, loopTimestamp);
 
-    } else if (snapshot.gps_sog_kts.value <
-               m_config.minGpsSpeedForUse) {
+    } else if (snapshot.gps_sog_kts.value < m_config.minGpsSpeedForUse) {
       effective = NavigationSource::Compass;
       m_diagnostics.emit(DiagnosticEvent::Degraded, FunctionalCapability::GPS,
                          loopTimestamp);
@@ -2250,6 +2348,10 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
     };
     break;
   case NavigationSource::Wind:
+    if (!snapshot.compass_hdg_dg.valid) {
+      m_diagnostics.emit(DiagnosticEvent::CRITICAL_ERROR,
+                         FunctionalCapability::COMPASS, loopTimestamp);
+    };
     if (!snapshot.wind_angle_dg.valid) {
       effective = NavigationSource::Compass;
       m_diagnostics.emit(DiagnosticEvent::LostWithFallback,
@@ -2269,10 +2371,7 @@ SourcePolicyEngine::evaluate(NavigationSource requested,
   return effective;
 };
 
-//_____________________SOURCE_INTERPRETER________________________
-SourceTargetInterpreter::SourceTargetInterpreter(GPSModel &gpsModel,
-                                                 WindModel &windModel)
-    : m_gpsModel(gpsModel), m_windModel(windModel) {}
+//_____________________TARGET_INTERPRETER________________________
 
 uint16_t
 SourceTargetInterpreter::applySourceFilters(uint16_t generalTarget,
@@ -2295,15 +2394,12 @@ SourceTargetInterpreter::applySourceFilters(uint16_t generalTarget,
 
 //____________________________EXECUTOR_______________________________
 
-SourceExecutor::SourceExecutor(NavigationSensors &navsens,
-                               CoreSteeringController &csc)
-    : m_navigationSensors(navsens), m_csc(csc) {}
+SourceExecutor::SourceExecutor(NavigationSensors &navsens)
+    : m_navigationSensors(navsens) {}
 
-void SourceExecutor::execute(NavigationSource effective,
-                             uint16_t filteredTarget) {
+void SourceExecutor::execute(NavigationSource effective) {
 
   m_navigationSensors.setLeadSource(effective);
-  m_csc.setInternalTarget(filteredTarget);
 }
 
 /* ===== FILE: src/core/steering/sourceModels/gpsModel.cpp ===== */
@@ -2331,79 +2427,96 @@ uint16_t WindModel::applyFilter(uint16_t target) {
 #include "types/globalTypes.h"
 #include <cstdint>
 
-SteeringOrchestrator::SteeringOrchestrator(CoreSteeringController &csc,
-                                           ImpulseFilter &filter,
-                                           PWMController &pwm)
-    :m_csc(csc), m_impulsefilter(filter),
-      m_pwm(pwm){};
-
-void SteeringOrchestrator::tick(NavigationSensors::NavigationSnapshot snapshot,
+SteeringOrchestrator::SteeringOrchestrator(
+    const SteeringControllerConfig &config)
+    : m_impulsefilter(config.mechanics, config.physics),
+      m_csc(config.regulations), m_pwm(config.mechanics) {}
+void SteeringOrchestrator::tick(
+    const NavigationSensors::NavigationSnapshot &snapshot,
+                                uint16_t cscInternalTarget,
                                 uint32_t loopTimestamp) {
 
-
+  // TODO
+  // Evtl zu methodenaufrufen umstruktieren. Vorher Abhängigkeiten untersuchen
+  // Gerade unklar ob Target über Ticks hinaus gehalten werden soll
+  // TODO(Architektur):
+  // CSC soll "nur Kurse" sehen. Der direkte Zugriff auf
+  // snapshot.compass_hdg_dg ist aktuell bewusst Compass-only, koppelt den
+  // Orchestrator aber an Snapshot-Details. Falls spaeter ein GuidanceOutput
+  // existiert, sollte currentHDG nur noch daraus kommen.
   m_csc.currentHDG(snapshot.compass_hdg_dg.value);
-
+  m_csc.setInternalTarget(cscInternalTarget);
   auto intentOpt = m_csc.tick(loopTimestamp);
 
   if (intentOpt) {
-    SteeringIntent intent = *intentOpt;
-    auto cmd = m_impulsefilter.apply(intent, snapshot);
+    auto cmd = m_impulsefilter.apply(*intentOpt, snapshot);
     m_pwm.command(cmd);
   }
 };
 
 /* ===== FILE: src/core/systemController.cpp ===== */
 ﻿#include "core/systemController.h"
-
 #include "types/globalTypes.h"
 #include <cstdint>
 
 SystemController::SystemController()
-    : m_navigationSensors(m_compassModule, m_gpsModule, m_windModule,
-                          m_nmea183Bus),
-      // Config is owned here and passed down in granular slices.
-      m_impulseFilter(m_config.mechanics, m_config.physics),
-      m_csc(m_config.regulations),
-      m_sourceHandler(m_controlPanel, m_navigationSensors, m_config.source,
-                      m_diagnostics, m_csc),
-      m_steeringOrchestrator(m_csc, m_impulseFilter, m_pwmController),
-      m_displayContent( m_navigationSensors, m_diagnostics,
-                       m_state) {}
+    : m_navigationSensors(),
+      m_sourceHandler( m_navigationSensors, m_config.source,
+                      m_diagnostics),
+      m_steeringOrchestrator(m_config) {}
 
 void SystemController::tick(uint32_t loopTimestamp) {
-  // Überblick übers System
-  const auto snapshot = m_navigationSensors.createSnapshot();
-  const auto intent = m_controlPanel.readIntent();
+  // 1. Überblick übers System
+  const auto nav_snapshot = m_navigationSensors.createSnapshot();
+  const auto panel_intent = m_controlPanel.readIntent();
 
   // 2. Quelle waehlen
   // Verarbeitet aktive Sensorquelle und Fallbacks der Sensoren
-  m_sourceHandler.tick(intent.activeSource, loopTimestamp, snapshot,
-                       intent.generalTarget);
+  auto cscTarget =
+      m_sourceHandler.tick(nav_snapshot, panel_intent.activeSource,
+                           panel_intent.generalTarget, loopTimestamp);
 
   // 3. Steering Ausführen
   // Only drive the actuator path when steering is explicitly engaged.
-  if (intent.steeringEngaged &&
+  if (panel_intent.steeringEngaged &&
       m_state.systemMode == SystemState::SystemMode::OK) {
-    m_steeringOrchestrator.tick(snapshot, loopTimestamp);
+    m_steeringOrchestrator.tick(nav_snapshot, cscTarget, loopTimestamp);
   }
 
+  // TODO(Architektur):
+  // State-Update als explizite Transition modellieren:
+  // nextState = f(previousState, diagnostics, panelIntent)
+  // Dann bleiben Mode-Wechsel deterministisch und "INIT/OK/SAFE"-Regeln sind
+  // zentral an einer Stelle dokumentiert.
+
   // 4. Diagnostics
+  // Gerade noch getrennt, weil tick wahrscheinlich mehr machen wird als den
+  // snapshot
   m_diagnostics.tick(loopTimestamp);
+  const auto diagnostics_snapshot = m_diagnostics.snapshot();
 
-  // 6. Systemstatus überprüfen
-  stateUpdate();
+  // 5.. Systemstatus überprüfen
+ m_state = stateUpdate(diagnostics_snapshot);
 
-  // 7. Display updaten
-  auto content =  m_displayContent.tick(intent, loopTimestamp);
+  // 6. Display updaten
+  auto content = m_displayContent.create(
+      panel_intent, nav_snapshot, diagnostics_snapshot, m_state.systemMode, loopTimestamp);
   m_display.update(content);
 }
 
-void SystemController::stateUpdate() {
+SystemState SystemController::stateUpdate(const DiagnosticSnapshot &snapshot) {
+  // TODO(Architektur):
+  // Diese Funktion sollte den bisherigen Zustand beruecksichtigen, statt immer
+  // von einem neu erzeugten Default-State auszugehen.
+  SystemState state;
   // 1. Error Handling
-  if (m_diagnostics.criticalErroroccured) {
-    m_state.systemMode = SystemState::SystemMode::SAFE;
+  if (snapshot.criticalErrorOccured) {
+    state.systemMode = SystemState::SystemMode::SAFE;
   };
+
+  return state;
 }
+
 /* ===== FILE: src/diagnostics/diagnostics.cpp ===== */
 #include "diagnostics/diagnostics.h"
 #include "diagnostics/diagnostic_types.h"
@@ -2427,6 +2540,27 @@ CapabilityState Diagnostics::capabilityState(FunctionalCapability cap) const
     return m_states[static_cast<uint8_t>(cap)];
 }
 
+DiagnosticSnapshot Diagnostics::snapshot () {
+    DiagnosticSnapshot snapshot; 
+
+    for (uint8_t i = 0; i < static_cast<uint8_t>(FunctionalCapability::COUNT); i++) {
+        if (m_states[i]== CapabilityState::CRITICAL_ERROR){
+            snapshot.criticalErrorOccured = true; 
+            snapshot.criticalCapability = static_cast<FunctionalCapability>(i); 
+        };
+    };
+
+    snapshot.compassState = m_states[static_cast<uint8_t>(FunctionalCapability::COMPASS)];
+    snapshot.gpsState = m_states[static_cast<uint8_t>(FunctionalCapability::GPS)];
+    snapshot.windState = m_states[static_cast<uint8_t>(FunctionalCapability::WIND)];
+    snapshot.stwState = m_states[static_cast<uint8_t>(FunctionalCapability::STW)];
+    snapshot.pwmState = m_states[static_cast<uint8_t>(FunctionalCapability::PWM)]; 
+    snapshot.aisState = m_states[static_cast<uint8_t>(FunctionalCapability::AIS)];
+    snapshot.countState = m_states[static_cast<uint8_t>(FunctionalCapability::COUNT)];
+     
+return snapshot;
+};
+
 void Diagnostics::pushEvent(DiagnosticEvent event,
                             FunctionalCapability capability,
                             uint32_t ts)
@@ -2442,6 +2576,9 @@ void Diagnostics::updateCapabilityState(DiagnosticEvent event,
 {
     auto& state = m_states[static_cast<uint8_t>(capability)];
 
+    // TODO(Architektur):
+    // Mapping bewusst zentral in dieser Funktion pflegen. Wenn neue Events
+    // dazukommen, hier sofort in einen CapabilityState uebersetzen.
     switch (event) {
         case DiagnosticEvent::Lost:
             state = CapabilityState::Lost; // latched
@@ -2559,10 +2696,10 @@ void Platform_Init()
     SystemClock_Config();
 }
 
-/* ===== FILE: src/sensors/NMEA183BUS.cpp ===== */
-#include "sensors/NMEA183BUS.h"
+/* ===== FILE: src/sensors/NASA_Duo.cpp ===== */
+#include "sensors/NASA_Duo.h"
 
-SensorSample<float> NMEA183BUS::readSTW() const {
+SensorSample<float> NASA_Duo::readSTW() const {
   SensorSample<float> sample;
   sample.value = 0.0f;
   sample.valid = false;
@@ -2622,8 +2759,7 @@ SensorSample<float> GPSModule::readSOG() const {
 
 /* ===== FILE: src/sensors/navigationSensors.cpp ===== */
 #include "sensors/navigationSensors.h"
-
-#include "sensors/NMEA183BUS.h"
+#include "sensors/NASA_Duo.h"
 #include "types/globalTypes.h"
 #include <cstdlib>
 
@@ -2679,7 +2815,6 @@ SensorSample<uint16_t> WindModule::read()const{
 
 /* ===== FILE: src/ui/controlPanel.cpp ===== */
 #include "ui/controlPanel.h"
-#include "ui/controlPanelTypes.h"
 
 Intent ControlPanel::readIntent() const {
   // TODO Inputs lesen und Intent befüllen
@@ -2690,38 +2825,114 @@ Intent ControlPanel::readIntent() const {
 #include "ui/display.h"
 #include"ui/frameBuffer.h"
 
-void Display::update(FrameBuffer buffer)
+void Display::update(const FrameBuffer &buffer)
 {
     // TODO: implement display update
 }
 
 /* ===== FILE: src/ui/frameBuffer.cpp ===== */
 #include "ui/frameBuffer.h"
+#include "ui/fonts.h"
+#include <cstdint>
+#include <optional>
+#include <stdint.h>
+#include <sys/types.h>
+#include <vector>
 
-DisplayContent::DisplayContent(const NavigationSensors &navsens,
-                               const Diagnostics &diagnostics,
-                               const SystemState &state)
-    : m_navigationSensors(navsens), m_diagnostics(diagnostics),
-      m_state(state){};
+// ================= UIContent =================
 
-FrameBuffer DisplayContent::tick(const Intent &intent, uint32_t loopTimestamp) {
-  createModel(intent);
-  FrameBuffer buffer;
-  return buffer;
+FrameBuffer UIContent::create(const Intent& panel,
+                              const NavigationSensors::NavigationSnapshot& navigation,
+                              const DiagnosticSnapshot& diagnostics, SystemState::SystemMode mode,
+                              uint32_t loopTimestamp)
+{
+    const auto model = createModel(panel, navigation, diagnostics, mode);
+    const auto buffer = createBuffer(model);
+    return buffer;
 }
 
-void DisplayContent::createModel(const Intent &intent) {
-  model.mode = m_state.systemMode;
+DisplayModel UIContent::createModel(const Intent& panel,
+                                    const NavigationSensors::NavigationSnapshot& navigation,
+                                    const DiagnosticSnapshot& diagnostics,
+                                    SystemState::SystemMode mode)
+{
+    DisplayModel model;
 
-  model.panelIntent = intent;
+    model.panelIntent = panel;
 
-  model.ais = m_diagnostics.capabilityState(FunctionalCapability::AIS);
-  model.compass = m_diagnostics.capabilityState(FunctionalCapability::COMPASS);
-  model.gps = m_diagnostics.capabilityState(FunctionalCapability::GPS);
-  model.hullSpeed =
-      m_diagnostics.capabilityState(FunctionalCapability::HullSpeed);
-  model.wind = m_diagnostics.capabilityState(FunctionalCapability::WIND);
+    model.ais = diagnostics.aisState;
+    model.compass = diagnostics.compassState;
+    model.gps = diagnostics.gpsState;
+    model.stw = diagnostics.stwState;
+    model.wind = diagnostics.windState;
+
+    model.mode = mode;
+
+    return model;
+}
+
+// ================= FrameBuffer =================
+BufferBuilderTEST::BufferBuilderTEST(uint16_t width, uint16_t height)
+    : m_width(width), m_height(height),
+      m_buffer((static_cast<size_t>(width) * static_cast<size_t>(height) + 7) / 8){};
+
+void BufferBuilderTEST::setPixel(int x, int y, bool on)
+{
+    if (x < 0 || x >= m_width || y < 0 || y >= m_height)
+        return;
+
+    size_t pixelIndex = static_cast<size_t>(y) * m_width + x;
+    size_t byteIndex = pixelIndex / 8;
+    uint8_t bitOffset = pixelIndex % 8;
+
+    if (byteIndex >= m_buffer.size())
+        return;
+
+    uint8_t& byte = m_buffer[byteIndex];
+
+    if (on)
+        byte |= 1u << (7 - bitOffset);
+    else
+        byte &= ~(1u << (7 - bitOffset));
+}
+
+void BufferBuilderTEST::clear()
+{
+    for (auto& b : m_buffer)
+        b = 0;
+}
+
+void BufferBuilderTEST::drawChar(int startX, int startY, const uint8_t glyph[8])
+{
+    for (int row = 0; row < 8; ++row)
+    {
+        uint8_t binary = glyph[row];
+
+        for (int col = 0; col < 8; ++col)
+        {
+            uint8_t mask = 1u << (7 - col);
+
+            if (binary & mask)
+                setPixel(startX + col, startY + row, true);
+            else
+                setPixel(startX + col, startY + row, false);
+        }
+    }
 };
+
+void BufferBuilderTEST::drawText(int startX, int startY, char* text)
+{
+    const uint8_t pixelsBtwChars = 3;
+    uint8_t cursorX = startX;
+
+    for (int i = 0; text[i] != '\0'; ++i)
+    {
+        char c = text[i];
+        drawChar(cursorX, startY, fontDigits[c - '0']);
+        cursorX += 8 + pixelsBtwChars;
+    };
+};
+
 /* ===== FILE: test/test_csc/test_csc.cpp ===== */
 #include "core/config.h"
 #include "core/steering/csc/csc.h"
@@ -2871,7 +3082,7 @@ void test_buffer_is_not_ready_when_empty() {
 
   // When / Then
   TEST_ASSERT_TRUE(
-      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
+      guard.intentBlocked(lastIntent, median, sampleSize, omega, time));
 }
 
 void test_buffer_is_not_ready_when_below_minimum_samples() {
@@ -2888,7 +3099,7 @@ void test_buffer_is_not_ready_when_below_minimum_samples() {
 
   // When / Then
   TEST_ASSERT_TRUE(
-      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
+      guard.intentBlocked(lastIntent, median, sampleSize, omega, time));
 }
 
 void test_buffer_is_ready_when_minimum_samples_reached() {
@@ -2904,7 +3115,7 @@ void test_buffer_is_ready_when_minimum_samples_reached() {
   const float omega = 0;
   // When / Then
   TEST_ASSERT_FALSE(
-      guard.intentBlocked(time, lastIntent, sampleSize, median, omega));
+      guard.intentBlocked(lastIntent, median, sampleSize, omega, time));
 }
 
 // ObservationBuffer tests
@@ -3052,8 +3263,8 @@ void test_no_second_action_within_cooldown_period() {
   const float omega = 0;
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent + 1000, lastIntent,
-                                       enoughSamples, median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                       lastIntent + 1000));
 }
 
 void test_no_action_within_omegaDeadband() {
@@ -3066,8 +3277,8 @@ void test_no_action_within_omegaDeadband() {
   const int16_t median = 0;
   const float omega = 0;
 
-  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent + 1000, lastIntent,
-                                       enoughSamples, median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                       lastIntent + 1000));
 };
 
 void test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband() {
@@ -3086,8 +3297,8 @@ void test_omega_guard_blocks_positive_median_when_omega_exceeds_deadband() {
   const float omega = config.omegaDeadband + 0.05f;
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples,
-                                       median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                       loopTimestamp));
 }
 
 void test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband() {
@@ -3106,8 +3317,8 @@ void test_omega_guard_blocks_negative_median_when_omega_exceeds_deadband() {
   const float omega = -(config.omegaDeadband + 0.05f);
 
   // When / Then
-  TEST_ASSERT_TRUE(guard.intentBlocked(loopTimestamp, lastIntent, enoughSamples,
-                                       median, omega));
+  TEST_ASSERT_TRUE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                       loopTimestamp));
 }
 
 void test_omega_guard_allows_action_when_omega_within_deadband() {
@@ -3126,8 +3337,8 @@ void test_omega_guard_allows_action_when_omega_within_deadband() {
   const float omega = config.omegaDeadband - 0.05f;
 
   // When / Then
-  TEST_ASSERT_FALSE(guard.intentBlocked(loopTimestamp, lastIntent,
-                                        enoughSamples, median, omega));
+  TEST_ASSERT_FALSE(guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                                        loopTimestamp));
 }
 
 void test_action_allowed_after_cooldown_expires() {
@@ -3144,8 +3355,8 @@ void test_action_allowed_after_cooldown_expires() {
 
   // When / Then
   TEST_ASSERT_FALSE(
-      guard.intentBlocked(lastIntent + config.steeringCooldown_ms + 1,
-                          lastIntent, enoughSamples, median, omega));
+      guard.intentBlocked(lastIntent, median, enoughSamples, omega,
+                          lastIntent + config.steeringCooldown_ms + 1));
 }
 
 void test_no_action_when_error_oscillates_symmetrically() {
@@ -3353,7 +3564,7 @@ void test_counter_fires_and_maps_impulse_from_positive_omega() {
   TEST_ASSERT_FALSE(prep.has_value());
   TEST_ASSERT_TRUE(counter.has_value());
   TEST_ASSERT_EQUAL(SteeringDirection::Left, counter->dir);
-  TEST_ASSERT_EQUAL_UINT8(60, counter->abstractImpulse_0_100);
+  TEST_ASSERT_EQUAL_UINT8(50, counter->abstractImpulse_0_100);
 }
 
 void test_counter_is_blocked_by_counter_cooldown() {
@@ -3448,7 +3659,7 @@ void test_counter_fires_on_negative_side_with_negative_omega() {
 
   TEST_ASSERT_TRUE(counter.has_value());
   TEST_ASSERT_EQUAL(SteeringDirection::Right, counter->dir);
-  TEST_ASSERT_EQUAL_UINT8(60, counter->abstractImpulse_0_100);
+  TEST_ASSERT_EQUAL_UINT8(50, counter->abstractImpulse_0_100);
 }
 
 int main() {
@@ -3496,3 +3707,5 @@ int main() {
 
   return UNITY_END();
 }
+
+/* ===== EXPORTED AT: 2026-03-02 00:21:59 +0100 ===== */
