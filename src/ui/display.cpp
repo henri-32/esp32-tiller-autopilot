@@ -1,7 +1,7 @@
 #include "ui/display.h"
-#include"ui/frameBuffer.h"
+#include"ui/uiContent.h"
 
-void Display::update(const FrameBuffer &buffer)
+void Display::update()
 {
     // TODO: implement display update
 }

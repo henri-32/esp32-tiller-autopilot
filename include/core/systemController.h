@@ -8,7 +8,7 @@
 #include "types/globalTypes.h"
 #include "ui/controlPanel.h"
 #include "ui/display.h"
-#include "ui/frameBuffer.h"
+
 
 class SystemController {
 public:
@@ -36,7 +36,7 @@ private:
   SteeringOrchestrator m_steeringOrchestrator;
 
   // Presentation
-  UIContent m_displayContent;
+  UIContent m_displayContent {600, 600};
   Display m_display;
 
   // TODO(Architektur):

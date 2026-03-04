@@ -2825,7 +2825,7 @@ Intent ControlPanel::readIntent() const {
 #include "ui/display.h"
 #include"ui/frameBuffer.h"
 
-void Display::update(const FrameBuffer &buffer)
+void Display::update()
 {
     // TODO: implement display update
 }

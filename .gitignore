@@ -5,20 +5,33 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+all_sources.txt
+
+
 
 # clangd
 .cache/
 index/
 *.idx
 
+
+
+
 # Build / Tooling
 build/
 compile_commands.json
 .clangd-db/
+build.log 
+
+
+
 
 # Python venv (simulation analysis)
 sim/analysis/venv/
 sim/plots/__pycache__/plot_drift.cpython-313.pyc
+
+
+
 
 # Simulation outputs (generated artifacts)
 sim/sim_output/*.csv
