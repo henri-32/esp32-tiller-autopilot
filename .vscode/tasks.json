@@ -2,30 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "PlatformIO: Refresh clangd databases (firmware + sim + native_csc + gui + gui_sim)",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        ".vscode/scripts/refresh-clangd-db.ps1"
-      ],
-      "linux": {
-        "command": "bash",
-        "args": [
-          ".vscode/scripts/refresh-clangd-db.sh"
-        ]
-      },
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
-    {
       "label": "PlatformIO: Build sim",
       "type": "shell",
       "command": "pio",

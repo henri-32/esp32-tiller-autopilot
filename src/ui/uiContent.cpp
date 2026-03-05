@@ -8,7 +8,7 @@
 
 // ================= UIContent =================
 
-d::vector<uint8_t> UIContent::create(const Intent& panel,
+std::vector<uint8_t> UIContent::create(const Intent& panel,
                                        const NavigationSensors::NavigationSnapshot& navigation,
                                        const DiagnosticSnapshot& diagnostics,
                                        SystemState::SystemMode mode, uint32_t loopTimestamp)
