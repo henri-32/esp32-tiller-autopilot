@@ -42,7 +42,7 @@ void SystemController::tick(uint32_t loopTimestamp)
     m_state = stateUpdate(diagnostics_snapshot);
 
     // 6. Display updaten
-    auto content = m_displayContent.create(panel_intent, nav_snapshot, diagnostics_snapshot,
+    auto content = m_displayContent.renderBuffer(panel_intent, nav_snapshot, diagnostics_snapshot,
                                            m_state.systemMode, loopTimestamp);
     m_display.update();
 }

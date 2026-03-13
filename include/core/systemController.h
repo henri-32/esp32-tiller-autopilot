@@ -36,7 +36,7 @@ private:
   SteeringOrchestrator m_steeringOrchestrator;
 
   // Presentation
-  UIContent m_displayContent {600, 600};
+  UIContent m_displayContent {m_config.display};
   Display m_display;
 
   // TODO(Architektur):

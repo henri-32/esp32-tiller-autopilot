@@ -21,3 +21,8 @@ Schichten fuer Sensorik, Entscheidungslogik und Aktorik.
 
 - [Architektur](include/READMES/Architektur.md)
 - [Steering Controller Config](include/READMES/SteeringControllerConfig.md)
+
+## Third-Party
+
+- ASCII 16x16 bitmap font in `include/ui/fonts.h` is rendered from DejaVu Sans Mono (`/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`): https://dejavu-fonts.github.io/
+- License: DejaVu Fonts License (Bitstream Vera derivative, permissive)

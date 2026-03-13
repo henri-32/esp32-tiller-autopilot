@@ -20,6 +20,7 @@ public:
     SensorSample<float> gps_sog_kts;
     SensorSample<uint16_t> wind_angle_dg;
     SensorSample<float> stw_kts;
+	NavigationSource LeadSource;
   };
 
   struct SensorActivation {

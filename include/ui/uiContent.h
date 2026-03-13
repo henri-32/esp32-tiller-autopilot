@@ -1,5 +1,5 @@
 #pragma once
-#include "diagnostics/diagnostic_types.h"
+#include "core/config.h"
 #include "diagnostics/diagnostics.h"
 #include "sensors/navigationSensors.h"
 #include "types/globalTypes.h"
@@ -10,40 +10,45 @@ struct DisplayModel
 {
     SystemState::SystemMode mode = SystemState::SystemMode::OK;
     Intent panelIntent;
-
-    CapabilityState gps = CapabilityState::OK;
-    CapabilityState wind = CapabilityState::OK;
-    CapabilityState compass = CapabilityState::OK;
-    CapabilityState ais = CapabilityState::OK;
-    CapabilityState stw = CapabilityState::OK;
+    NavigationSensors::NavigationSnapshot navSnapshot;
+    DiagnosticSnapshot diagSnapshot;
 };
 
 class UIContent
 {
   public:
-    UIContent(uint16_t width, uint16_t height);
+    static constexpr int kGlyphWidthPx = 16;
+    static constexpr int kCharSpacingPx = 3;
 
-    std::vector<uint8_t> create(const Intent& panel,
-                                const NavigationSensors::NavigationSnapshot& navigation,
-                                const DiagnosticSnapshot& diagnostics,
-                                SystemState::SystemMode state, uint32_t loopTimestamp);
+    UIContent(const DisplayConfig& config);
+
+    const std::vector<uint8_t>renderBuffer(const Intent& panel,
+                                      const NavigationSensors::NavigationSnapshot& navigation,
+                                      const DiagnosticSnapshot& diagnostics,
+                                      SystemState::SystemMode state, const DisplayConfig& config,
+                                      uint32_t loopTimestamp);
 
   private:
+    uint16_t m_height;
+    uint16_t m_width;
+    uint32_t m_xCursor;
+    uint32_t m_yCursor;
+    // TODO Größe des Pixel Buffers berechnen um heap allocation zu vermeiden
+    std::vector<uint8_t> m_buffer;
+    uint32_t m_lastUpdate;
+
     DisplayModel createModel(const Intent& panel,
                              const NavigationSensors::NavigationSnapshot& navigation,
                              const DiagnosticSnapshot& diagnostics, SystemState::SystemMode state);
 
     std::vector<uint8_t> createBuffer(const DisplayModel& Model);
-
-    uint16_t m_width;
-    uint16_t m_height;
-    uint32_t m_uiCursor;
-
-    // TODO Größe des Pixel Buffers berechnen um heap allocation zu vermeiden
-    std::vector<uint8_t> m_buffer;
-
-    void setPixel(int x, int y, bool on);
     void clear();
-    void drawChar(int startX, int startY, const uint8_t glyph[8]);
-    void drawText(int startX, int startY, const char* const text);
+    void drawText(int startX, int startY, const char* const text, uint8_t scale = 1, uint8_t spacingScale = 1);
+    void drawHorizontalLine(int startX, int startY, int thickness, int length, bool onOff);
+    void drawVerticalLine(int startX, int startY, int thickness, int length, bool onOff);
+    void renderSourceInformation(const DisplayModel& model);
+    void renderCoreInformation(const DisplayModel& model);
+    int textWidthPx(const char* text, uint8_t scale) const;
+    void drawChar(int startX, int startY, const uint16_t glyph[16], uint8_t scale);
+    void setPixel(int x, int y, bool on);
 };
