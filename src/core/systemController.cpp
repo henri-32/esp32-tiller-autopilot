@@ -43,7 +43,7 @@ void SystemController::tick(uint32_t loopTimestamp)
 
     // 6. Display updaten
     auto content = m_displayContent.renderBuffer(panel_intent, nav_snapshot, diagnostics_snapshot,
-                                           m_state.systemMode, loopTimestamp);
+                                           m_state.systemMode, m_config.display, loopTimestamp);
     m_display.update();
 }
 

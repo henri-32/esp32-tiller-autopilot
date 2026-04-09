@@ -17,6 +17,13 @@ Schichten fuer Sensorik, Entscheidungslogik und Aktorik.
 - Simulation bauen: `pio run -e sim`
 - GUI bauen: `pio run -e gui`
 
+## Deterministische Compile Database
+
+- CMake konfigurieren: `cmake --preset clangd`
+- Datenbank liegt danach in `build/compile-db/compile_commands.json`
+- `clangd` ist ueber `.clangd` fest auf diesen Pfad gebunden
+- Die Source-Listen sind bewusst explizit in `CMakeLists.txt` gepflegt, damit die Datenbank nicht von zufaelligen Build-Artefakten oder zuletzt verwendeten PlatformIO-Environments abhängt
+
 ## Architektur-Dokumente
 
 - [Architektur](include/READMES/Architektur.md)
