@@ -12,10 +12,12 @@ else ifeq ($(MODE), DEBUG)
 
 else ifeq ($(MODE), SAN) 
 	TEST_CXX_FLAGS := -std=c++20 -Wall -Wextra $(SAN_FLAGS)
+	TEST_LD_FLAGS := -fsanitize=address
 
 else 
 	$(error Unknown MODE '$(MODE)')
 endif
+
 
 
 TEST_INCLUDE := -Iinclude

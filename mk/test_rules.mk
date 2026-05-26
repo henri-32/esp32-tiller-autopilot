@@ -1,7 +1,8 @@
 $(TEST_BIN): $(TEST_OBJS) $(SRC_UNDER_TEST_OBJS) $(LIB_OBJS) 
-	@$(CXX) $(LD_FLAGS)  $^ -o $@ 
+	@$(CXX) $(TEST_LD_FLAGS)  $^ -o $@ 
+	@chmod +x $(TEST_BIN)
 	@echo 'LINK $@' 
-
+	@echo 'Build Mode = $(MODE)'
 
 $(TEST_BUILD_DIR)/test/%.o: test/%.cpp
 	@mkdir -p $(dir $@) 

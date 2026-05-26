@@ -6,6 +6,5 @@ MODE ?= TEST
 
 DEBUG_FLAGS := -g -O0 
 SAN_FLAGS := -fsanitize=address -fno-omit-frame-pointer
-LD_FLAGS := -fsanitize=address 
 
 

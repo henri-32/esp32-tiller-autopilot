@@ -10,6 +10,10 @@ include mk/test_rules.mk
 .PHONY: test
 test: $(TEST_BIN) 
 
+.PHONY: run_test
+run_test: 
+	./$(TEST_BIN)
+
 .PHONY: compiledb_test
 compiledb_test: 
 	@$(MAKE) clean_test
@@ -18,8 +22,7 @@ compiledb_test:
 .PHONY: clean 
 clean: 
 	@rm -rf build_test 
-	@rm -rf build_lib 
-	@echo 'removed all build artefacts'
+	@echo 'removed all build artefacts (Libs excluded. To remove lib artefacts run "make clean_lib"'
 
 .PHONY: clean_test 
 clean_test: 

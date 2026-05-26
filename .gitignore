@@ -24,7 +24,9 @@ build_lib/
 compile_commands.json
 .clangd-db/
 build.log 
+.log/
 
+# Libraries
 lib/
 
 
