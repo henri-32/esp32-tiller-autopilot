@@ -19,11 +19,13 @@ index/
 
 # Build / Tooling
 build/
+build_test/
+build_lib/
 compile_commands.json
 .clangd-db/
 build.log 
 
-
+lib/
 
 
 # Python venv (simulation analysis)

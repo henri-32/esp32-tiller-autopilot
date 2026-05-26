@@ -57,7 +57,7 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   // Harte Resets bei 0 haben meine counter Intents verhindert. Deswegen Reaktion auf sign flip im Bereich nahe 0 
   const bool insideNoActionBand =
       std::abs(error) <= m_config.steeringTolerance_deg;
-  const bool signFlip = (error<0 && m_lastError >0 || error > 0 && m_lastError < 0); 
+  const bool signFlip = ((error<0 && m_lastError >0) || (error > 0 && m_lastError < 0)); 
   if (insideNoActionBand && signFlip) {
     m_observationBuffer.reset();
   }
