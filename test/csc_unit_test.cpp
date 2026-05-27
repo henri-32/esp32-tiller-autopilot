@@ -123,7 +123,7 @@ void test_error_exactly_on_deadband_boundary_is_treated_as_non_significant() {
 
 void test_error_just_outside_deadband_is_treated_as_significant() {
   // Given
-  SteeringRegulationConfig config = makeRegConfig();
+	  SteeringRegulationConfig config = makeRegConfig();
   config.steeringTolerance_deg = 10;
   Deadband deadband(config);
 

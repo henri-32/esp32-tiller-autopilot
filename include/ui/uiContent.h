@@ -33,7 +33,7 @@ class UIContent
     uint16_t m_width;
     uint32_t m_xCursor;
     uint32_t m_yCursor;
-    // TODO Größe des Pixel Buffers berechnen um heap allocation zu vermeiden
+    // TODO Größe des Pixel Buffers berechnen um vector zu vermeiden
     std::vector<uint8_t> m_buffer;
     uint32_t m_lastUpdate;
 

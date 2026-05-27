@@ -1,9 +1,0 @@
-CompileFlags:
-  CompilationDatabase: build/compile-db
-  Add:
-    - -Iinclude
-    - -Isrc
-    - -isystem/usr/include/c++/11
-    - -isystem/usr/include/x86_64-linux-gnu/c++/11
-Index:
-  Background: Build

@@ -16,8 +16,8 @@ run_test:
 
 .PHONY: compiledb_test
 compiledb_test: 
-	@$(MAKE) clean_test
-	@bear -- $(MAKE) test
+	@$(MAKE) -no-print-directory clean_test
+	@bear -- $(MAKE) -no-print-directory test
 
 .PHONY: clean 
 clean: 

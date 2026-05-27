@@ -11,5 +11,5 @@ $(TEST_BUILD_DIR)/test/%.o: test/%.cpp
 
 $(TEST_BUILD_DIR)/src/%.o: src/%.cpp
 	@mkdir -p $(dir $@) 
-	@$(CACHED_CXX) $(TEST_CXX_FLAGS) -c $< $(TEST_INCLUDE) -o$@ 
+	@$(CACHED_CXX) $(TEST_CXX_FLAGS) -c $< $(TEST_INCLUDE) -o $@ 
 	@echo 'CACHED_CXX $< -> $@'
