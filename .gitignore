@@ -21,8 +21,10 @@ index/
 build/
 build_test/
 build_lib/
+esp/build/
+esp/sdkconfig 
+esp/sdkconfig.old
 compile_commands.json
-.clangd-db/
 build.log 
 .log/
 

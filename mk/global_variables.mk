@@ -3,6 +3,7 @@ MODE ?= TEST
 # DEBUG for debug symbols 
 # SAN for sanitizer symbols 
 
+SHELL := /bin/bash
 
 DEBUG_FLAGS := -g -O0 
 SAN_FLAGS := -fsanitize=address -fno-omit-frame-pointer

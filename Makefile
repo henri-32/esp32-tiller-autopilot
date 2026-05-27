@@ -34,4 +34,8 @@ clean_lib:
 	@rm -rf build_lib 
 	@echo 'removed library object files'
 
-
+.PHONY: esp 
+esp: 
+	@source /home/henri-32/.espressif/tools/activate_idf_v6.0.1.sh 1>/dev/null && \
+	idf.py build 
+	@echo 'esp venv activated'
