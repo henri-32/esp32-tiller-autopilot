@@ -1,4 +1,5 @@
 include mk/global_variables.mk
+include mk/commands.mk
 include mk/toolchain.mk
 include mk/test_variables.mk
 include mk/test_lib_variables.mk

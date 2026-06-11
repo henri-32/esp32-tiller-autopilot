@@ -1,3 +1,6 @@
 [submodule "lib/Unity"]
 	path = lib/Unity
 	url = https://github.com/ThrowTheSwitch/Unity.git
+[submodule "platform/esp-idf"]
+	path = platform/esp-idf
+	url = git@github.com:espressif/esp-idf.git

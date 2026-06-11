@@ -1,109 +1,33 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.22) 
 
-project(AutopilotCompileDb LANGUAGES CXX)
+set(PROJECT_ROOT "${CMAKE_SOURCE_DIR}")
+message(STATUS "PROJECT_ROOT = ${PROJECT_ROOT}")
+set(IDF_PATH "${PROJECT_ROOT}/platform/esp-idf")
+set(ENV{IDF_PATH} "${IDF_PATH}")
+message(STATUS "IDF_PATH = ${IDF_PATH}")
+set(IDF_TARGET "esp32" CACHE STRING "ESP-IDF mcu target") 
+message(STATUS "IDF_TARGET = ${IDF_TARGET}")
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON) 
 
-set(AUTOPILOT_COMMON_INCLUDE_DIRS
-    "${CMAKE_SOURCE_DIR}/include"
-    "${CMAKE_SOURCE_DIR}/src"
-)
+set(CMAKE_TOOLCHAIN_FILE 
+	"${IDF_PATH}/tools/cmake/toolchain-${IDF_TARGET}.cmake"
+	CACHE FILEPATH "ESP-IDF toolchain file" 
+) 
+message(STATUS "TOOLCHAIN_FILE = ${CMAKE_TOOLCHAIN_FILE}")
 
-set(AUTOPILOT_CSC_SOURCES
-    src/core/steering/csc/csc.cpp
-    src/core/steering/csc/deadband.cpp
-    src/core/steering/csc/headingErrorCalculator.cpp
-    src/core/steering/csc/observationBuffer.cpp
-    src/core/steering/csc/steeringGuard.cpp
-)
+project(autopilot C CXX ASM) 
 
-set(AUTOPILOT_RUNTIME_SOURCES
-    src/actuators/pwmController.cpp
-    src/core/steering/impulseFilter.cpp
-    src/core/steering/sourceHandling.cpp
-    src/core/steering/sourceModels/gpsModel.cpp
-    src/core/steering/sourceModels/windModel.cpp
-    src/core/steering/steeringOrchestrator.cpp
-    src/core/systemController.cpp
-    src/diagnostics/diagnostics.cpp
-    src/sensors/NASA_Duo.cpp
-    src/sensors/compassModule.cpp
-    src/sensors/gpsModule.cpp
-    src/sensors/navigationSensors.cpp
-    src/sensors/windModule.cpp
-)
+include("${IDF_PATH}/tools/cmake/idf.cmake")
 
-set(AUTOPILOT_PLATFORM_SOURCES
-    src/core/main.cpp
-    src/platform/fatal.cpp
-    src/platform/system_clock.cpp
-    src/platform/system_gpio.cpp
-    src/platform/system_init.cpp
-)
+idf_build_process("${IDF_TARGET}") 
 
-set(AUTOPILOT_UI_SOURCES
-    src/ui/controlPanel.cpp
-    src/ui/display.cpp
-    src/ui/uiContent.cpp
-)
+option(BUILD_COMPASS_HARDWARE_TEST "Build path for compass hardware tests" ON)
+if (BUILD_COMPASS_HARDWARE_TEST)
+	add_executable(compassModuleHardwareTest.elf 
+		test/hardwaretests/compassModuleHardwareTest/compassModuleHardwareTest.cpp
+	)
+	add_subdirectory(test/hardwaretests/compassModuleHardwareTest)
+	idf_build_executable(compassModuleHardwareTest.elf)
+endif()
 
-add_library(autopilot_csc STATIC ${AUTOPILOT_CSC_SOURCES})
-target_include_directories(autopilot_csc PUBLIC ${AUTOPILOT_COMMON_INCLUDE_DIRS})
-target_compile_features(autopilot_csc PUBLIC cxx_std_17)
-
-add_library(autopilot_runtime STATIC ${AUTOPILOT_RUNTIME_SOURCES})
-target_include_directories(autopilot_runtime PUBLIC ${AUTOPILOT_COMMON_INCLUDE_DIRS})
-target_link_libraries(autopilot_runtime PUBLIC autopilot_csc)
-target_compile_features(autopilot_runtime PUBLIC cxx_std_17)
-
-add_library(autopilot_ui STATIC ${AUTOPILOT_UI_SOURCES})
-target_include_directories(autopilot_ui PUBLIC ${AUTOPILOT_COMMON_INCLUDE_DIRS})
-target_compile_features(autopilot_ui PUBLIC cxx_std_17)
-
-add_library(autopilot_embedded_analysis OBJECT ${AUTOPILOT_PLATFORM_SOURCES})
-target_include_directories(
-    autopilot_embedded_analysis
-    PRIVATE
-        ${AUTOPILOT_COMMON_INCLUDE_DIRS}
-        "${CMAKE_SOURCE_DIR}/cmake/stubs"
-)
-target_link_libraries(autopilot_embedded_analysis PRIVATE autopilot_runtime)
-target_compile_definitions(
-    autopilot_embedded_analysis
-    PRIVATE
-        STM32F411xE
-)
-target_compile_features(autopilot_embedded_analysis PUBLIC cxx_std_17)
-
-add_executable(autopilot_gui src/ui/native_main.cpp)
-target_include_directories(
-    autopilot_gui
-    PRIVATE
-        ${AUTOPILOT_COMMON_INCLUDE_DIRS}
-        /usr/include/SDL2
-)
-target_link_libraries(autopilot_gui PRIVATE autopilot_ui SDL2)
-target_compile_features(autopilot_gui PUBLIC cxx_std_17)
-
-add_executable(autopilot_sim sim/headingSimulator.cpp)
-target_include_directories(
-    autopilot_sim
-    PRIVATE
-        ${AUTOPILOT_COMMON_INCLUDE_DIRS}
-        "${CMAKE_SOURCE_DIR}/sim"
-)
-target_link_libraries(autopilot_sim PRIVATE autopilot_csc)
-target_compile_features(autopilot_sim PUBLIC cxx_std_17)
-
-add_executable(autopilot_csc_tests test/test_csc/test_csc.cpp)
-target_include_directories(
-    autopilot_csc_tests
-    PRIVATE
-        ${AUTOPILOT_COMMON_INCLUDE_DIRS}
-        "${CMAKE_SOURCE_DIR}/cmake/stubs"
-)
-target_link_libraries(autopilot_csc_tests PRIVATE autopilot_csc)
-target_compile_features(autopilot_csc_tests PUBLIC cxx_std_17)

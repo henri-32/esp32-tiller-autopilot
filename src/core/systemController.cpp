@@ -8,7 +8,7 @@ SystemController::SystemController()
 {
 }
 
-void SystemController::tick(uint32_t loopTimestamp)
+void operator(uint32_t loopTimestamp)
 {
     // 1. Überblick übers System
     const auto nav_snapshot = m_navigationSensors.createSnapshot();
