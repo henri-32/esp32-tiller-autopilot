@@ -1,240 +1,108 @@
-# Autopilot Boot – Architektur
+# Autopilot Boot - Architektur
 
-Dieses Dokument beschreibt die **konzeptionelle und strukturelle Architektur**
-des Autopilot-Boot-Projekts.  
-Es ist **kein Implementierungsleitfaden**, sondern ein stabiler Referenzrahmen
-für Struktur, Verantwortlichkeiten und Abgrenzungen.
+Dieses Dokument beschreibt die aktuelle Architektur des Projekts auf Basis des
+derzeitigen Codes.
 
----
+## 1. Zielbild
 
-## 1. Grundidee & Zielsetzung
+Das System ist als adaptive Trimmregelung aufgebaut:
+- seltene, robuste Korrekturimpulse statt permanenter Momentanregelung
+- klare Trennung zwischen Sensorik, Entscheidungslogik und Aktorik
+- deterministischer Tick-Ablauf im `SystemController`
 
-Das System ist **kein klassischer Autopilot**, sondern eine **adaptive Trimmregelung**.
+## 2. Zentrale Komponenten
 
-Ziel ist nicht die exakte Momentanregelung, sondern die **Korrektur der
-langfristigen Mittellage (Bias)**.
+- `SystemController`
+  - Top-Level Orchestrierung des Ticks
+  - besitzt Konfiguration und Module
+- `NavigationSensors`
+  - liest Rohwerte (Compass, GPS, Wind, STW)
+- `SourceHandler`
+  - bewertet Quell-Policy (Fallbacks)
+  - filtert Target je Quelle
+  - setzt effektive Quelle in `NavigationSensors`
+- `CoreSteeringController` (CSC)
+  - entscheidet ueber `SteeringIntent`
+  - arbeitet auf Kurs-/Fehlerdaten, nicht auf Hardware
+- `ImpulseFilter`
+  - daempft abstract impulse u. a. mit STW-Kontext
+  - erzeugt `PWMIntent`
+- `PWMController`
+  - mappt `PWMIntent` auf hardware-nahe PWM-Parameter
+- `Diagnostics`
+  - sammelt Ereignisse und Capability-Zustaende
+- `UI` (`ControlPanel`, `UIContent`, `Display`)
+  - Bedien-Intent und Darstellung
 
-> **Leitsatz:**  
-> Das Boot darf oszillieren – entscheidend ist, dass es nicht driftet.
+## 3. Aktueller Tick-Ablauf (`SystemController::tick`)
 
-Eigenschaften:
-- kurzfristige mechanische Oszillation ist erlaubt und erwünscht
-- Robustheit entsteht durch Ebenentrennung, nicht durch aggressive Regelung
-- Entscheidungen sind selten, sanft und deterministisch
+1. `nav_snapshot = NavigationSensors::createSnapshot()`
+2. `panel_intent = ControlPanel::readIntent()`
+3. `cscTarget = SourceHandler::tick(nav_snapshot, requestedSource, target, loopTimestamp)`
+4. Falls Steering aktiv und System `OK`:
+   `SteeringOrchestrator::tick(nav_snapshot, cscTarget, loopTimestamp)`
+5. `Diagnostics::tick(loopTimestamp)` und Snapshot ziehen
+6. `stateUpdate(diagnostics_snapshot)`
+7. `UIContent::create(...)` und `Display::update(...)`
 
----
+Hinweis:
+- Im aktuellen Stand bekommt CSC `currentHDG` aus Compass
+  (`snapshot.compass_hdg_dg.value`).
 
-## 2. Gesamtarchitektur (Top-Level)
-
-Die Architektur ist bewusst **flach und linear** gehalten.
-
-### Zentrale Komponenten
-
-- **SystemController**  
-  Zentrale Orchestrierungseinheit, besitzt alle Subsysteme.
-
-- **CoreSteeringController (CSC)**  
-  Alleiniger Entscheider über Trimmimpulse.
-
-- **CourseGuidance**  
-  Ableitung von Kursen aus Sensoren, Intent und Filtern.
-
-- **NavigationSensors**  
-  Aggregator für Rohsensorik (Compass, GPS, Wind).
-
-- **PWMController**  
-  Reine Aktor-Ansteuerung ohne Kontext.
-
-- **ControlPanel / Display**  
-  Menschlicher Intent & Anzeige, keine Regelung.
-
----
-
-## 3. Fester Systemablauf (System-Tick)
-
-Der Ablauf im `SystemController` ist **fixiert** und bildet die Architekturachse:
-
-1. Intent lesen (ControlPanel)
-2. Politik anwenden (Modus, Quelle, Ziel)
-3. Rohwerte lesen (NavigationSensors)
-4. Kurs ableiten & validieren (CourseGuidance)
-5. Trimmentscheidung treffen (CoreSteeringController)
-6. Aktor ausführen (PWMController)
-
-Dieser Ablauf darf **nicht implizit durchbrochen** werden.
-
----
-
-## 4. Rollen & Verantwortlichkeiten
+## 4. Verantwortungsgrenzen
 
 ### SystemController
-- besitzt alle Module
-- orchestriert den Ablauf
-- enthält **keine Fachlogik**
+- orchestriert
+- enthaelt bewusst nur wenig Fachlogik
 
-> **Architekturregel:**  
-> SystemController darf besitzen, aber nicht steuern.
+### SourceHandler
+- entscheidet effektive Quelle inkl. Fallback
+- transformiert `generalTarget` in quellenabhaengiges internes Ziel
 
----
+### CSC
+- beobachtet Fehler ueber Zeit
+- nutzt Guards, Median, Omega und Counter-Intent
+- gibt optional `SteeringIntent` zurueck
 
-### CoreSteeringController (CSC)
-Der CSC ist **bewusst minimalistisch und rein**.
+### Aktorpfad
+- `ImpulseFilter`: fachliche Dampfungs-/Shaping-Logik
+- `PWMController`: hardware-nahe Umsetzung
 
-Aufgaben:
-- Beobachtung des Heading Errors (HDG)
-- Sammeln von Evidenz über Zeit (Observation Buffer)
-- Entscheidung über seltene Trimmimpulse
-- Richtung ja/nein (keine Aktor-Parametrisierung)
+## 5. Diagnostics und State
 
-Nicht-Aufgaben:
-- keine Sensorvalidierung
-- keine Navigation
-- kein Logging
-- kein Error-Handling
-- keine Zielinterpretation
+- Source-Policy emittiert u. a. `Degraded`, `LostWithFallback`,
+  `CRITICAL_ERROR`
+- `Diagnostics` fuehrt Event-Puffer und Capability-States
+- `SystemController::stateUpdate(...)` setzt aktuell bei Critical auf `SAFE`
 
-Der CSC kennt **nur Kurse**, keine Sensoren.
-
-> **Merksatz:**  
-> Der CSC trimmt die Mittellage, nicht den Momentanwert.
-
----
-
-### CourseGuidance
-Zwischenschicht zwischen Sensorik und Regelung.
-
-Aufgaben:
-- Sensorvalidierung & Fallbacks
-- Filterlogik (GPS, Wind, COG)
-- Ableitung von:
-  - `currentHDG`
-  - `internalTargetHDG`
-- Modulation von Geduld / Toleranzen (z. B. Hull Speed)
-
-CourseGuidance trifft **keine Aktorentscheidungen**.
-
----
-
-### NavigationSensors
-- liefert Rohdaten
-- aggregiert Sensorquellen
-- entscheidet **nicht**, warum eine Quelle aktiv ist
-- keine Interpretation, keine Regelung
-
----
-
-### PWMController
-- reine Hardware-Ansteuerung
-- kennt keinen Kurs
-- kennt keine Regelung
-- führt exakt aus, was angefordert wird
-
----
-
-## 5. Beobachtungs- & Entscheidungsmodell (CSC)
-
-### Beobachtung
-- Heading Errors werden zeitlich diskret gesammelt
-- Trennung in Left/Right Errors
-- Zusammenführung in signierten Fehlerraum
-- Median als robuste Abstraktion
-
-### Entscheidung
-- Entscheidung nur bei:
-  - signifikanter Abweichung
-  - über ausreichende Dauer
-- Zeit dient nur als Guard (Physik, Messhygiene)
-
-Konsequenz:
-- Wellen & Böen werden ignoriert
-- Dauerhafte Bias-Effekte führen zu sanfter Korrektur
-
----
-
-## 6. Heading Error – semantische Einordnung
-
-Der HDG Error liegt **oberhalb der mechanischen Ebene**:
-
-- Pinne, Gummi, Ruder dürfen schwingen
-- Oszillation innerhalb der Toleranz ist korrekt
-- zu feine Toleranzen führen zu Fehlinterpretation
-
-Zusätzlich:
-- Ziel-HDG kann selbst bewegt sein (z. B. COG)
-- der CSC reagiert auf ein **bewegtes Ziel**
-
----
-
-## 7. GPS / COG / XTE – Ebenentrennung
-
-Es existieren zwei strikt getrennte Regelräume:
-
-### Winkelraum (HDG / COG)
-- lokal
-- schnell
-- geeignet für Trimm
-
-### Geometrischer Raum (XTE / Distanz)
-- global
-- langsam
-- geeignet für Navigation
-
-Regeln:
-- COG darf Ziel-HDG ersetzen
-- XTE darf **niemals direkt** auf Aktoren wirken
-- XTE moduliert nur das interne Ziel-HDG
-
-Fehler äußern sich dadurch als **Oszillation**, nicht als Drift.
-
----
-
-## 8. Hull Speed
-
-Hull Speed ist **kein Regelparameter**, sondern ein Modulator.
-
-Darf beeinflussen:
-- Toleranzen
-- Cooldowns
-- Geduld
-
-Darf nicht:
-- Ziele filtern
-- Regelentscheidungen ersetzen
-
----
-
-## 9. Error Handling & Diagnostics
-
-- Error-Handling ist **explizit modelliert**
-- Fehler sind Zustände, keine impliziten Rückgabewerte
-- Diagnostics & Logging sind reine Beobachtung
-
-> Beobachtung ≠ Entscheidung
-
-Der CSC bleibt frei von Logging und Error-Logik.
-
----
-
-## 10. Ordnerstruktur & Abhängigkeiten
-
-Die Ordner spiegeln Domänen wider, nicht Technik.
+## 6. Ordnerstruktur (Ist-Zustand)
 
 ```text
 include/
-├── core/
-├── guidance/
-├── sensors/
-├── actuators/
-├── ui/
-├── diagnostics/
-├── errors/
-└── types/
+|- core/
+|  |- steering/
+|  |  |- csc/
+|  |  |- sourceModels/
+|- sensors/
+|- actuators/
+|- diagnostics/
+|- ui/
+|- types/
 
 src/
-├── core/
-├── guidance/
-├── sensors/
-├── actuators/
-├── ui/
-├── diagnostics/
-└── errors/
+|- core/
+|  |- steering/
+|  |  |- csc/
+|  |  |- sourceModels/
+|- sensors/
+|- actuators/
+|- diagnostics/
+|- ui/
+```
+
+## 7. Offene Architekturthemen (im Code als TODO markiert)
+
+- Guidance-Output als eigener Typ statt losem Target-Rueckgabewert
+- klarere State-Transition-Funktion (`prevState + inputs -> nextState`)
+- vollstaendiges Event->State-Mapping in Diagnostics
+- wirksame Sensor-Aktivierung fuer Stromsparmodi

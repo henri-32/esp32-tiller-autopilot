@@ -1,5 +1,5 @@
 #pragma once
-#include "sensors/NMEA183BUS.h"
+#include "sensors/NASA_Duo.h"
 #include "sensors/compassModule.h"
 #include "sensors/gpsModule.h"
 #include "sensors/windModule.h"
@@ -11,12 +11,8 @@ public:
   // Contract:
   // Purpose: Read and aggregate navigation sensor data into a snapshot.
   // Inputs: hardware modules + lead source selection.
-  // Outputs/Side-effects: returns snapshot; updates lead source state.
-  explicit NavigationSensors(const CompassModule &compass, const GPSModule &gps,
-                             const WindModule &wind,
-                             const NMEA183BUS &nmea183Bus)
-      : m_compass(compass), m_gps(gps), m_wind(wind),
-        m_nmea183Bus(nmea183Bus) {};
+  // Outputs/Side-effects: returns snapshot; no hardware write side-effects.
+  explicit NavigationSensors() = default;
 
   struct NavigationSnapshot {
     SensorSample<uint16_t> compass_hdg_dg;
@@ -24,6 +20,7 @@ public:
     SensorSample<float> gps_sog_kts;
     SensorSample<uint16_t> wind_angle_dg;
     SensorSample<float> stw_kts;
+	NavigationSource LeadSource;
   };
 
   struct SensorActivation {
@@ -37,15 +34,19 @@ public:
   };
 
   NavigationSnapshot createSnapshot();
+  // TODO(Architektur):
+  // SensorActivation spaeter in createSnapshot() wirksam machen
+  // (z. B. Sensor gezielt nicht lesen), damit Modi tatsaechlich
+  // Energie sparen und nicht nur Status-Flags setzen.
   void setSensorActivations(NavigationSource source, bool setTo);
   void setLeadSource(NavigationSource src);
   NavigationSource getLeadSource() const;
 
 private:
   NavigationSource m_leadSource = NavigationSource::Compass;
-  const CompassModule &m_compass;
-  const GPSModule &m_gps;
-  const WindModule &m_wind;
-  const NMEA183BUS &m_nmea183Bus;
+  CompassModule m_compass;
+  GPSModule m_gps;
+  WindModule m_wind;
+  NASA_Duo m_nmea183Bus;
   SensorActivation m_sensorActivation;
 };

@@ -1,72 +1,16 @@
 ﻿#include "core/steering/csc/csc.h"
 
-#include "core/steering/csc/deadband.h"
+
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 
-CoreSteeringController::CoreSteeringController(SteeringRegulationConfig &config)
-    :  m_observationBuffer(config), m_deadband(config),
-      m_steeringGuard(config) {}
-
-std::optional<SteeringIntent>
-CoreSteeringController::tick(uint32_t loopTimestamp) {
-  /*CSC macht zwei Sachen
-  - Beobachten
-  - Intent zurückgeben
-
-  Wenn er wegen Guards nicht beobachten darf early return*/
-
-  // Gate observation to avoid reacting too frequently.
-  if (m_steeringGuard.observationBlocked(loopTimestamp, m_lastObsUpdate,
-                                         m_lastIntent)) {
-    return std::nullopt;
-  }
-
-  SteeringIntent intent; // Return value
-
-  int16_t error = m_errorCalculator.getCurrentError(m_currentCourse,
-                                                    m_internalTargetCourse);
-
-  /*Ein nicht signifikanter Error kann keine Aktion auslösen
-  Deswegen darf das direkt zum early return führen*/
-  // Ignore small errors to avoid actuator chatter.
-  if (!m_deadband.errorSignificant(error)) {
-    return std::nullopt;
-  }
-
-  m_observationBuffer.update(error);
-  m_lastObsUpdate = loopTimestamp;
-
-  /* Der Median wird bewusst nur für die Bestimmung der
-  nötigen Korrekturrichtung genutzt, da ich bewusst keinen
-  PID Regler will*/
-
-  SteeringDirection dir = determineDirection(m_observationBuffer.getMedian());
-
-  if (m_steeringGuard.intentBlocked(loopTimestamp, m_lastIntent,
-                                    m_observationBuffer.getSampleSize())) {
-    return std::nullopt;
-  } else {
-    intent.dir = dir;
-
-    /* Semantisch klargestellt. CSC setzt vollen abstrakten Impuls.
-    Der kann danach nur nach unten gedämpft, aber nicht nach
-    oben eskaliert werden.*/
-
-    intent.abstractImpulse_0_100 = 100;
-    m_lastIntent = loopTimestamp;
-
-    /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
-    diese wird bewusst verworfen*/
-
-    // Intent consumed; discard accumulated evidence to start fresh.
-    m_observationBuffer.reset();
-
-    return intent;
-  }
-}
+CoreSteeringController::CoreSteeringController(const SteeringRegulationConfig &config)
+    : m_observationBuffer(config),m_steeringGuard(config),
+      m_config(config) {}
 
 void CoreSteeringController::currentHDG(uint16_t current) {
   m_currentCourse = current;
@@ -80,6 +24,97 @@ uint16_t CoreSteeringController::getInternalTarget() const {
   return m_internalTargetCourse;
 };
 
+const CSCDebugSnapshot &CoreSteeringController::getDebug() const {
+  return m_debug;
+}
+
+std::optional<SteeringIntent>
+CoreSteeringController::tick(uint32_t loopTimestamp) {
+  // Debug flags are per-tick state, not latched state.
+  m_debug.observationBlocked = false;
+  m_debug.intentBlocked = false;
+
+  /*CSC macht zwei Sachen
+  - Beobachten
+  - Intent zurückgeben
+
+  Wenn er wegen Guards nicht beobachten darf early return*/
+  if (m_steeringGuard.observationBlocked(m_lastObsUpdate, m_lastIntent,
+                                         loopTimestamp)) {
+    m_debug.observationBlocked = true;
+    return std::nullopt;
+  }
+
+  int16_t error =
+      m_errorCalculator.calculateError(m_currentCourse, m_internalTargetCourse);
+  m_debug.error = error;
+
+  // Beim Fehler von 0 wird der Buffer zurückgesetzt, um schnelleres Reagieren
+  // bei Richtungswechseln zu ermöglichen, dadurch dass der Median um null
+  // weniger robust wird. Die steeringTolerance ermöglicht Oszillationen um 0
+  // als no action zu behandeln, während große Fehler schneller signifikant
+  // werden
+  // Harte Resets bei 0 haben meine counter Intents verhindert. Deswegen Reaktion auf sign flip im Bereich nahe 0 
+  const bool insideNoActionBand =
+      std::abs(error) <= m_config.steeringTolerance_deg;
+  const bool signFlip = ((error<0 && m_lastError >0) || (error > 0 && m_lastError < 0)); 
+  if (insideNoActionBand && signFlip) {
+    m_observationBuffer.reset();
+  }
+
+  m_observationBuffer.update(error, loopTimestamp);
+  m_lastObsUpdate = loopTimestamp;
+
+  // Bewusst kein Struct, damit gezielte Zugriffe jederzeit möglich bleiben und
+  // nicht an snapshots gebunden werden
+  const int16_t median = m_observationBuffer.getMedian();
+  const uint8_t sampleSize = m_observationBuffer.getSampleSize();
+  const float omega = m_observationBuffer.getOmega(loopTimestamp);
+
+  m_debug.median = median;
+  m_debug.sampleSize = sampleSize;
+
+  /*Counter Intent steuert kurz vor Erreichen des Targets gegen.
+  Siehe Doku iterations/3. counterImpulse
+  Absichtlich außerhalb der regulären Intent-Guards, weil eigene counterGuards
+  Vor den regulären Intents, damit der counter nicht von deren Guards abgehalten
+  wird*/
+  if (counterIntentNecessary(median, sampleSize, omega, loopTimestamp)) {
+    auto counter = counterIntent(omega);
+    m_lastCounterIntent = loopTimestamp;
+    m_lastIntent = loopTimestamp;
+    m_lastIntentValue = counter;
+    m_observationBuffer.reset();
+    return counter;
+  }
+
+  /*steering Guards.*/
+  if (m_steeringGuard.intentBlocked(m_lastIntent, median, sampleSize, omega,
+                                    loopTimestamp)) {
+    m_debug.intentBlocked = true;
+
+    return std::nullopt;
+  } else {
+
+    auto intent = calculateIntentFromObs();
+    m_lastIntent = loopTimestamp;
+
+    /* Wenn Handlung ausgelöst wird, wurde auf Evidenz reagiert und
+      diese wird bewusst verworfen*/
+    m_observationBuffer.reset();
+
+    /*Für Counter Intent wichtig*/
+    if (intent.has_value()) {
+      m_lastIntentValue = intent;
+    }
+
+    // Für sign flip Logik
+    m_lastError = error;
+
+    return intent;
+  }
+}
+
 SteeringDirection
 CoreSteeringController::determineDirection(int16_t median) const {
   if (median < 0) {
@@ -89,3 +124,98 @@ CoreSteeringController::determineDirection(int16_t median) const {
   };
   return SteeringDirection::Left;
 }
+
+std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
+
+  /* Der Median wird als robuster Mittelwert für die Entscheidung
+  Action/NoAction und Richtungsentscheidung genutzt. Ein leicht geglätteter
+  aktueller mean wird als Fehlergröße für die Berechnung der abstrakten
+  Impulsstärke genutzt. */
+
+  SteeringIntent intent; // return value
+
+  intent.dir = determineDirection(m_observationBuffer.getMedian());
+
+  /* Semantisch klargestellt. CSC setzt grundsätzlich bei jeder Entscheidung
+  vollen abstrakten Impuls.
+  Der kann danach nach unten gedämpft, aber nicht nach
+  oben eskaliert werden.*/
+  intent.abstractImpulse_0_100 = 100;
+  int16_t currentError = m_observationBuffer.getSmoothedCurrentError();
+
+  if (currentError < -m_config.smoothedMeanApplicationWindow_deg ||
+      currentError > m_config.smoothedMeanApplicationWindow_deg) {
+    return intent;
+  };
+
+  /*Bis hier hin war Richtung noch wichtig, um mean korrekt bestimmen zu
+  können Ab hier nur noch für abstractImpulse Größe ohne Vorzeichenrelevanz
+  verwendet*/
+  currentError = std::abs(currentError);
+
+  /*Wenn die obere (positive) Grenze des Windows 100% abstract Impulse bedeutet,
+  wird so in linearem Verhältnis auf die Fehlergröße reagiert*/
+  float errorPercantage = static_cast<float>(currentError) /
+                          m_config.smoothedMeanApplicationWindow_deg;
+  intent.abstractImpulse_0_100 *= errorPercantage;
+
+  return intent;
+};
+
+bool CoreSteeringController::counterIntentNecessary(int16_t median,
+                                                    uint8_t sampleSize,
+                                                    float omega,
+                                                    uint32_t loopTimestamp) {
+  // nullopt kann aufgrund fehlender Richtung nicht Basis sein
+  if (!m_lastIntentValue.has_value()) {
+    return false;
+  }
+
+  // FlipFlop Guard (nach FlipFlops in Sims) Bewusst auf reguläre Intents
+  // bezogen
+  if (loopTimestamp - m_lastIntent < m_config.counterTimerGuard_ms &&
+      m_lastIntentValue->dir != determineDirection(median)) {
+    return false;
+  }
+  // Cooldown auf letzte counters bezogen
+  if (loopTimestamp - m_lastCounterIntent < m_config.counterCooldown_ms) {
+    return false;
+  }
+
+  // Qualität von Omega
+  if (sampleSize < m_config.counterOmegaMinSampleSize ||
+      std::abs(omega) < m_config.omegaThresholdForCounter) {
+    return false;
+  }
+
+  const int16_t absError = std::abs(m_debug.error);
+  const bool nearTarget = absError <= m_config.counterNearTargetWindow_deg;
+
+  if (median < 0 && omega < 0 && nearTarget) {
+    return true;
+  } else if (median > 0 && omega > 0 && nearTarget) {
+    return true;
+  } else
+    return false;
+};
+
+SteeringIntent CoreSteeringController::counterIntent(float omega) {
+  SteeringIntent intent;
+  if (m_lastIntentValue->dir == SteeringDirection::Left) {
+    intent.dir = SteeringDirection::Right;
+  } else if (m_lastIntentValue->dir == SteeringDirection::Right) {
+    intent.dir = SteeringDirection::Left;
+  }
+
+  /*TODO Der abstract Impulse sollte auf die ersten realen Testergebnisse
+  (Einfluss von Intent auf Omega) gemappt werden, damit das Target möglichst
+  genau abgefangen werden kann.
+  Hier ist gerade SIM Logik drin !!!!!!
+  Ich fange 60% von Omega ab um zu gucken, ob ich eingeregelt bekomme!!!!!*/
+  const float omegaAbs = std::abs(omega);
+  const float mappedImpulse = omegaAbs * 100.0f * 0.5f;
+  const float clampedImpulse = std::clamp(mappedImpulse, 0.0f, 100.0f);
+  intent.abstractImpulse_0_100 = static_cast<uint8_t>(clampedImpulse);
+
+  return intent;
+};

@@ -1,4 +1,5 @@
 #include "ui/display.h"
+#include"ui/uiContent.h"
 
 void Display::update()
 {

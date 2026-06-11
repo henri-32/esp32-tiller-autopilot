@@ -1,15 +1,11 @@
 #include "core/steering/csc/deadband.h"
-#include <algorithm>
+#include <cstdint>
 
-Deadband::Deadband(SteeringRegulationConfig &config) : m_config(config) {};
+Deadband::Deadband(const SteeringRegulationConfig &config) : m_config(config) {};
 
 bool Deadband::errorSignificant(int16_t error) {
-
-  // Treat small errors as noise.
-  if (abs(error) <= m_config.steeringTolerance_deg) {
-    return false;
-  } else if (error > m_config.steeringTolerance_deg) {
-    return true;
-  };
+  if (error >  m_config.steeringTolerance_deg) return true;
+  if (error < -m_config.steeringTolerance_deg) return true;
   return false;
-};
+}
+

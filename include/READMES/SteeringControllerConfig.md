@@ -4,18 +4,17 @@ Dieses Dokument beschreibt ausschließlich die **Konfigurationsparameter**
 des Core Steering Controllers (CSC) und deren **Auswirkungen auf Verhalten,
 Robustheit und Energieverbrauch**.
 
-Architektur, Rollen und Systemgrenzen sind in `ARCHITECTURE.md` definiert
+Architektur, Rollen und Systemgrenzen sind in `Architektur.md` definiert
 und werden hier **nicht wiederholt**.
 
 ---
 
-## Config-Lifecycle (Hot-Reload)
+## Config-Lifecycle (aktueller Stand)
 
-Die Konfiguration wird im SystemController gehalten und ist zur Laufzeit
-hot-reload faehig. Updates kommen ueber das Control-Interface, werden in
-eine pending-Struktur geschrieben und am Ende des SystemController-Ticks
-atomar uebernommen. Alle Module halten Referenzen auf die benoetigten
-Config-Slices und sehen die neuen Werte ab dem naechsten Tick konsistent.
+Die Konfiguration wird im `SystemController` gehalten und beim Bau der
+Module als `const`-Referenzen auf die benoetigten Config-Slices verdrahtet.
+Ein Runtime-Hot-Reload ueber pending-Struktur ist im aktuellen Code noch
+nicht implementiert.
 
 ---
 
@@ -30,11 +29,18 @@ Config-Slices und sehen die neuen Werte ab dem naechsten Tick konsistent.
 ## Parameterübersicht
 
 - `steeringTolerance_deg`
-- `SteeringMinImpulse_ms`
-- `SteeringMaxImpulse_ms`
-- `SteeringCooldown_ms`
+- `counterNearTargetWindow_deg`
+- `steeringMinImpulse_ms`
+- `steeringMaxImpulse_ms`
+- `steeringCooldown_ms`
 - `minimumTimeBtwObs_ms`
 - `observationBufferSize`
+- `activeObservationBufferSize`
+- `minimumSampleSize`
+- `calculationWindowSmoothedMean`
+- `smoothedMeanApplicationWindow_deg`
+- `omegaRobust`
+- `omegaDeadband`
 - `pauseForValidObsAfterImpulse_ms`
 
 ---
@@ -69,7 +75,7 @@ gilt das System als ausreichend getrimmt.
 
 ---
 
-### `SteeringMinImpulse_ms`
+### `steeringMinImpulse_ms`
 
 **Bedeutung**  
 Untergrenze für einen Trimmimpuls.  
@@ -89,7 +95,7 @@ Stellt sicher, dass ein Impuls mechanisch wirksam ist
 
 ---
 
-### `SteeringMaxImpulse_ms`
+### `steeringMaxImpulse_ms`
 
 **Bedeutung**  
 Obergrenze für einen einzelnen Trimmimpuls.
@@ -132,6 +138,14 @@ Dient ausschließlich dem Schutz von Aktor und Energiehaushalt.
 - Praxis: 2000–8000 ms
 - Maximum: ca. 15000–30000 ms
 
+**Hinweis zum aktuellen Implementierungsstand**
+- Der Cooldown hat derzeit einen staerkeren Systemeinfluss als reine
+  Aktorschonung, weil der Counter-Intent im `tick()` vor den regulaeren
+  Intent-Guards geprueft wird.
+- In Kombination mit engem Counter-Fenster und Omega-Logik kann ein hoher
+  Cooldown alternierende Counter/Normal-Impulse beguenstigen und damit als
+  Regimeparameter wirken.
+
 ---
 
 ### `minimumTimeBtwObs_ms`
@@ -163,12 +177,141 @@ Messhygiene-Parameter, **kein Regelparameter**.
 ### `observationBufferSize`
 
 **Bedeutung**  
-Maximale Anzahl von Observations im Evidenzraum.
-Bestimmt, wie viel Dominanz nötig ist, bevor getrimmt wird.
+Compile-time Maximalgroesse des Observation-Buffers.  
+Bestimmt die feste Obergrenze der intern allozierten CSC-Arrays.
 
 **Zusammenhang**
 max. Beobachtungsdauer
-≈ minimumTimeBtwObs_ms × observationBufferSize
+~= minimumTimeBtwObs_ms * observationBufferSize
 
+### `activeObservationBufferSize`
 
+**Bedeutung**  
+Laufzeit-aktive Kapazitaet des Observation-Buffers.  
+Der Wert steuert, wie viele Samples im aktuellen Run gesammelt werden,
+bevor der Evidenzraum als voll gilt.
 
+**Hinweis Sim-Tuning**  
+In der Simulation kann dieser Wert per JSON gesetzt werden
+(`csc.observationBufferSize`).
+Im Produktiv-Default bleibt `activeObservationBufferSize` auf dem
+compile-time Maximum `observationBufferSize`.
+
+---
+
+### `calculationWindowSmoothedMean`
+
+**Bedeutung**  
+Anzahl der Error-Samples fuer einen geglaetteten Mean der Fehlergroesse.
+Die Richtungsentscheidung bleibt median-basiert; der Mean ist als
+zusaetzlicher Groessenindikator gedacht.
+
+**Ziel im Tuning-Kontext**  
+Bei kleinen Fehlern soll weniger aggressiv reagiert werden, um
+Nachtrimmen und Ueberschwingen um das Target zu reduzieren.
+
+**Einheit / Bezug**  
+Sample-Anzahl (kein Zeitwert).  
+Effektive Zeitspanne grob:
+`calculationWindowSmoothedMean * minimumTimeBtwObs_ms`
+
+**Groesser einstellen**
+- staerker geglaettete Fehlergroesse
+- robuster gegen einzelne Ausreisser
+- traeger bei schnellen Aenderungen
+
+**Kleiner einstellen**
+- reaktiver auf aktuelle Fehlergroesse
+- empfindlicher gegen Messrauschen
+
+**Hinweis Implementierungsstand**  
+Die Berechnung liegt im ObservationBuffer (`getSmoothedCurrentError()`).
+Der CSC bestimmt die Richtung weiterhin ueber den Median.
+
+---
+
+### `smoothedMeanApplicationWindow_deg`
+
+**Bedeutung**  
+Symmetrisches Fenster um 0 fuer den geglaetteten aktuellen Fehler
+(`getSmoothedCurrentError()`).
+
+**Verhalten im CSC**  
+- Wenn `|currentError| > smoothedMeanApplicationWindow_deg`, bleibt der
+  abstrakte Impuls bei 100.
+- Wenn `|currentError| <= smoothedMeanApplicationWindow_deg`, wird der Impuls
+  linear skaliert:
+  `abstractImpulse_0_100 = 100 * |currentError| / smoothedMeanApplicationWindow_deg`
+
+**Groesser einstellen**
+- mehr weicher Uebergang nahe dem Target
+- weniger abrupte Impulsspruenge
+
+**Kleiner einstellen**
+- schneller voller Impuls
+- aggressiveres Verhalten bei mittleren Fehlern
+
+**Hinweis**
+- Der Wert muss groesser als 0 bleiben, damit die lineare Skalierung sinnvoll
+  bleibt.
+
+---
+
+### `omegaRobust`
+
+**Bedeutung**  
+Anzahl der letzten Error-Samples, die in die Omega-Schaetzung eingehen.
+Die effektive Fenstergroesse ist `min(sampleSize, omegaRobust)`.
+
+**Groesser einstellen**
+- robustere Omega-Schaetzung
+- traeger bei schnellen Richtungswechseln
+
+**Kleiner einstellen**
+- reaktiver auf kurzfristige Aenderungen
+- empfindlicher gegen Rauschen
+
+**Hinweis**
+- `0` deaktiviert effektiv die Omega-Schaetzung (`omega = 0`).
+
+---
+
+### `omegaDeadband`
+
+**Bedeutung**  
+Toleranzband fuer die Omega-Guard-Entscheidung im `SteeringGuard`.
+Liegt die gemessene Winkelgeschwindigkeit innerhalb dieses Bands, blockiert
+Omega den Intent nicht.
+
+**Groesser einstellen**
+- weniger Blockierung durch kleine Restrotationen
+- konservativeres Nachsteuern
+
+**Kleiner einstellen**
+- fruehere Blockierung bei Rotation in Zielrichtung
+- kann zu weniger Nachtrimmen fuehren
+
+**Hinweis**
+- Muss `>= 0` sein.
+
+---
+
+### `counterNearTargetWindow_deg`
+
+**Bedeutung**  
+Absolutes Error-Fenster fuer den Counter-Intent (`|error| <= window`).
+Dieser Parameter ist bewusst von `steeringTolerance_deg` entkoppelt, damit
+Counter-Tuning und Deadband-Tuning getrennt erfolgen koennen.
+
+**Groesser einstellen**
+- Counter greift frueher und haeufiger ein
+- besseres fruehes Abfangen moeglich
+- hoeheres Risiko fuer alternierende Gegenimpulse
+
+**Kleiner einstellen**
+- Counter greift spaeter und seltener ein
+- konservativeres Verhalten nahe Target
+- hoehere Restenergie beim Target-UEbergang moeglich
+
+**Typische Startwerte**
+- 1-3 Grad (Default: 2 Grad)

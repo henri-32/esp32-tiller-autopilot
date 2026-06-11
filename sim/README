@@ -1,0 +1,91 @@
+# Sim Workflow
+
+## Standard-Run
+
+1. `sim/next_run_config.json` fuer den naechsten Lauf anpassen.
+2. Simulation bauen und starten:
+   - `pio run -e sim`
+   - `.pio/build/sim/program.exe`
+3. Output entsteht in `sim/sim_output/`:
+   - `drift_sim.csv`
+   - `drift_sim_config.json`
+4. Plot erzeugen:
+   - `python sim/plots/plot_drift.py`
+5. Plot-Output:
+   - `sim/sim_output/drift_plot.png`
+
+## Parameter in `sim/next_run_config.json`
+
+Pflichtfelder (strikt geparst):
+
+- `time.dt_sec`
+- `time.sim_seconds`
+- `boat.intentStepToTiller`
+- `boat.tillerMaxAbs`
+- `boat.tillerToYawAccel_deg_s2`
+- `boat.initialHeading_deg`
+- `boat.environmentTorque_deg_s2`
+- `boat.yawInertia`
+- `boat.yawDampingLinear`
+- `boat.yawDampingQuadratic`
+- `boat.trueWindSpeed_mps`
+- `boat.trueWindDirection_deg`
+- `boat.windHullYawAccelPerMps2`
+- `csc.steeringTolerance_deg`
+- `csc.counterNearTargetWindow_deg`
+- `csc.counterTimerGuard_ms`
+- `csc.counterCooldown_ms`
+- `csc.counterOmegaMinSampleSize`
+- `csc.omegaThresholdForCounter`
+- `csc.minimumSampleSize`
+- `csc.minimumTimeBtwObs_ms`
+- `csc.pauseForValidObsAfterImpulse_ms`
+- `csc.steeringCooldown_ms`
+- `csc.calculationWindowSmoothedMean`
+- `csc.smoothedMeanApplicationWindow_deg`
+- `csc.observationBufferSize`
+- `csc.omegaRobust`
+- `csc.omegaDeadband`
+- `csc.target_deg`
+
+Hinweis zum aktuellen Reglerverhalten:
+- `csc.steeringCooldown_ms` beeinflusst derzeit nicht nur den Takt normaler
+  Intents, sondern auch den Regimewechsel. Grund: Der Counter-Check laeuft im
+  CSC vor den regulaeren Intent-Guards.
+- Hoher Cooldown kann dadurch alternierende Counter/Normal-Impulse verstaerken
+  oder dominieren (abhaengig von Counter-Fenster und Omega-Zustand).
+
+## VS Code Task
+
+- Komplettablauf ueber VS Code Task:
+  - `Simulation: run_simulation + plot_drift`
+- Der Task baut `sim`, fuehrt die Simulation aus und startet danach `plot_drift.py`.
+
+## Prozess bei Erweiterung der Sim-Config
+
+Der Loader ist absichtlich strikt. Wenn neue Config-Felder in der Simulation dazukommen,
+muessen die Felder an allen relevanten Stellen erweitert werden:
+
+1. `SimulationConfig` in `sim/headingSimulator.h`
+2. Parsing/Validierung in `loadSimulationConfigFromJson(...)` in `sim/headingSimulator.cpp`
+3. Snapshot-Writer `writeConfigSnapshotJson(...)` in `sim/headingSimulator.cpp`
+4. `sim/next_run_config.json` (neuen Wert eintragen)
+5. Optional, aber empfohlen: `include/READMES/SteeringControllerConfig.md` mit dem neuen Parameter aktualisieren
+
+Fehlt ein Pflichtfeld, bricht der Sim-Run mit Fehlermeldung ab.
+
+## Physikmodell
+
+Die Bootdynamik nutzt ein kompaktes Yaw-Modell mit:
+
+- persistente Pinnenposition durch CSC-Intent
+  (`intentStepToTiller`, `tillerMaxAbs`)
+- daraus kontinuierliches Ruder-Yaw-Moment
+  (`tillerToYawAccel_deg_s2`)
+- konstanter Umgebungsdrift (`environmentTorque_deg_s2`)
+- linearer und quadratischer Daempfung (`yawDampingLinear`, `yawDampingQuadratic`)
+- vereinfachtem Windage-Yaw-Einfluss auf den Rumpf
+  (`trueWindSpeed_mps`, `trueWindDirection_deg`, `windHullYawAccelPerMps2`)
+
+Die verwendete Windkopplung ist bewusst segelfrei und modelliert nur einen
+windinduzierten Stoereinfluss auf den Rumpf (kein Lift/Drag-Segelmodell).

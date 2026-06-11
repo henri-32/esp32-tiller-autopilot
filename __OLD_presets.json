@@ -1,0 +1,21 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "clangd",
+      "displayName": "clangd compile database",
+      "description": "Deterministic CMake configure preset for compile_commands.json.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/compile-db",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    }
+  ]
+}

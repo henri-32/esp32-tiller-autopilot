@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/uiContent.h"
 class Display {
 public:
     // Contract:

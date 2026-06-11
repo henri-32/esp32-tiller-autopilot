@@ -5,5 +5,6 @@ class HeadingErrorCalculator {
 public:
   HeadingErrorCalculator() = default;
 
-  int16_t getCurrentError(uint16_t current, uint16_t target);
+  int16_t calculateError(uint16_t current, uint16_t target);
+  
 };

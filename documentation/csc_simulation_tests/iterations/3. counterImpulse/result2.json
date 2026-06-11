@@ -1,0 +1,32 @@
+{
+  "time": {
+    "dt_sec": 0.100,
+    "sim_seconds": 180
+  },
+  "boat": {
+    "intentStepToTiller": 0.002,
+    "tillerMaxAbs": 1.000,
+    "tillerToYawAccel_deg_s2": 4.000,
+    "initialHeading_deg": 20.000,
+    "environmentTorque_deg_s2": 0.000,
+    "yawInertia": 1.000,
+    "yawDampingLinear": 0.700,
+    "yawDampingQuadratic": 0.030,
+    "trueWindSpeed_mps": 6.000,
+    "trueWindDirection_deg": 70.000,
+    "windHullYawAccelPerMps2": 0.035
+  },
+  "csc": {
+    "steeringTolerance_deg": 1,
+    "minimumSampleSize": 4,
+    "minimumTimeBtwObs_ms": 250,
+    "pauseForValidObsAfterImpulse_ms": 250,
+    "steeringCooldown_ms": 5000,
+    "calculationWindowSmoothedMean": 3,
+    "smoothedMeanApplicationWindow_deg": 15,
+    "observationBufferSize": 20,
+    "omegaRobust": 4,
+    "omegaDeadband": 0.040,
+    "target_deg": 0
+  }
+}

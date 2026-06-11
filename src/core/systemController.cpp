@@ -1,38 +1,63 @@
 ﻿#include "core/systemController.h"
-#include "sensors/navigationSensors.h"
-#include "ui/controlPanelTypes.h"
+#include "types/globalTypes.h"
 #include <cstdint>
 
 SystemController::SystemController()
-    : m_navigationSensors(m_compassModule, m_gpsModule, m_windModule,
-                          m_nmea183Bus),
-      // Config is owned here and passed down in granular slices.
-      m_impulseFilter(m_config.mechanics, m_config.physics),
-      m_csc(m_config.regulations),
-      m_sourceHandler(m_controlPanel, m_navigationSensors,
-                      m_config.source, m_diagnostics, m_csc),
-      m_steeringOrchestrator( m_csc, m_impulseFilter,
-                             m_pwmController) {}
+    : m_navigationSensors(), m_sourceHandler(m_navigationSensors, m_config.source, m_diagnostics),
+      m_steeringOrchestrator(m_config)
+{
+}
 
-void SystemController::tick(uint32_t loopTimestamp) {
-  // Überblick übers System
-  const auto snapshot = m_navigationSensors.createSnapshot();
-  const auto intent = m_controlPanel.readIntent();
+void operator(uint32_t loopTimestamp)
+{
+    // 1. Überblick übers System
+    const auto nav_snapshot = m_navigationSensors.createSnapshot();
+    const auto panel_intent = m_controlPanel.readIntent();
 
-  // 2. Quelle waehlen
-  // Verarbeitet aktive Sensorquelle und Fallbacks der Sensoren
-  m_sourceHandler.tick(intent.requestedSource, loopTimestamp, snapshot,
-                       intent.generalTarget);
+    // 2. Quelle waehlen
+    // Verarbeitet aktive Sensorquelle und Fallbacks der Sensoren
+    auto cscTarget = m_sourceHandler.tick(nav_snapshot, panel_intent.activeSource,
+                                          panel_intent.generalTarget, loopTimestamp);
 
-  // 3. Steering Ausführen
-  // Only drive the actuator path when steering is explicitly engaged.
-  if (intent.steeringEngaged) {
-    m_steeringOrchestrator.tick(snapshot, loopTimestamp);
-  }
+    // 3. Steering Ausführen
+    // Only drive the actuator path when steering is explicitly engaged.
+    if (panel_intent.steeringEngaged && m_state.systemMode == SystemState::SystemMode::OK)
+    {
+        m_steeringOrchestrator.tick(nav_snapshot, cscTarget, loopTimestamp);
+    }
 
-  // 4. Diagnostics
-  m_diagnostics.tick(loopTimestamp);
+    // TODO(Architektur):
+    // State-Update als explizite Transition modellieren:
+    // nextState = f(previousState, diagnostics, panelIntent)
+    // Dann bleiben Mode-Wechsel deterministisch und "INIT/OK/SAFE"-Regeln sind
+    // zentral an einer Stelle dokumentiert.
 
-  // 5. Display updaten
-  m_display.update();
+    // 4. Diagnostics
+    // Gerade noch getrennt, weil tick wahrscheinlich mehr machen wird als den
+    // snapshot
+    m_diagnostics.tick(loopTimestamp);
+    const auto diagnostics_snapshot = m_diagnostics.snapshot();
+
+    // 5.. Systemstatus überprüfen
+    m_state = stateUpdate(diagnostics_snapshot);
+
+    // 6. Display updaten
+    auto content = m_displayContent.renderBuffer(panel_intent, nav_snapshot, diagnostics_snapshot,
+                                           m_state.systemMode, m_config.display, loopTimestamp);
+    m_display.update();
+}
+
+SystemState SystemController::stateUpdate(const DiagnosticSnapshot& snapshot)
+{
+    // TODO(Architektur):
+    // Diese Funktion sollte den bisherigen Zustand beruecksichtigen, statt immer
+    // von einem neu erzeugten Default-State auszugehen.
+    SystemState state;
+    // 1. Error Handling
+    if (snapshot.criticalErrorOccured)
+    {
+        state.systemMode = SystemState::SystemMode::SAFE;
+    };
+
+    return state;
 }

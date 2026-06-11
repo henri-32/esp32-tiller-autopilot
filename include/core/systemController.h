@@ -1,15 +1,14 @@
 #pragma once
-#include "actuators/pwmController.h"
 #include "core/config.h"
-#include "core/steering/csc/csc.h"
-#include "core/steering/impulseFilter.h"
+
 #include "core/steering/sourceHandling.h"
 #include "core/steering/steeringOrchestrator.h"
 #include "diagnostics/diagnostics.h"
-#include "sensors/NMEA183BUS.h"
 #include "sensors/navigationSensors.h"
+#include "types/globalTypes.h"
 #include "ui/controlPanel.h"
 #include "ui/display.h"
+
 
 class SystemController {
 public:
@@ -22,19 +21,26 @@ public:
   void tick(uint32_t loopTimestamp);
 
 private:
-  // Top-level composition root. Owns hardware modules, config, and orchestration.
-  ControlPanel m_controlPanel{};
-  CompassModule m_compassModule{};
-  GPSModule m_gpsModule;
-  WindModule m_windModule;
-  NMEA183BUS m_nmea183Bus;
-  NavigationSensors m_navigationSensors;
-  PWMController m_pwmController{};
+  // Top-level composition root. Owns partly hardware, config and
+  // orchestration.
+  SystemState m_state;
   SteeringControllerConfig m_config;
+
+  // Inputs and UI intent
+  ControlPanel m_controlPanel{};
+  NavigationSensors m_navigationSensors;
+
+  // Control and supervision pipeline
   Diagnostics m_diagnostics;
-  ImpulseFilter m_impulseFilter;
-  CoreSteeringController m_csc;
   SourceHandler m_sourceHandler;
   SteeringOrchestrator m_steeringOrchestrator;
+
+  // Presentation
+  UIContent m_displayContent {m_config.display};
   Display m_display;
+
+  // TODO(Architektur):
+  // Als reine Transition-Funktion ausbauen (prevState + Inputs -> nextState).
+  // So bleibt die Zustandslogik testbar und vom Tick-Ablauf entkoppelt.
+  SystemState stateUpdate(const DiagnosticSnapshot &snapshot);
 };

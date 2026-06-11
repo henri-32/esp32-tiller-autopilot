@@ -9,10 +9,10 @@ public:
   // Purpose: Reject small errors as noise.
   // Inputs: error + regulation config slice.
   // Outputs/Side-effects: boolean decision, no side-effects.
-  Deadband(SteeringRegulationConfig &config);
+  Deadband(const SteeringRegulationConfig &config);
 
   bool errorSignificant(int16_t error);
 
 private:
-  SteeringRegulationConfig &m_config;
+  const SteeringRegulationConfig &m_config;
 };
