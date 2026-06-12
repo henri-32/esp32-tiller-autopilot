@@ -1,0 +1,26 @@
+{ 
+  "version":6, 
+  "configurePresets": [
+    {
+      "name": "hardwaretest-compass",
+      "displayName":"hardwaretest-compass", 
+      "generator": "Ninja", 
+      "binaryDir": "${sourceDir}/build/hardwaretest-compass", 
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug", 
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "BUILD_COMPASS_HARDWARE_TEST": "ON"
+      }
+     }
+  ], 
+  "buildPresets":  [
+    {
+      "name": "hardwaretest-compass", 
+      "displayName": "hardwaretest-compass", 
+      "configurePreset": "hardwaretest-compass", 
+      "targets": [
+			"compassModuleHardwareTest.elf"
+      ]
+    } 
+  ]
+}

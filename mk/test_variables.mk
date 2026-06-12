@@ -1,8 +1,8 @@
 include mk/global_variables.mk
 
-TEST_BUILD_DIR := build_test/$(MODE)
+TEST_BUILD_DIR := build/native/$(MODE)
 
-TEST_BIN := build_test/unit_tests
+TEST_BIN := build/native/unit_tests
 
 ifeq ($(MODE), TEST)
 	TEST_CXX_FLAGS := -std=c++20 -Wall -Wextra 

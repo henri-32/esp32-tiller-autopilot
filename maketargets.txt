@@ -1,0 +1,11 @@
+For every following component (*) ... 
+
+- hardwaretest-compass 
+
+are the following variants of make targets provided: 
+
+- configure_* (configures the CMake project according to the preset *)
+- build_* (builds the CMake project according to the preset *)
+- flash_* (flashes the CMake build of the preset *) 
+
+===========================================================

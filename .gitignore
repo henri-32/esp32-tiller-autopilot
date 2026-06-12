@@ -23,7 +23,7 @@ esp/sdkconfig
 esp/sdkconfig.old
 compile_commands.json
 build.log 
-.log/
+.logs/
 
 # Libraries
 lib/
