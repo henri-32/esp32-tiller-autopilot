@@ -6,6 +6,10 @@ are the following variants of make targets provided:
 
 - configure_* (configures the CMake project according to the preset *)
 - build_* (builds the CMake project according to the preset *)
-- flash_* (flashes the CMake build of the preset *) 
+- flash_* (builds and flashes the CMake build of the preset *) 
+
+if it's a hardwaretest it also provides: 
+
+- monitor_* (builds, flashes the CMake build of the preset * and starts monitoring the serial port)
 
 ===========================================================

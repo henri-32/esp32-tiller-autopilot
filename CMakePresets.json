@@ -19,7 +19,7 @@
       "displayName": "hardwaretest-compass", 
       "configurePreset": "hardwaretest-compass", 
       "targets": [
-			"compassModuleHardwareTest.elf"
+			"hardwaretest-compass.elf"
       ]
     } 
   ]

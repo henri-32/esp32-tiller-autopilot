@@ -1,5 +1,5 @@
 include mk/global_variables.mk
-include mk/commands.mk
+include mk/cmakeWrappers.mk
 include mk/toolchain.mk
 include mk/test_variables.mk
 include mk/test_lib_variables.mk
@@ -22,7 +22,7 @@ compiledb_test:
 
 .PHONY: clean 
 clean: 
-	@rm -rf build_test 
+	@rm -rf build 
 	@echo 'removed all build artefacts (Libs excluded. To remove lib artefacts run "make clean_lib"'
 
 .PHONY: clean_test 

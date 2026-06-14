@@ -24,10 +24,12 @@ idf_build_process("${IDF_TARGET}")
 
 option(BUILD_COMPASS_HARDWARE_TEST "Build path for compass hardware tests" ON)
 if (BUILD_COMPASS_HARDWARE_TEST)
-	add_executable(compassModuleHardwareTest.elf 
-		test/hardwaretests/compassModuleHardwareTest/compassModuleHardwareTest.cpp
+	add_executable(hardwaretest-compass.elf 
+		test/hardwaretests/hardwaretest-compass/hardwaretest-compass.cpp
+		src/drivers/compassModule.cpp 
+		src/drivers/i2c_driver.cpp
 	)
-	add_subdirectory(test/hardwaretests/compassModuleHardwareTest)
-	idf_build_executable(compassModuleHardwareTest.elf)
+	add_subdirectory(test/hardwaretests/hardwaretest-compass)
+	idf_build_executable(hardwaretest-compass.elf)
 endif()
 
