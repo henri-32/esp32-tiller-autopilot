@@ -24,8 +24,11 @@ public:
 
 
   esp_err_t init() override; 
+  int16_t read_raw(); 
+  void dump(); 
   SensorSample<uint16_t> read() const override;
 
 private: 
   i2c_master_bus_handle_t master_handle_; 
+  i2c_master_dev_handle_t dev_handle_; 
 };

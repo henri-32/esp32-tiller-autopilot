@@ -20,5 +20,5 @@ flash_hardwaretest-compass:
 	@$(SOURCE) && cmake --build --preset hardwaretest-compass -j8 --target flash | tee .logs/lastBuild.log
 
 monitor_hardwaretest-compass: 
-	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-compass/hardwaretest-compass.elf
+	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-compass/hardwaretest-compass.elf | tee .logs/lastMonitor.log
 
