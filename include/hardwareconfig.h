@@ -23,7 +23,9 @@ struct CompassConfig
   static const uint32_t scl_speed_hz = 10000;
   static const uint16_t write_timeout_ms = 10;
   static const uint8_t control_reg1 = 0x0a;
-  // control_val represents configuration of the hardwarecompass from the data sheet. This value
-  // means currently: OSR = 64, RNG = 8Gauss, ODR = 10Hz, MODE = Continuous Measurement
+  // control_val represents configuration of the hardwaremodule from the data sheet.
   static const uint8_t control_val = 0b01100011;
+  // Data Registers
+  static const uint8_t compassdata_register_start = 0x01;
+  static const uint8_t compassdata_register_bytes = 6; 
 };

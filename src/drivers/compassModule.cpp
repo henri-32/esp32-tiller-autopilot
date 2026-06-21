@@ -6,11 +6,11 @@
 #include "hardwareconfig.h"
 #include "types/globalTypes.h"
 #include <cstdint>
-#include <sys/types.h>
 
 using CCfg = CompassConfig;
 
 SensorSample<uint16_t> CompassModule::read() const
+//{{{
 {
   SensorSample<uint16_t> sample;
 
@@ -22,10 +22,11 @@ SensorSample<uint16_t> CompassModule::read() const
   };
   return sample;
 }
+//}}}
 
 esp_err_t CompassModule::init()
+//{{{
 {
-  const char* TAG = "CompassModule::init()";
 
   i2c_device_config_t dev_cfg = {
       .dev_addr_length = CCfg::dev_addr_length,
@@ -55,10 +56,24 @@ esp_err_t CompassModule::init()
   // TODO Maybe future checking of values for validation after init
   return device_init;
 }
+//}}}
 
-int16_t CompassModule::read_raw() {}
+raw_compass_val_t CompassModule::read_raw()
+//{{{
+{
+  uint8_t data_reg = CCfg::compassdata_register_start;
+  uint8_t data[CCfg::compassdata_register_bytes] = {};
+  esp_err_t read = i2c_master_transmit_receive(dev_handle_, &data_reg, 1, data,
+                                               CCfg::compassdata_register_bytes, 20);
+
+  return {.x = static_cast<int16_t>((data[1] << 8) | data[0]),
+          .y = static_cast<int16_t>((data[3] << 8) | data[2]),
+          .z = static_cast<int16_t>((data[5] << 8) | data[4])};
+}
+//}}}
 
 void CompassModule::dump()
+//{{{
 {
   const char* TAG = "I2C_DUMP";
   uint8_t dumps = 0;
@@ -84,3 +99,4 @@ void CompassModule::dump()
     vTaskDelay(pdMS_TO_TICKS(500));
   }
 }
+//}}}
