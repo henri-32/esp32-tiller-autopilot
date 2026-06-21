@@ -9,7 +9,7 @@ struct raw_compass_val_t;
 class ICompassModule
 {
 public:
-  virtual SensorSample<uint16_t> read() const = 0;
+  virtual SensorSample<uint16_t> read() = 0;
   virtual esp_err_t init() = 0;
 };
 
@@ -24,9 +24,12 @@ public:
   explicit CompassModule(i2c_master_bus_handle_t mh) : master_handle_(mh) {};
 
   esp_err_t init() override;
+  SensorSample<uint16_t> read() override;
+
   raw_compass_val_t read_raw();
+  bool data_is_rdy();
+  uint16_t calc_heading_from_raw(raw_compass_val_t raw);
   void dump();
-  SensorSample<uint16_t> read() const override;
 
 private:
   const char* TAG = "CompassModule::init()";

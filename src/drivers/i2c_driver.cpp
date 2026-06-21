@@ -17,7 +17,7 @@ esp_err_t I2cDriver::init()
   return master_init;
 }
 
-i2c_master_bus_handle_t I2cDriver::get_bus_handler() const
+i2c_master_bus_handle_t I2cDriver::get_master_bus_handle() const
 {
   return bus_handle_;
 }

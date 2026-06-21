@@ -26,6 +26,7 @@ struct CompassConfig
   // control_val represents configuration of the hardwaremodule from the data sheet.
   static const uint8_t control_val = 0b01100011;
   // Data Registers
-  static const uint8_t compassdata_register_start = 0x01;
-  static const uint8_t compassdata_register_bytes = 6; 
+  static const uint8_t compass_data_reg_start_addr = 0x01;
+  static const uint8_t compass_data_reg_byte_len = 6; 
+  static const uint8_t compass_status_reg = 0x09;
 };

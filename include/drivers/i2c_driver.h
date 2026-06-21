@@ -5,7 +5,7 @@ class I2cDriver
 {
 public:
   esp_err_t init();
-  i2c_master_bus_handle_t get_bus_handler() const;
+  i2c_master_bus_handle_t get_master_bus_handle() const;
 
 private:
   const char* TAG = "I2C_DRIVER";

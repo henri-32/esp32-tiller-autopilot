@@ -1,19 +1,22 @@
 #include "drivers/compassModule.h"
-#include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "hardwareconfig.h"
 #include "types/globalTypes.h"
 #include <cstdint>
+#include <math.h>
 
 using CCfg = CompassConfig;
 
-SensorSample<uint16_t> CompassModule::read() const
+SensorSample<uint16_t> CompassModule::read()
 //{{{
 {
   SensorSample<uint16_t> sample;
-
+  if (data_is_rdy())
+  {
+    read_raw();
+  }
   const uint16_t raw = 0;
   if (true)
   {
@@ -27,7 +30,6 @@ SensorSample<uint16_t> CompassModule::read() const
 esp_err_t CompassModule::init()
 //{{{
 {
-
   i2c_device_config_t dev_cfg = {
       .dev_addr_length = CCfg::dev_addr_length,
       .device_address = CCfg::device_adress,
@@ -54,23 +56,47 @@ esp_err_t CompassModule::init()
     return ESP_FAIL;
   }
   // TODO Maybe future checking of values for validation after init
-  return device_init;
 }
 //}}}
 
 raw_compass_val_t CompassModule::read_raw()
 //{{{
 {
-  uint8_t data_reg = CCfg::compassdata_register_start;
-  uint8_t data[CCfg::compassdata_register_bytes] = {};
+  uint8_t data_reg = CCfg::compass_data_reg_start_addr;
+  uint8_t data[CCfg::compass_data_reg_byte_len] = {};
   esp_err_t read = i2c_master_transmit_receive(dev_handle_, &data_reg, 1, data,
-                                               CCfg::compassdata_register_bytes, 20);
+                                               CCfg::compass_data_reg_byte_len, 20);
 
   return {.x = static_cast<int16_t>((data[1] << 8) | data[0]),
           .y = static_cast<int16_t>((data[3] << 8) | data[2]),
           .z = static_cast<int16_t>((data[5] << 8) | data[4])};
 }
 //}}}
+
+bool CompassModule::data_is_rdy()
+//{{{
+{
+  uint8_t data_reg = CCfg::compass_status_reg;
+  uint8_t data[] = {0x0};
+
+  esp_err_t read = i2c_master_transmit_receive(dev_handle_, &data_reg, 1, data, 1, 20);
+  ESP_LOGI(TAG, "i2c_master_transmit_receive(): %s", esp_err_to_name(read));
+
+  return (data[0] & 0b00000001) != 0;
+}
+//}}}
+
+uint16_t CompassModule::calc_heading_from_raw(raw_compass_val_t raw)
+{
+  constexpr float pi = 3.14159265F;
+  float radiant = atan2(raw.y, raw.x);
+  float heading = radiant * 180 / pi;
+  if (heading < 0.0)
+  {
+    heading += 360.0F;
+  }
+  return static_cast<uint16_t>(heading); 
+}
 
 void CompassModule::dump()
 //{{{

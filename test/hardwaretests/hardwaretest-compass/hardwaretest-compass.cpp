@@ -10,7 +10,8 @@
 #define GREEN_LED_GPIO GPIO_NUM_16
 #define RED_LED_GPIO GPIO_NUM_17
 
-static bool askedForRun = false;
+static bool testRan = false;
+static bool askedForTest = false;
 
 int run_test()
 {
@@ -21,7 +22,7 @@ int run_test()
   I2cDriver i2c_driver{};
   esp_err_t bus_init = i2c_driver.init();
 
-  static CompassModule compassModule{i2c_driver.get_bus_handler()};
+  static CompassModule compassModule{i2c_driver.get_master_bus_handle()};
   esp_err_t compass_init = compassModule.init();
 
   if (bus_init != ESP_OK || compass_init != ESP_OK)
@@ -30,6 +31,12 @@ int run_test()
     return 1;
   }
 
+  while (true)
+  {
+  //  printf("x: %d \ny: %d \nz: %d \n", compassModule.read_raw().x, compassModule.read_raw().y,
+   //        compassModule.read_raw().z);
+  printf("Heading: %d \n", compassModule.calc_heading_from_raw(compassModule.read_raw()));  
+}
   return 0;
 }
 
@@ -40,10 +47,10 @@ extern "C" void app_main()
 
   while (1)
   {
-    if (askedForRun == false)
+    if (!testRan && !askedForTest)
     {
       printf("Do you want to run the hardwaretest-compass? \n [y/n] \n");
-      askedForRun = true;
+      askedForTest = true;
     };
 
     int c = getchar();
@@ -51,6 +58,7 @@ extern "C" void app_main()
     if (c == 'y' || c == 'Y')
     {
       run_test();
+      testRan = true;
     }
     if (c == 'n' || c == 'N')
     {
@@ -58,6 +66,11 @@ extern "C" void app_main()
       return;
     }
     c = ' ';
+    if (testRan)
+    {
+      printf("Test finished");
+      return;
+    }
     vTaskDelay(pdMS_TO_TICKS(500));
   }
 }
