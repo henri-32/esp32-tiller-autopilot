@@ -9,6 +9,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug", 
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+		"BUILD_HARDWARETEST": "ON",
         "BUILD_COMPASS_HARDWARE_TEST": "ON"
       }
      }

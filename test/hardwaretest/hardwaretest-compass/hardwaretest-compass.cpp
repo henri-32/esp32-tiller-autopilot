@@ -2,18 +2,12 @@
 #include "drivers/compassModule.h"
 #include "drivers/i2c_driver.h"
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include <stdio.h>
 
 // GPIO 21 for sda and GPIO 22 for scl required
 #define GREEN_LED_GPIO GPIO_NUM_16
 #define RED_LED_GPIO GPIO_NUM_17
 
-static bool testRan = false;
-static bool askedForTest = false;
-
-int run_test()
+int run_hardwaretest()
 {
   gpio_reset_pin(RED_LED_GPIO);
   gpio_set_direction(RED_LED_GPIO, GPIO_MODE_OUTPUT);
@@ -40,38 +34,3 @@ int run_test()
   return 0;
 }
 
-extern "C" void app_main()
-//{{{
-{
-  const char* TAG = "MAIN";
-
-  while (1)
-  {
-    if (!testRan && !askedForTest)
-    {
-      printf("Do you want to run the hardwaretest-compass? \n [y/n] \n");
-      askedForTest = true;
-    };
-
-    int c = getchar();
-
-    if (c == 'y' || c == 'Y')
-    {
-      run_test();
-      testRan = true;
-    }
-    if (c == 'n' || c == 'N')
-    {
-      printf("No tests were started");
-      return;
-    }
-    c = ' ';
-    if (testRan)
-    {
-      printf("Test finished");
-      return;
-    }
-    vTaskDelay(pdMS_TO_TICKS(500));
-  }
-}
-//}}}

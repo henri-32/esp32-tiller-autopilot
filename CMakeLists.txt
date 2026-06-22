@@ -22,14 +22,25 @@ include("${IDF_PATH}/tools/cmake/idf.cmake")
 
 idf_build_process("${IDF_TARGET}") 
 
-option(BUILD_COMPASS_HARDWARE_TEST "Build path for compass hardware tests" ON)
+option(BUILD_HARDWARETEST "Build path for hardwaretests in general" OFF)
+if (BUILD_HARDWARETEST)
+	add_subdirectory(test/hardwaretest)
+endif()
+
+option(BUILD_COMPASS_HARDWARE_TEST "Build path for compass hardware tests" OFF)
 if (BUILD_COMPASS_HARDWARE_TEST)
 	add_executable(hardwaretest-compass.elf 
-		test/hardwaretests/hardwaretest-compass/hardwaretest-compass.cpp
+		test/hardwaretest/hardwaretest-compass/hardwaretest-compass.cpp
 		src/drivers/compassModule.cpp 
 		src/drivers/i2c_driver.cpp
 	)
-	add_subdirectory(test/hardwaretests/hardwaretest-compass)
-	idf_build_executable(hardwaretest-compass.elf)
-endif()
+	add_subdirectory(test/hardwaretest/hardwaretest-compass)
 
+	idf_build_executable(hardwaretest-compass.elf)
+
+	target_link_libraries(hardwaretest-compass.elf PRIVATE
+		idf::freertos
+		hardwaretest_runner
+	)
+		
+endif()
