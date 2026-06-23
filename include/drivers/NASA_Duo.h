@@ -2,7 +2,7 @@
 NMEA183 Protokoll
 Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
 #pragma once
-#include "types/globalTypes.h"
+#include "types/sensorTypes.h"
 class NASA_Duo {
 public:
   // Contract:

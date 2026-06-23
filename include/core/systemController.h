@@ -4,8 +4,8 @@
 #include "core/steering/sourceHandling.h"
 #include "core/steering/steeringOrchestrator.h"
 #include "diagnostics/diagnostics.h"
-#include "sensors/navigationSensors.h"
-#include "types/globalTypes.h"
+#include "drivers/navigationSensors.h"
+#include "types/controllerTypes.h"
 #include "ui/controlPanel.h"
 #include "ui/display.h"
 

@@ -1,5 +1,6 @@
 #pragma once
-#include "types/globalTypes.h"
+#include "types/controllerTypes.h"
+
 class ControlPanel {
 public:
   // Contract:

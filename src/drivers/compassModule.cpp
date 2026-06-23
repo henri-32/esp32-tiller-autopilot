@@ -3,7 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "hardwareconfig.h"
-#include "types/globalTypes.h"
+#include "types/sensorTypes.h"
 #include <cstdint>
 #include <math.h>
 

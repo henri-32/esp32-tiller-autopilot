@@ -1,7 +1,7 @@
 #pragma once
 #include "core/config.h"
-#include "sensors/navigationSensors.h"
-#include "types/globalTypes.h"
+#include "drivers/navigationSensors.h"
+#include "types/steeringTypes.h"
 
 class ImpulseFilter {
 public:

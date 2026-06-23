@@ -1,5 +1,5 @@
 #include "diagnostics/diagnostics.h"
-#include "sensors/navigationSensors.h"
+#include "drivers/navigationSensors.h"
 #include "ui/nativeGUI.h"
 #include <chrono>
 #include <cstdint>

@@ -9,7 +9,8 @@ include mk/test_rules.mk
 .DEFAULTTARGET= test
 
 .PHONY: test
-test: $(TEST_BIN) 
+test: 
+	$(MAKE) $(TEST_BIN) 2>&1 | tee .logs/lastBuild.log 
 
 .PHONY: run_test
 run_test: 

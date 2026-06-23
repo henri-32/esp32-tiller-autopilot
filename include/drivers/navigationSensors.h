@@ -1,9 +1,10 @@
 #pragma once
-#include "sensors/NASA_Duo.h"
-#include "sensors/compassModule.h"
-#include "sensors/gpsModule.h"
-#include "sensors/windModule.h"
-#include "types/globalTypes.h"
+#include "drivers/NASA_Duo.h"
+#include "drivers/compassModule.h"
+#include "drivers/gpsModule.h"
+#include "drivers/windModule.h"
+#include "types/sensorTypes.h"
+#include "types/controllerTypes.h"
 #include <cstdint>
 
 class NavigationSensors {

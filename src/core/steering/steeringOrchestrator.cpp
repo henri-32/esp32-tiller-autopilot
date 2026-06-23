@@ -1,7 +1,7 @@
 #include "core/steering/steeringOrchestrator.h"
 #include "core/steering/csc/csc.h"
-#include "sensors/navigationSensors.h"
-#include "types/globalTypes.h"
+#include "drivers/navigationSensors.h"
+#include "types/steeringTypes.h"
 #include <cstdint>
 
 SteeringOrchestrator::SteeringOrchestrator(

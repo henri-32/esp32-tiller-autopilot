@@ -1,4 +1,4 @@
-#include "sensors/NASA_Duo.h"
+#include "drivers/NASA_Duo.h"
 
 SensorSample<float> NASA_Duo::readSTW() const {
   SensorSample<float> sample;

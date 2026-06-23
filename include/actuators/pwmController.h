@@ -1,6 +1,6 @@
 #pragma once
 #include "core/config.h"
-#include "types/globalTypes.h"
+#include "types/steeringTypes.h"
 
 
 class PWMController {

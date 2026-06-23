@@ -1,5 +1,5 @@
-#include "sensors/windModule.h"
-#include "types/globalTypes.h"
+#include "drivers/windModule.h"
+#include "types/sensorTypes.h"
 #include <cstdint>
 #include <sys/types.h>
 SensorSample<uint16_t> WindModule::read()const{

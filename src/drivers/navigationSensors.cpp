@@ -1,6 +1,6 @@
-#include "sensors/navigationSensors.h"
-#include "sensors/NASA_Duo.h"
-#include "types/globalTypes.h"
+#include "drivers/navigationSensors.h"
+#include "drivers/NASA_Duo.h"
+#include "types/sensorTypes.h"
 #include <cstdlib>
 
 void NavigationSensors::setSensorActivations(NavigationSource source, bool setTo)

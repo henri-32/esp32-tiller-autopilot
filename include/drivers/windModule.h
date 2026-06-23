@@ -1,5 +1,5 @@
 #pragma once
-#include "types/globalTypes.h"
+#include "types/sensoTypes.h"
 #include <cstdint>
 #include <cstdlib>
 

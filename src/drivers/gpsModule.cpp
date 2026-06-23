@@ -1,5 +1,5 @@
-#include "sensors/gpsModule.h"
-#include "types/globalTypes.h"
+#include "drivers/gpsModule.h"
+#include "types/sensorTypes.h"
 #include <cstdint>
 #include <sys/types.h>
 

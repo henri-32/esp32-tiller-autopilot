@@ -1,5 +1,5 @@
 #include "core/steering/impulseFilter.h"
-#include "types/globalTypes.h"
+#include "types/steeringTypes.h"
 #include <algorithm>
 #include <cstdint>
 

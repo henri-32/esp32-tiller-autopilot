@@ -1,8 +1,10 @@
 #pragma once
 #include "core/config.h"
 #include "diagnostics/diagnostics.h"
-#include "sensors/navigationSensors.h"
-#include "types/globalTypes.h"
+#include "drivers/navigationSensors.h"
+#include "types/sensorTypes.h"
+#include "types/controllerTypes.h"
+#include "types/steeringTypes.h"
 #include <cstdint>
 #include <vector>
 

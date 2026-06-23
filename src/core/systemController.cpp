@@ -1,5 +1,7 @@
 ﻿#include "core/systemController.h"
-#include "types/globalTypes.h"
+#include "types/controllerTypes.h"
+#include "types/steeringTypes.h"
+#include "types/sensorTypes.h"
 #include <cstdint>
 
 SystemController::SystemController()

@@ -1,5 +1,5 @@
 #include "actuators/pwmController.h"
-#include "types/globalTypes.h"
+#include "types/steeringTypes.h"
 
 PWMController::PWMController(const SteeringMechanicsConfig &config)
     : m_config(config) {};

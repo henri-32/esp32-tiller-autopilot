@@ -4,7 +4,7 @@
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
-#include "types/globalTypes.h"
+#include "types/steeringTypes.h"
 #include <cstdint>
 #include <optional>
 struct CSCDebugSnapshot {

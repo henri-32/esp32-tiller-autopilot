@@ -3,8 +3,8 @@
 #include "actuators/pwmController.h"
 #include "core/steering/csc/csc.h"
 #include "core/steering/impulseFilter.h"
-#include "sensors/navigationSensors.h"
-#include "types/globalTypes.h"
+#include "drivers/navigationSensors.h"
+#include "types/steeringTypes.h"
 #include <cstdint>
 
 class SteeringOrchestrator {

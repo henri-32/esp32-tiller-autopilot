@@ -3,7 +3,7 @@
 #include "core/steering/sourceModels/gpsModel.h"
 #include "core/steering/sourceModels/windModel.h"
 #include "diagnostics/diagnostics.h"
-#include "sensors/navigationSensors.h"
+#include "drivers/navigationSensors.h"
 #include <cstdint>
 
 class SourcePolicyEngine {
