@@ -43,7 +43,7 @@ private:
   uint16_t compass_sensor_fusion(); 
   NavigationSource m_leadSource = NavigationSource::Compass;
   CompassDriver m_compass;
-  gpsDriver m_gps;
+  GpsDriver m_gps;
   WindModule m_wind;
   NASA_Duo m_nmea183Bus;
   SensorActivation m_sensorActivation;

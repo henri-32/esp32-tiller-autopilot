@@ -1,16 +1,28 @@
 #pragma once
-#include "types/sensorTypes.h"
-#include <cstdint>
+#include "esp_err.h"
 
+struct NMEA_DataSet;
 
-class gpsDriver {
+class IGpsDriver
+{
 public:
-// Contract:
-// Purpose: Read GPS course and speed over ground.
-// Inputs: hardware sensor state.
-// Outputs/Side-effects: returns SensorSample values; no side-effects.
-SensorSample<uint16_t> readCOG() const;
-SensorSample<float> readSOG() const;
+  virtual esp_err_t init() = 0;
 
+  virtual NMEA_DataSet read_raw() const = 0;
+};
 
+class GpsDriver : public IGpsDriver
+{
+public:
+  explicit GpsDriver() = default;
+
+  esp_err_t init() override;
+
+  NMEA_DataSet read_raw() const override;
+
+private:
+};
+
+struct NMEA_DataSet
+{
 };

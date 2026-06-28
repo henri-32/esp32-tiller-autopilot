@@ -4,10 +4,11 @@ target_include_directories(hardwaretest-compass.elf PRIVATE
 )
 
 target_link_libraries(hardwaretest-compass.elf PRIVATE
-	idf::freertos
 	idf::esp_driver_gpio
-	idf::esp_system
-    idf::esp_driver_i2c
+	idf::esp_driver_i2c
+
+	compassDriver
+	i2cDriver
 	hardwaretest_runner
 )
 		

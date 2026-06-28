@@ -12,9 +12,11 @@ targets:
 
 configure_hardwaretest-compass: 
 	@$(SOURCE) && cmake --preset hardwaretest-compass | tee .logs/lastBuild.log
+	@cp build/hardwaretest-compass/compile_commands.json compile_commands.json
 
 build_hardwaretest-compass:  
 	@$(SOURCE) && cmake --build --preset hardwaretest-compass -j8 | tee .logs/lastBuild.log
+	@cp build/hardwaretest-compass/compile_commands.json compile_commands.json
 
 flash_hardwaretest-compass:  
 	@$(SOURCE) && cmake --build --preset hardwaretest-compass -j8 --target flash | tee .logs/lastBuild.log
@@ -26,9 +28,11 @@ monitor_hardwaretest-compass:
 
 configure_hardwaretest-gps: 
 	@$(SOURCE) && cmake --preset hardwaretest-gps | tee .logs/lastBuild.log
+	@cp build/hardwaretest-gps/compile_commands.json compile_commands.json
 
 build_hardwaretest-gps: 
 	@$(SOURCE) && cmake --build --preset hardwaretest-gps -j8 | tee .logs/lastBuild.log 
+	@cp build/hardwaretest-gps/compile_commands.json compile_commands.json
 
 flash_hardwaretest-gps: 
 	@$(SOURCE) && cmake --build --preset hardwaretest-gps -j8 --target flash | tee .logs/lastBuild.log 

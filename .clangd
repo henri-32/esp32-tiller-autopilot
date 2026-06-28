@@ -1,5 +1,4 @@
 CompileFlags:
-  CompilationDatabase: build/hardwaretest-compass
   Remove:
     - -mlongcalls
     - -fno-shrink-wrap

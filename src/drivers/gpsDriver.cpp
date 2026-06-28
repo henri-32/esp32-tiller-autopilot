@@ -1,33 +1,10 @@
 #include "drivers/gpsDriver.h"
-#include "types/sensorTypes.h"
-#include <cstdint>
-#include <sys/types.h>
+#include "driver/uart.h"
+#include "hardwareconfig.h"
 
-SensorSample<uint16_t> gpsDriver::readCOG() const {
-  SensorSample<uint16_t> sample;
-
-  const uint16_t raw = 0; /*Hardware lesen*/
-  if (true /*Plausibilitätscheck*/) {
-    sample.value = raw;
-    sample.valid = true;
-  } else if (false /*Plausi falsch*/) {
-    sample.value = raw;
-    sample.valid = false;
-  };
-  return sample;
-};
-
-SensorSample<float> gpsDriver::readSOG() const {
-  SensorSample<float> sample;
-
-  const float raw = 0.0f; // Hardware lesen
-  if (true /*Plausi checken*/) {
-    sample.value = raw;
-    sample.valid = true;
-  } else if (false /*Plausi falsch*/) {
-    sample.value = raw;
-    sample.valid = false;
-  };
-
-  return sample;
-};
+esp_err_t init()
+{
+  esp_err_t install = uart_driver_install(GpsConfig::uart_num, GpsConfig::RX_buffer,
+                                          GpsConfig::TX_buffer, GpsConfig::event_queue_size,
+                                          GpsConfig::uart_queue, GpsConfig::interrupt_alloc_flags);
+}

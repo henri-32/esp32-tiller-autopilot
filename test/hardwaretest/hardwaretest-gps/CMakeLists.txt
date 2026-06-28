@@ -4,9 +4,9 @@ target_include_directories(hardwaretest-gps.elf PRIVATE
 )
 
 target_link_libraries(hardwaretest-gps.elf PRIVATE 
-	idf::freertos
 	idf::esp_driver_gpio
-	idf::esp_system
-    idf::esp_driver_i2c
+	idf::esp_driver_i2c
+
+	gpsDriver
 	hardwaretest_runner
 )
