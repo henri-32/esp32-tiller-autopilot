@@ -24,3 +24,16 @@ monitor_hardwaretest-compass:
 	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-compass/hardwaretest-compass.elf | \
 	tee >(sed -u $$'s/\x1b\\[[0-9;]*m//g' > .logs/lastMonitor.log)
 
+configure_hardwaretest-gps: 
+	@$(SOURCE) && cmake --preset hardwaretest-gps | tee .logs/lastBuild.log
+
+build_hardwaretest-gps: 
+	@$(SOURCE) && cmake --build --preset hardwaretest-gps -j8 | tee .logs/lastBuild.log 
+
+flash_hardwaretest-gps: 
+	@$(SOURCE) && cmake --build --preset hardwaretest-gps -j8 --target flash | tee .logs/lastBuild.log 
+
+monitor_hardwaretest-gps: 
+	@mkdir -p .logs
+	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-gps/hardwaretest-gps.elf | \
+	tee >(sed -u $$'s/\x1b\\[[0-9;]*m//g' > .logs/lastMonitor.log) 

@@ -12,7 +12,19 @@
 		"BUILD_HARDWARETEST": "ON",
         "BUILD_COMPASS_HARDWARE_TEST": "ON"
       }
-     }
+    },
+	{
+	  "name": "hardwaretest-gps", 
+	  "displayName":"hardwaretest-gps", 
+	  "generator": "Ninja", 
+	  "binaryDir":"${sourceDir}/build/hardwaretest-gps", 
+	  "cacheVariables": {
+	    "CMAKE_BUILD_TYPE": "Debug", 
+	    "CMAKE_EXPORT_COMPILE_COMMANDS": "ON", 
+	    "BUILD_HARDWARETEST": "ON", 
+		"BUILD_GPS_HARDWARE_TEST": "ON"
+	  }
+	}
   ], 
   "buildPresets":  [
     {
@@ -22,6 +34,14 @@
       "targets": [
 			"hardwaretest-compass.elf"
       ]
-    } 
+    }, 
+	{
+	  "name": "hardwaretest-gps", 
+	  "displayName": "hardwaretest-gps", 
+	  "configurePreset": "hardwaretest-gps", 
+	  "targets": [
+	  		"hardwaretest-gps.elf"
+	  ]
+	} 
   ]
 }

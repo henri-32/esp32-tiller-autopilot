@@ -1,4 +1,4 @@
-#include "drivers/gpsModule.h"
+#include "drivers/gpsDriver.h"
 #include "types/sensorTypes.h"
 #include <cstdint>
 #include <sys/types.h>

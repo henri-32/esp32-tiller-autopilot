@@ -12,7 +12,7 @@ extern "C" void app_main()
   {
     if (!testRan && !askedForTest)
     {
-      printf("Do you want to run the hardwaretest-compass? \n [y/n] \n");
+      printf("Do you want to run the hardwaretest? \n [y/n] \n");
       askedForTest = true;
     };
 
@@ -33,11 +33,11 @@ extern "C" void app_main()
     {
       if (test_return_val == 0)
       {
-        printf("Testrun finished");
+        printf("Testrun finished\n");
       }
       else
       {
-        printf("Testrun failed");
+        printf("Testrun failed\n");
       }
       return;
     }

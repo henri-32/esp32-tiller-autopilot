@@ -37,11 +37,18 @@ if (BUILD_COMPASS_HARDWARE_TEST)
 	add_subdirectory(test/hardwaretest/hardwaretest-compass)
 
 	idf_build_executable(hardwaretest-compass.elf)
-
-	target_link_libraries(hardwaretest-compass.elf PRIVATE
-		idf::freertos
-		hardwaretest_runner
-	)
 		
 endif()
 
+option(BUILD_GPS_HARDWARE_TEST "Build path for gps hardware tests" OFF) 
+if (BUILD_GPS_HARDWARE_TEST)
+	add_executable(hardwaretest-gps.elf
+		test/hardwaretest/hardwaretest-gps/hardwaretest-gps.cpp
+		src/drivers/gpsDriver.cpp
+		src/drivers/i2c_driver.cpp
+	)
+	add_subdirectory(test/hardwaretest/hardwaretest-gps) 
+
+	idf_build_executable(hardwaretest-gps.elf)
+ 
+endif()
