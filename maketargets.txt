@@ -1,4 +1,6 @@
-For every following component (*) ... 
+===========================================================
+
+For every following component (*): 
 
 - hardwaretest-compass 
 
@@ -11,5 +13,17 @@ are the following variants of make targets provided:
 if it's a hardwaretest it also provides: 
 
 - monitor_* (builds, flashes the CMake build of the preset * and starts monitoring the serial port)
+
+For native Make-orchestrated Unit-testing the following targets are provided:
+ 
+- test (builds unit test binary)  
+- run_test (builds and runs unit test binary) 
+- compiledb_test (cleans build_test and builds test with bear for compile_commands.json) 
+
+Also the following general targets are provided: 
+
+- clean (deletes build dir) 
+- clean_test (deletes build_test> 
+- clean_lib (deletes build_lib)[native test library]
 
 ===========================================================

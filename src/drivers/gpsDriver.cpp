@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <sys/types.h>
 
-SensorSample<uint16_t> GPSModule::readCOG() const {
+SensorSample<uint16_t> gpsDriver::readCOG() const {
   SensorSample<uint16_t> sample;
 
   const uint16_t raw = 0; /*Hardware lesen*/
@@ -17,7 +17,7 @@ SensorSample<uint16_t> GPSModule::readCOG() const {
   return sample;
 };
 
-SensorSample<float> GPSModule::readSOG() const {
+SensorSample<float> gpsDriver::readSOG() const {
   SensorSample<float> sample;
 
   const float raw = 0.0f; // Hardware lesen

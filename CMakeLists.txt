@@ -31,7 +31,7 @@ option(BUILD_COMPASS_HARDWARE_TEST "Build path for compass hardware tests" OFF)
 if (BUILD_COMPASS_HARDWARE_TEST)
 	add_executable(hardwaretest-compass.elf 
 		test/hardwaretest/hardwaretest-compass/hardwaretest-compass.cpp
-		src/drivers/compassModule.cpp 
+		src/drivers/compassDriver.cpp 
 		src/drivers/i2c_driver.cpp
 	)
 	add_subdirectory(test/hardwaretest/hardwaretest-compass)
@@ -44,3 +44,4 @@ if (BUILD_COMPASS_HARDWARE_TEST)
 	)
 		
 endif()
+

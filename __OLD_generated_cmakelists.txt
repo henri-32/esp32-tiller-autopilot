@@ -30,8 +30,8 @@ set(AUTOPILOT_RUNTIME_SOURCES
     src/core/systemController.cpp
     src/diagnostics/diagnostics.cpp
     src/sensors/NASA_Duo.cpp
-    src/sensors/compassModule.cpp
-    src/sensors/gpsModule.cpp
+    src/sensors/compassDriver.cpp
+    src/sensors/gpsDriver.cpp
     src/sensors/navigationSensors.cpp
     src/sensors/windModule.cpp
 )

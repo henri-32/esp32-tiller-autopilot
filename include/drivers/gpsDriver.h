@@ -3,7 +3,7 @@
 #include <cstdint>
 
 
-class GPSModule {
+class gpsDriver {
 public:
 // Contract:
 // Purpose: Read GPS course and speed over ground.

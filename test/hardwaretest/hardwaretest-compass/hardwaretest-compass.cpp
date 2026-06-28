@@ -1,5 +1,5 @@
 #include "driver/gpio.h"
-#include "drivers/compassModule.h"
+#include "drivers/compassDriver.h"
 #include "drivers/i2c_driver.h"
 #include "esp_log.h"
 
@@ -16,20 +16,20 @@ int run_hardwaretest()
   I2cDriver i2c_driver{};
   esp_err_t bus_init = i2c_driver.init();
 
-  static CompassModule compassModule{i2c_driver.get_master_bus_handle()};
-  esp_err_t compass_init = compassModule.init();
+  static CompassDriver compassDriver{i2c_driver.get_master_bus_handle()};
+  esp_err_t compass_init = compassDriver.init();
 
   if (bus_init != ESP_OK || compass_init != ESP_OK)
   {
-    ESP_LOGE(TAG, "Initialization of compassModule failed");
+    ESP_LOGE(TAG, "Initialization of compassDriver failed");
     return 1;
   }
 
   while (true)
   {
-  //  printf("x: %d \ny: %d \nz: %d \n", compassModule.read_raw().x, compassModule.read_raw().y,
-   //        compassModule.read_raw().z);
-  printf("Heading: %d \n", compassModule.calc_heading_from_raw(compassModule.read_raw()));  
+  //  printf("x: %d \ny: %d \nz: %d \n", compassDriver.read_raw().x, compassDriver.read_raw().y,
+   //        compassDriver.read_raw().z);
+  printf("x: %d \ny: %d \nz: %d \n",compassDriver.read_raw().x, compassDriver.read_raw().y, compassDriver.read_raw().z);  
 }
   return 0;
 }

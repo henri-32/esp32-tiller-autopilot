@@ -1,5 +1,5 @@
 #pragma once
-#include "types/sensoTypes.h"
+#include "types/sensorTypes.h"
 #include <cstdint>
 #include <cstdlib>
 

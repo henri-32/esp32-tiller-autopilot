@@ -1,7 +1,7 @@
 #pragma once
 #include "drivers/NASA_Duo.h"
-#include "drivers/compassModule.h"
-#include "drivers/gpsModule.h"
+#include "drivers/compassDriver.h"
+#include "drivers/gpsDriver.h"
 #include "drivers/windModule.h"
 #include "types/sensorTypes.h"
 #include "types/controllerTypes.h"
@@ -9,10 +9,6 @@
 
 class NavigationSensors {
 public:
-  // Contract:
-  // Purpose: Read and aggregate navigation sensor data into a snapshot.
-  // Inputs: hardware modules + lead source selection.
-  // Outputs/Side-effects: returns snapshot; no hardware write side-effects.
   explicit NavigationSensors() = default;
 
   struct NavigationSnapshot {
@@ -44,9 +40,10 @@ public:
   NavigationSource getLeadSource() const;
 
 private:
+  uint16_t compass_sensor_fusion(); 
   NavigationSource m_leadSource = NavigationSource::Compass;
-  CompassModule m_compass;
-  GPSModule m_gps;
+  CompassDriver m_compass;
+  gpsDriver m_gps;
   WindModule m_wind;
   NASA_Duo m_nmea183Bus;
   SensorActivation m_sensorActivation;

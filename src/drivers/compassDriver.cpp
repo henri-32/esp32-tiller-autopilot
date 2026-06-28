@@ -1,4 +1,4 @@
-#include "drivers/compassModule.h"
+#include "drivers/compassDriver.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -9,25 +9,7 @@
 
 using CCfg = CompassConfig;
 
-SensorSample<uint16_t> CompassModule::read()
-//{{{
-{
-  SensorSample<uint16_t> sample;
-  if (data_is_rdy())
-  {
-    read_raw();
-  }
-  const uint16_t raw = 0;
-  if (true)
-  {
-    sample.value = raw;
-    sample.valid = true;
-  };
-  return sample;
-}
-//}}}
-
-esp_err_t CompassModule::init()
+esp_err_t CompassDriver::init()
 //{{{
 {
   i2c_device_config_t dev_cfg = {
@@ -59,7 +41,7 @@ esp_err_t CompassModule::init()
 }
 //}}}
 
-raw_compass_val_t CompassModule::read_raw()
+raw_compass_val_t CompassDriver::read_raw()
 //{{{
 {
   uint8_t data_reg = CCfg::compass_data_reg_start_addr;
@@ -73,7 +55,7 @@ raw_compass_val_t CompassModule::read_raw()
 }
 //}}}
 
-bool CompassModule::data_is_rdy()
+bool CompassDriver::data_is_rdy()
 //{{{
 {
   uint8_t data_reg = CCfg::compass_status_reg;
@@ -86,43 +68,3 @@ bool CompassModule::data_is_rdy()
 }
 //}}}
 
-uint16_t CompassModule::calc_heading_from_raw(raw_compass_val_t raw)
-{
-  constexpr float pi = 3.14159265F;
-  float radiant = atan2(raw.y, raw.x);
-  float heading = radiant * 180 / pi;
-  if (heading < 0.0)
-  {
-    heading += 360.0F;
-  }
-  return static_cast<uint16_t>(heading); 
-}
-
-void CompassModule::dump()
-//{{{
-{
-  const char* TAG = "I2C_DUMP";
-  uint8_t dumps = 0;
-
-  while (dumps <= 10)
-  {
-
-    for (uint8_t reg = 0x00; reg <= 0x3F; ++reg)
-    {
-      uint8_t value = 0;
-      esp_err_t err = i2c_master_transmit_receive(dev_handle_, &reg, 1, &value, 1, 100);
-
-      if (err == ESP_OK)
-      {
-        ESP_LOGI(TAG, "reg 0x%02X -> 0x%02X", reg, value);
-      }
-      else
-      {
-        ESP_LOGW(TAG, "reg 0x%02X failed: %s", reg, esp_err_to_name(err));
-      }
-    }
-    dumps++;
-    vTaskDelay(pdMS_TO_TICKS(500));
-  }
-}
-//}}}

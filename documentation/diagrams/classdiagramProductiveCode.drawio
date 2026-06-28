@@ -73,7 +73,7 @@
         <mxCell id="B7sy-6tvhzp1BTqz867x-23" parent="B7sy-6tvhzp1BTqz867x-17" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" value="+getLeadSource() : NavigationSource" vertex="1">
           <mxGeometry height="33" width="470" y="172.9230769230769" as="geometry" />
         </mxCell>
-        <mxCell id="B7sy-6tvhzp1BTqz867x-24" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=47.2;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;" value="CompassModule" vertex="1">
+        <mxCell id="B7sy-6tvhzp1BTqz867x-24" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=47.2;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;" value="CompassDriver" vertex="1">
           <mxGeometry height="102.2" width="326" x="947" y="1288" as="geometry" />
         </mxCell>
         <mxCell id="B7sy-6tvhzp1BTqz867x-25" parent="B7sy-6tvhzp1BTqz867x-24" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1">
@@ -82,7 +82,7 @@
         <mxCell id="B7sy-6tvhzp1BTqz867x-26" parent="B7sy-6tvhzp1BTqz867x-24" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" value="+read() : SensorSample&lt;uint16_t&gt;" vertex="1">
           <mxGeometry height="47" width="326" y="55.2" as="geometry" />
         </mxCell>
-        <mxCell id="B7sy-6tvhzp1BTqz867x-27" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40.57142857142857;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;" value="GPSModule" vertex="1">
+        <mxCell id="B7sy-6tvhzp1BTqz867x-27" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40.57142857142857;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;" value="gpsDriver" vertex="1">
           <mxGeometry height="130.57142857142856" width="339" x="1323" y="1276" as="geometry" />
         </mxCell>
         <mxCell id="B7sy-6tvhzp1BTqz867x-28" parent="B7sy-6tvhzp1BTqz867x-27" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1">
