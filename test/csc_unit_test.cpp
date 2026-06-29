@@ -1,4 +1,4 @@
-#include "core/config.h"
+#include "config/config.h"
 #include "core/steering/csc/csc.h"
 #include "core/steering/csc/deadband.h"
 #include "core/steering/csc/headingErrorCalculator.h"

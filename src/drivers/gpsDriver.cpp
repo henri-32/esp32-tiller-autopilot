@@ -1,6 +1,6 @@
 #include "drivers/gpsDriver.h"
 #include "driver/uart.h"
-#include "hardwareconfig.h"
+#include "config/gps_hwconfig.h"
 
 esp_err_t init()
 {

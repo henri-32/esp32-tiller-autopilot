@@ -2,7 +2,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "hardwareconfig.h"
+#include "config/i2c_hwconfig.h"
 #include "types/sensorTypes.h"
 #include <cstdint>
 #include <math.h>

@@ -1,14 +1,13 @@
-add_library(hardwareConfig INTERFACE) 
+add_library(i2c_hwconfig INTERFACE) 
 
-target_include_directories(hardwareConfig
-	INTERFACE
-		"${PROJECT_ROOT}/include"
-)
-
-target_link_libraries(hardwareConfig 
-	INTERFACE 
+target_link_libraries(i2c_hwconfig INTERFACE
 		idf::esp_driver_i2c
-		idf::esp_driver_gpio
-		idf::esp_driver_uart
-		
 )
+
+add_library(gps_hwconfig INTERFACE) 
+
+target_link_libraries(gps_hwconfig INTERFACE 
+	idf::esp_driver_uart
+)
+
+		

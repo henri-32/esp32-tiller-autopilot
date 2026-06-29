@@ -11,18 +11,16 @@ add_library(compassDriver STATIC
 ) 
 
 target_link_libraries(i2cDriver PRIVATE 
-	idf::esp_driver_i2c
-	hardwareConfig
+	i2c_hwconfig
 )
 
 target_link_libraries(gpsDriver PRIVATE
 	idf::esp_driver_uart 
-	hardwareConfig
+	gps_hwconfig
 )
 
 target_link_libraries(compassDriver PRIVATE 
-	idf::esp_driver_i2c
-	hardwareConfig
+	i2c_hwconfig
 )	
 
 target_include_directories(i2cDriver PRIVATE 

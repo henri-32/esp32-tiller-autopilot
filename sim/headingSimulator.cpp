@@ -10,7 +10,7 @@
 #include <sstream>
 #include <string>
 
-#include "core/config.h"
+#include "config/config.h"
 #include "core/steering/csc/csc.h"
 #include "headingSimulator.h"
 #include "types/globalTypes.h"

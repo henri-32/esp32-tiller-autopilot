@@ -1,5 +1,5 @@
 #pragma once
-#include "core/config.h"
+#include "config/config.h"
 #include "diagnostics/diagnostics.h"
 #include "drivers/navigationSensors.h"
 #include "types/sensorTypes.h"

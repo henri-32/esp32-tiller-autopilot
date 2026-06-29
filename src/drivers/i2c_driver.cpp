@@ -1,6 +1,6 @@
 #include "drivers/i2c_driver.h"
 #include "esp_log.h"
-#include "hardwareconfig.h"
+#include "config/i2c_hwconfig.h"
 
 esp_err_t I2cDriver::init()
 {
