@@ -6,6 +6,8 @@ target_include_directories(hardwaretest-gps.elf PRIVATE
 target_link_libraries(hardwaretest-gps.elf PRIVATE 
 	idf::esp_driver_gpio
 	idf::esp_driver_i2c
+	idf::esp_driver_uart
+	idf::esp_timer
 
 	gpsDriver
 	hardwaretest_runner

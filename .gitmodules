@@ -4,3 +4,6 @@
 [submodule "platform/esp-idf"]
 	path = platform/esp-idf
 	url = git@github.com:espressif/esp-idf.git
+[submodule "lib/minmea"]
+	path = lib/minmea
+	url = https://github.com/kosma/minmea.git

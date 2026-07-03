@@ -8,6 +8,7 @@ add_library(gps_hwconfig INTERFACE)
 
 target_link_libraries(gps_hwconfig INTERFACE 
 	idf::esp_driver_uart
+	idf::esp_driver_gpio
 )
 
 		

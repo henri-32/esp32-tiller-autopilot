@@ -16,6 +16,7 @@ target_link_libraries(i2cDriver PRIVATE
 
 target_link_libraries(gpsDriver PRIVATE
 	idf::esp_driver_uart 
+	minmea
 	gps_hwconfig
 )
 

@@ -23,6 +23,7 @@ include("${IDF_PATH}/tools/cmake/idf.cmake")
 idf_build_process("${IDF_TARGET}") 
 
 add_subdirectory(include)
+add_subdirectory(lib)
 add_subdirectory(src/drivers) 
 
 option(BUILD_HARDWARETEST "Build path for hardwaretests in general" OFF)
