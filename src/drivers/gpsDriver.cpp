@@ -4,6 +4,7 @@
 #include "minmea.h"
 
 esp_err_t GpsDriver::init()
+//{{{
 {
   esp_err_t install = uart_driver_install(GpsConfig::uart_num, GpsConfig::RX_buffer,
                                           GpsConfig::TX_buffer, GpsConfig::event_queue_size,
@@ -34,28 +35,36 @@ esp_err_t GpsDriver::init()
     return ESP_OK;
   }
 }
+//}}}
 
-const char* full_sentence::get_sentence()
+void GpsDriver::fill_data()
+//{{{
 {
-  read_buffer();
-  printf("Bytes read: %d\n", bytes_read_);
+  bytes_read_ = uart_read_bytes(GpsConfig::uart_num, uart_data_, GpsConfig::RX_buffer,
+                                20 / portTICK_PERIOD_MS);
   consume_uart_data();
-  // parse with minmea last_compl_sentence
-  return last_compl_sentence_;
-};
 
-void full_sentence::parse_sentence()
+};
+//}}}
+
+void GpsDriver::parse_sentence(const char* sentence)
+//{{{
 {
-  if (minmea_check(last_compl_sentence_, true))
+  if (sentence == nullptr)
+  {
+    return;
+  }
+
+  if (minmea_check(sentence, true))
 
   {
-    const enum minmea_sentence_id id = minmea_sentence_id(last_compl_sentence_, true);
+    const enum minmea_sentence_id id = minmea_sentence_id(sentence, true);
     switch (id)
     {
     case MINMEA_SENTENCE_GGA:
     {
       minmea_sentence_gga frame{};
-      if (minmea_parse_gga(&frame, last_compl_sentence_))
+      if (minmea_parse_gga(&frame, sentence))
       {
         gpsData_->fixQuality = frame.fix_quality;
         gpsData_->satellites_tracked = frame.satellites_tracked;
@@ -67,7 +76,7 @@ void full_sentence::parse_sentence()
     case MINMEA_SENTENCE_VTG:
     {
       minmea_sentence_vtg frame{};
-      if (minmea_parse_vtg(&frame, last_compl_sentence_))
+      if (minmea_parse_vtg(&frame, sentence))
       {
         gpsData_->course_true = minmea_tofloat(&frame.true_track_degrees);
         gpsData_->speed_kts = minmea_tofloat(&frame.speed_knots);
@@ -86,47 +95,58 @@ void full_sentence::parse_sentence()
     }
   };
 };
+//}}}
 
-void full_sentence::read_buffer()
-{
-  bytes_read_ = uart_read_bytes(GpsConfig::uart_num, uart_data_, GpsConfig::RX_buffer,
-                                20 / portTICK_PERIOD_MS);
-}
-
-void full_sentence::consume_uart_data()
+void GpsDriver::consume_uart_data()
+//{{{
 {
   for (uint16_t i = 0; i < bytes_read_; ++i)
   {
     consume_byte(uart_data_[i]);
-    // printf("%02X ", uart_data_[i]);
-    printf("%c", uart_data_[i]);
+
+	//To print raw uart_data and debug/validate parsed input.
+    //printf("%c", uart_data_[i]);
   }
 }
+//}}}
 
-void full_sentence::consume_byte(char byte)
+void GpsDriver::consume_byte(char byte)
+//{{{
 {
+
+  //sentence_compl_ garantees that cut off sentences get discarded // $ marks beginning of nmea sentence 
   if (sentence_compl_ && byte == '$')
   {
+	//starting the sentence with $ and marking the sentence incomplete 
     sentence_len_ = 0;
     sentence_[sentence_len_] = byte;
+    sentence_len_++;
     sentence_compl_ = false;
   }
 
+  //'\n' marks the end of nmea sentence
   else if (byte == '\n')
   {
+    //marking the sentence complete, adding nullterminator and parsing it to the gpsData_ struct
     sentence_compl_ = true;
     sentence_[sentence_len_] = 0x00;
-    last_compl_sentence_ = sentence_;
+    parse_sentence(sentence_);
   }
+
+  //normal characters
   else
   {
+ 	//normal characters btw. sentences have to be noise	
     if (!sentence_compl_)
     {
+	  //Limiting sentence_len_ to prevent crashes if start byte gets decoded from garbage bytes
       if (sentence_len_ < 2000)
       {
+		//normal characters get written into the sentence
         sentence_[sentence_len_] = byte;
         sentence_len_++;
       }
+	  //Limiting sentence_len_
       else
       {
         sentence_compl_ = true;
@@ -135,3 +155,4 @@ void full_sentence::consume_byte(char byte)
     }
   }
 }
+//}}}

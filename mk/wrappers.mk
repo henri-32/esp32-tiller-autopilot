@@ -23,7 +23,7 @@ flash_hardwaretest-compass:
 
 monitor_hardwaretest-compass: 
 	@mkdir -p .logs
-	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-compass/hardwaretest-compass.elf | \
+	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-compass/hardwaretest-compass.elf 2>&1 | \
 	tee >(sed -u $$'s/\x1b\\[[0-9;]*m//g' > .logs/lastMonitor.log)
 
 configure_hardwaretest-gps: 
@@ -39,5 +39,5 @@ flash_hardwaretest-gps:
 
 monitor_hardwaretest-gps: 
 	@mkdir -p .logs
-	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-gps/hardwaretest-gps.elf | \
+	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-gps/hardwaretest-gps.elf 2>&1 | \
 	tee >(sed -u $$'s/\x1b\\[[0-9;]*m//g' > .logs/lastMonitor.log) 

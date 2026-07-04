@@ -10,15 +10,8 @@ int run_hardwaretest()
 {
   GpsDriver driver; 
   driver.init();
-  full_sentence parser;
   while (1)
   {
-    const char* sentence = parser.get_sentence();
-    if (sentence != nullptr)
-    {
-      //printf("%s\n", sentence);
-    }
-    vTaskDelay(pdMS_TO_TICKS(500));
   }
   return 0;
 }
