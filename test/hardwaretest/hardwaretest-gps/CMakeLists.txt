@@ -12,3 +12,7 @@ target_link_libraries(hardwaretest-gps.elf PRIVATE
 	gpsDriver
 	hardwaretest_runner
 )
+
+target_compile_options(hardwaretest-gps.elf PRIVATE
+	-fstack-usage
+)

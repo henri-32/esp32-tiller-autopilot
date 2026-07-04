@@ -3,12 +3,10 @@
 #include "freertos/task.h"
 #include <stdio.h>
 
-extern "C" void app_main()
-//{{{
+void vHardwareTestRunner(void* pvParameters)
 {
-  const char* TAG = "MAIN";
-
-  while (1)
+  const char* TAG = "HardwareTestRunner";
+  while (true)
   {
     if (!testRan && !askedForTest)
     {
@@ -44,6 +42,19 @@ extern "C" void app_main()
     vTaskDelay(pdMS_TO_TICKS(500));
   }
 }
+
+extern "C" void app_main()
+//{{{
+{
+  static TaskHandle_t hwtestTaskHandle = nullptr;
+  xTaskCreate(vHardwareTestRunner,
+              "Decicion to run hardwaretest/return of Hardwaretest if automated", 3000, nullptr, 1,
+              &hwtestTaskHandle);
+  while (true)
+  {
+    uint16_t minimum_free = uxTaskGetStackHighWaterMark(hwtestTaskHandle);
+    printf("================ HARDWARETESTRUNNER MINIMUM FREE %d BYTES ================\n", minimum_free);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+  }
+}
 //}}}
-
-

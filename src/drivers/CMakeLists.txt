@@ -35,3 +35,15 @@ target_include_directories(gpsDriver PRIVATE
 target_include_directories(compassDriver PRIVATE 
 	"${PROJECT_ROOT}/include"
 )
+
+target_compile_options(i2cDriver PRIVATE 
+	-fstack-usage
+)
+
+target_compile_options(gpsDriver PRIVATE 
+	-fstack-usage
+)
+
+target_compile_options(compassDriver PRIVATE 
+	-fstack-usage
+)

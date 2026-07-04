@@ -40,7 +40,51 @@ const char* full_sentence::get_sentence()
   read_buffer();
   printf("Bytes read: %d\n", bytes_read_);
   consume_uart_data();
+  // parse with minmea last_compl_sentence
   return last_compl_sentence_;
+};
+
+void full_sentence::parse_sentence()
+{
+  if (minmea_check(last_compl_sentence_, true))
+
+  {
+    const enum minmea_sentence_id id = minmea_sentence_id(last_compl_sentence_, true);
+    switch (id)
+    {
+    case MINMEA_SENTENCE_GGA:
+    {
+      minmea_sentence_gga frame{};
+      if (minmea_parse_gga(&frame, last_compl_sentence_))
+      {
+        gpsData_->fixQuality = frame.fix_quality;
+        gpsData_->satellites_tracked = frame.satellites_tracked;
+        gpsData_->latitude = minmea_tocoord(&frame.latitude);
+        gpsData_->longitude = minmea_tocoord(&frame.longitude);
+      }
+      break;
+    }
+    case MINMEA_SENTENCE_VTG:
+    {
+      minmea_sentence_vtg frame{};
+      if (minmea_parse_vtg(&frame, last_compl_sentence_))
+      {
+        gpsData_->course_true = minmea_tofloat(&frame.true_track_degrees);
+        gpsData_->speed_kts = minmea_tofloat(&frame.speed_knots);
+      }
+      break;
+    }
+
+    case MINMEA_INVALID:
+      break;
+
+    case MINMEA_UNKNOWN:
+      break;
+
+    default:
+      break;
+    }
+  };
 };
 
 void full_sentence::read_buffer()
@@ -54,7 +98,7 @@ void full_sentence::consume_uart_data()
   for (uint16_t i = 0; i < bytes_read_; ++i)
   {
     consume_byte(uart_data_[i]);
-    //printf("%02X ", uart_data_[i]);
+    // printf("%02X ", uart_data_[i]);
     printf("%c", uart_data_[i]);
   }
 }
