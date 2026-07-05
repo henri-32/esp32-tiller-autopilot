@@ -48,3 +48,22 @@ target_compile_options(gpsDriver PRIVATE
 target_compile_options(compassDriver PRIVATE 
 	-fstack-usage
 )
+
+option(MEM_LOG "Adds logging functionality of memory/perfomance values" OFF)
+if(MEM_LOG)	
+	target_compile_options(i2cDriver PRIVATE 
+		-fstack-usage
+		-DMEM_LOG
+	)
+
+	target_compile_options(gpsDriver PRIVATE 
+		-fstack-usage
+		-DMEM_LOG
+	)
+
+	target_compile_options(compassDriver PRIVATE 
+		-fstack-usage
+		-DMEM_LOG
+	)
+endif()
+

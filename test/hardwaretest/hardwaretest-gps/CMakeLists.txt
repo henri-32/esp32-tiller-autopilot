@@ -16,3 +16,9 @@ target_link_libraries(hardwaretest-gps.elf PRIVATE
 target_compile_options(hardwaretest-gps.elf PRIVATE
 	-fstack-usage
 )
+if(MEM_LOG)
+	target_compile_options(hardwaretest-gps.elf PRIVATE
+		-fstack-usage
+		-DMEM_LOG
+	)
+endif()

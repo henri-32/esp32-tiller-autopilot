@@ -15,8 +15,8 @@ void vPrintGpsTask(void* pvParameters)
     gps::data data{};
     xQueueReceive(context->gpsQueue, &data, pdMS_TO_TICKS(2000));
 
-    printf("SOG: %f / expected: 0.0\nfixQuality: %d / expected: 0\n", data.speed_kts,
-           data.fixQuality);
+    printf("SOG: %f / expected: 0.0\nfixQuality: %d / expected: 0\nFreeTaskStackGPS: %d \n", data.speed_kts,
+           data.fixQuality, context->free_task_stack);
   }
 };
 

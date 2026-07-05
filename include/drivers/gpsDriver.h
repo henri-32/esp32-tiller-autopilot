@@ -1,6 +1,7 @@
 #pragma once
 #include "config/gps_hwconfig.h"
 #include "esp_err.h"
+#include "utils/debug_utils.h"
 #include <new>
 
 namespace gps {
@@ -22,12 +23,14 @@ struct data
 
   // Number of satellites used for positioning
   uint8_t satellites_tracked = 0;
+
 };
 
 struct task_context
 {
   void* THIS = nullptr;
   QueueHandle_t gpsQueue = nullptr;
+  ADD_MEMORY_VALUES();
 };
 }
 

@@ -1,6 +1,7 @@
 #include "drivers/gpsDriver.h"
 #include "driver/uart.h"
 #include "esp_log.h"
+#include "utils/debug_utils.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "minmea.h"
@@ -16,6 +17,8 @@ void vGpsTask(void* pvParameters)
     GpsDriver* driver = static_cast<GpsDriver*>(context->THIS);
     driver->fill_data();
     xQueueOverwrite(context->gpsQueue, driver->gpsData_);
+	WRITE_FREE_TASK_STACK_TO_CONTEXT(context);
+
     vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
   vTaskDelete(nullptr);
