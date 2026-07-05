@@ -32,12 +32,13 @@ void vHardwareTestRunner(void* pvParameters)
       if (test_return_val == 0)
       {
         printf("Testrun finished\n");
+        vTaskDelete(nullptr);
       }
       else
       {
         printf("Testrun failed\n");
+        vTaskDelete(nullptr);
       }
-      return;
     }
     vTaskDelay(pdMS_TO_TICKS(500));
   }
@@ -48,12 +49,13 @@ extern "C" void app_main()
 {
   static TaskHandle_t hwtestTaskHandle = nullptr;
   xTaskCreate(vHardwareTestRunner,
-              "Decicion to run hardwaretest/return of Hardwaretest if automated", 3000, nullptr, 1,
+              "Decicion to run hardwaretest/return of Hardwaretest if automated", 9000, nullptr, 1,
               &hwtestTaskHandle);
   while (true)
   {
     uint16_t minimum_free = uxTaskGetStackHighWaterMark(hwtestTaskHandle);
-    printf("================ HARDWARETESTRUNNER MINIMUM FREE %d BYTES ================\n", minimum_free);
+    printf("================ HARDWARETESTRUNNER MINIMUM FREE %d BYTES ================\n",
+           minimum_free);
     vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }

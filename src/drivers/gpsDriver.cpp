@@ -1,7 +1,25 @@
 #include "drivers/gpsDriver.h"
 #include "driver/uart.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "minmea.h"
+
+void vGpsTask(void* pvParameters)
+{
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+  const TickType_t xPeriod = pdMS_TO_TICKS(GpsConfig::task_period);
+
+  while (true)
+  {
+    gps::task_context* context = static_cast<gps::task_context*>(pvParameters);
+    GpsDriver* driver = static_cast<GpsDriver*>(context->THIS);
+    driver->fill_data();
+    xQueueOverwrite(context->gpsQueue, driver->gpsData_);
+    vTaskDelayUntil(&xLastWakeTime, xPeriod);
+  }
+  vTaskDelete(nullptr);
+}
 
 esp_err_t GpsDriver::init()
 //{{{
@@ -20,13 +38,24 @@ esp_err_t GpsDriver::init()
   };
 
   esp_err_t configure = uart_param_config(GpsConfig::uart_num, &uart_config);
-  ESP_LOGI(TAG, "uart_param_config(): %s", esp_err_to_name(configure));
 
   esp_err_t set_pin = uart_set_pin(GpsConfig::uart_num, GpsConfig::TX_GPIO, GpsConfig::RX_GPIO,
                                    UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-  ESP_LOGI(TAG, "uart_set_pin(): %s", esp_err_to_name(set_pin));
 
-  if (install != ESP_OK || configure != ESP_OK || set_pin != ESP_OK)
+  context_->gpsQueue = xQueueCreate(1, sizeof(gps::data));
+  context_->THIS = this;
+
+  const char* description =
+      "Reading Gps Data over UART, parsing the data and sending it to the gpsQueue";
+
+  BaseType_t task_create;
+
+  if (context_->gpsQueue != nullptr)
+  {
+    task_create = xTaskCreate(vGpsTask, description, 10000, context_, 5, nullptr);
+  }
+
+  if (install != ESP_OK || configure != ESP_OK || set_pin != ESP_OK || task_create != pdPASS)
   {
     return ESP_FAIL;
   }
@@ -40,10 +69,14 @@ esp_err_t GpsDriver::init()
 void GpsDriver::fill_data()
 //{{{
 {
+  if (uart_data_ == nullptr)
+  {
+    return;
+  }
+
   bytes_read_ = uart_read_bytes(GpsConfig::uart_num, uart_data_, GpsConfig::RX_buffer,
                                 20 / portTICK_PERIOD_MS);
   consume_uart_data();
-
 };
 //}}}
 
@@ -104,8 +137,8 @@ void GpsDriver::consume_uart_data()
   {
     consume_byte(uart_data_[i]);
 
-	//To print raw uart_data and debug/validate parsed input.
-    //printf("%c", uart_data_[i]);
+    // To print raw uart_data and debug/validate parsed input.
+    // printf("%c", uart_data_[i]);
   }
 }
 //}}}
@@ -114,10 +147,11 @@ void GpsDriver::consume_byte(char byte)
 //{{{
 {
 
-  //sentence_compl_ garantees that cut off sentences get discarded // $ marks beginning of nmea sentence 
+  // sentence_compl_ garantees that cut off sentences get discarded // $ marks beginning of nmea
+  // sentence
   if (sentence_compl_ && byte == '$')
   {
-	//starting the sentence with $ and marking the sentence incomplete 
+    // starting the sentence with $ and marking the sentence incomplete
     sentence_len_ = 0;
     sentence_[sentence_len_] = byte;
     sentence_len_++;
@@ -127,26 +161,26 @@ void GpsDriver::consume_byte(char byte)
   //'\n' marks the end of nmea sentence
   else if (byte == '\n')
   {
-    //marking the sentence complete, adding nullterminator and parsing it to the gpsData_ struct
+    // marking the sentence complete, adding nullterminator and parsing it to the gpsData_ struct
     sentence_compl_ = true;
     sentence_[sentence_len_] = 0x00;
     parse_sentence(sentence_);
   }
 
-  //normal characters
+  // normal characters
   else
   {
- 	//normal characters btw. sentences have to be noise	
+    // normal characters btw. sentences have to be noise
     if (!sentence_compl_)
     {
-	  //Limiting sentence_len_ to prevent crashes if start byte gets decoded from garbage bytes
+      // Limiting sentence_len_ to prevent crashes if start byte gets decoded from garbage bytes
       if (sentence_len_ < 2000)
       {
-		//normal characters get written into the sentence
+        // normal characters get written into the sentence
         sentence_[sentence_len_] = byte;
         sentence_len_++;
       }
-	  //Limiting sentence_len_
+      // Limiting sentence_len_
       else
       {
         sentence_compl_ = true;

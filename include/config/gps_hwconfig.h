@@ -16,5 +16,6 @@ struct GpsConfig
   static constexpr int event_queue_size = 0; 
   static constexpr QueueHandle_t* uart_queue = nullptr; 
   static constexpr int interrupt_alloc_flags = 0; 
+  static constexpr uint16_t task_period = 2000;
 
 }; 
