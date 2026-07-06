@@ -19,6 +19,7 @@ target_link_libraries(gpsDriver PRIVATE
 	idf::freertos
 	minmea
 	gps_hwconfig
+	queueServer
 )
 
 target_link_libraries(compassDriver PRIVATE 

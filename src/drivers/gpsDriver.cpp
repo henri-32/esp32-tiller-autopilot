@@ -1,10 +1,10 @@
 #include "drivers/gpsDriver.h"
 #include "driver/uart.h"
 #include "esp_log.h"
-#include "utils/debug_utils.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "minmea.h"
+#include "utils/debug_utils.h"
 
 void vGpsTask(void* pvParameters)
 {
@@ -13,18 +13,21 @@ void vGpsTask(void* pvParameters)
 
   while (true)
   {
-    gps::task_context* context = static_cast<gps::task_context*>(pvParameters);
+    task_context* context = static_cast<task_context*>(pvParameters);
     GpsDriver* driver = static_cast<GpsDriver*>(context->THIS);
+
     driver->fill_data();
-    xQueueOverwrite(context->gpsQueue, driver->gpsData_);
-	WRITE_FREE_TASK_STACK_TO_CONTEXT(context);
+	driver->gpsTelemetry_->performance.free_task_stack = uxTaskGetStackHighWaterMark(nullptr);
+
+    xQueueOverwrite(context->queueBundle.data, &driver->gpsTelemetry_->data);
+	xQueueOverwrite(context->queueBundle.performance, &driver->gpsTelemetry_->performance);
 
     vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
   vTaskDelete(nullptr);
 }
 
-esp_err_t GpsDriver::init()
+esp_err_t GpsDriver::init(QueueBundle bundle)
 //{{{
 {
   esp_err_t install = uart_driver_install(GpsConfig::uart_num, GpsConfig::RX_buffer,
@@ -45,15 +48,14 @@ esp_err_t GpsDriver::init()
   esp_err_t set_pin = uart_set_pin(GpsConfig::uart_num, GpsConfig::TX_GPIO, GpsConfig::RX_GPIO,
                                    UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
-  context_->gpsQueue = xQueueCreate(1, sizeof(gps::data));
   context_->THIS = this;
+  context_->queueBundle = bundle;
 
-  const char* description =
-      "Reading Gps Data over UART, parsing the data and sending it to the gpsQueue";
+  const char* description = "GpsTask";
 
   BaseType_t task_create;
 
-  if (context_->gpsQueue != nullptr)
+  if (context_->queueBundle.data != nullptr)
   {
     task_create = xTaskCreate(vGpsTask, description, 10000, context_, 5, nullptr);
   }
@@ -102,10 +104,10 @@ void GpsDriver::parse_sentence(const char* sentence)
       minmea_sentence_gga frame{};
       if (minmea_parse_gga(&frame, sentence))
       {
-        gpsData_->fixQuality = frame.fix_quality;
-        gpsData_->satellites_tracked = frame.satellites_tracked;
-        gpsData_->latitude = minmea_tocoord(&frame.latitude);
-        gpsData_->longitude = minmea_tocoord(&frame.longitude);
+        gpsTelemetry_->data.fixQuality = frame.fix_quality;
+        gpsTelemetry_->data.satellites_tracked = frame.satellites_tracked;
+        gpsTelemetry_->data.latitude = minmea_tocoord(&frame.latitude);
+        gpsTelemetry_->data.longitude = minmea_tocoord(&frame.longitude);
       }
       break;
     }
@@ -114,8 +116,8 @@ void GpsDriver::parse_sentence(const char* sentence)
       minmea_sentence_vtg frame{};
       if (minmea_parse_vtg(&frame, sentence))
       {
-        gpsData_->course_true = minmea_tofloat(&frame.true_track_degrees);
-        gpsData_->speed_kts = minmea_tofloat(&frame.speed_knots);
+        gpsTelemetry_->data.course_true = minmea_tofloat(&frame.true_track_degrees);
+        gpsTelemetry_->data.speed_kts = minmea_tofloat(&frame.speed_knots);
       }
       break;
     }

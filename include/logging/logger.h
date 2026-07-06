@@ -9,7 +9,7 @@ namespace log
 struct task_context
 {
   void* THIS = nullptr;
-  QueueHandle_t gpsQueue; 
+  QueueHandle_t dataQueue; 
 };
 
 } // namespace log
