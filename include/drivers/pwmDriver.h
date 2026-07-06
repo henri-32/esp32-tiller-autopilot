@@ -3,7 +3,7 @@
 #include "types/steeringTypes.h"
 
 
-class PWMController {
+class PwmDriver {
 public:
   // Contract:
   // Purpose: Drive the steering actuator from a filtered PWM intent.
@@ -15,9 +15,8 @@ public:
     High
   }; // gerade noch Platzhalter, das wird der duty cycle.
 
-  PWMController(const SteeringMechanicsConfig& config);
-  PWMController(const PWMController &) = delete;
-  PWMController &operator=(const PWMController &) = delete;
+  PwmDriver(SteeringMechanicsConfig& conf): m_config(conf){};
+
 
   void command(const PWMIntent &command);
 

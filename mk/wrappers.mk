@@ -10,6 +10,9 @@ fresh:
 targets: 
 	@cat maketargets.txt
 
+size: 
+	@$(SOURCE) && xtensa-esp32-elf-size $(ELF)
+
 configure_hardwaretest-compass: 
 	@$(SOURCE) && cmake --preset hardwaretest-compass | tee .logs/lastBuild.log
 	@cp build/hardwaretest-compass/compile_commands.json compile_commands.json

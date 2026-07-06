@@ -27,7 +27,7 @@ Das System ist als adaptive Trimmregelung aufgebaut:
 - `ImpulseFilter`
   - daempft abstract impulse u. a. mit STW-Kontext
   - erzeugt `PWMIntent`
-- `PWMController`
+- `PwmDriver`
   - mappt `PWMIntent` auf hardware-nahe PWM-Parameter
 - `Diagnostics`
   - sammelt Ereignisse und Capability-Zustaende
@@ -66,7 +66,7 @@ Hinweis:
 
 ### Aktorpfad
 - `ImpulseFilter`: fachliche Dampfungs-/Shaping-Logik
-- `PWMController`: hardware-nahe Umsetzung
+- `PwmDriver`: hardware-nahe Umsetzung
 
 ## 5. Diagnostics und State
 

@@ -343,13 +343,13 @@
         <mxCell id="B7sy-6tvhzp1BTqz867x-113" parent="B7sy-6tvhzp1BTqz867x-109" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" value="+intentBlocked(uint32_t, uint32_t, uint8_t, int16_t, float) : bool" vertex="1">
           <mxGeometry height="37" width="543" y="118.88888888888889" as="geometry" />
         </mxCell>
-        <mxCell id="B7sy-6tvhzp1BTqz867x-114" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40.57142857142857;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;" value="PWMController" vertex="1">
+        <mxCell id="B7sy-6tvhzp1BTqz867x-114" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40.57142857142857;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;" value="PwmDriver" vertex="1">
           <mxGeometry height="130.57142857142856" width="319" x="3650" y="1380" as="geometry" />
         </mxCell>
         <mxCell id="B7sy-6tvhzp1BTqz867x-115" parent="B7sy-6tvhzp1BTqz867x-114" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1">
           <mxGeometry height="8" width="319" y="40.57142857142857" as="geometry" />
         </mxCell>
-        <mxCell id="B7sy-6tvhzp1BTqz867x-116" parent="B7sy-6tvhzp1BTqz867x-114" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" value="+PWMController()" vertex="1">
+        <mxCell id="B7sy-6tvhzp1BTqz867x-116" parent="B7sy-6tvhzp1BTqz867x-114" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" value="+PwmDriver()" vertex="1">
           <mxGeometry height="41" width="319" y="48.57142857142857" as="geometry" />
         </mxCell>
         <mxCell id="B7sy-6tvhzp1BTqz867x-117" parent="B7sy-6tvhzp1BTqz867x-114" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" value="+command(PWMCommand) : void" vertex="1">

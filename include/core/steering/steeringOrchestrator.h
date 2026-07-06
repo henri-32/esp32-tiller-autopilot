@@ -24,6 +24,6 @@ public:
 private:
   ImpulseFilter m_impulsefilter;
   CoreSteeringController m_csc;
-  PWMController m_pwm;
+  PwmDriver m_pwm;
   SteeringIntent m_steeringIntent;
 };

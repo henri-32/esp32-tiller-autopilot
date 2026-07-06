@@ -1,10 +1,10 @@
 #include "actuators/pwmController.h"
 #include "types/steeringTypes.h"
 
-PWMController::PWMController(const SteeringMechanicsConfig &config)
+PwmDriver::PWMController(const SteeringMechanicsConfig &config)
     : m_config(config) {};
 
-void PWMController::command(const PWMIntent &command) {
+void PwmDriver::command(const PWMIntent &command) {
   // TODO HardwareImpulse ausgeben
   //Auskommentiert um clangd Warnungen zu ignorieren
   
