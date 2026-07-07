@@ -1,14 +1,26 @@
 #pragma once
 #include "cstdint"
 
+
 template <typename T> struct SensorSample
 {
   T value{};
   bool valid{false};
   uint32_t timestamp;
 };
+struct Performance
+{
+  uint16_t free_task_stack = 0;
+};
 
-struct Data
+
+template <typename T> struct Telemetry
+{
+  T data{};
+  Performance performance;
+};
+
+struct GpsData
 {
   // lat and long in decimaldegree format DD.DDD...
   uint32_t latitude = 0;
@@ -28,14 +40,3 @@ struct Data
   uint8_t satellites_tracked = 0;
 };
 
-struct Performance
-{
-  uint16_t free_task_stack = 0;
-};
-
-struct GpsTelemetry
-{
-Data data; 
-Performance performance;
-
-};

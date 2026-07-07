@@ -27,10 +27,10 @@ public:
     uart_data_ = static_cast<uint8_t*>(pvPortMalloc(GpsConfig::RX_buffer));
     sentence_ = static_cast<char*>(pvPortMalloc(GpsConfig::max_sentence_len));
 
-    void* telMem = pvPortMalloc(sizeof(GpsTelemetry));
+    void* telMem = pvPortMalloc(sizeof(Telemetry<GpsData>));
     if (telMem != nullptr)
     {
-      gpsTelemetry_ = new (telMem) GpsTelemetry{};
+      gpsTelemetry_ = new (telMem) Telemetry<GpsData>{};
     }
     void* contextMem = pvPortMalloc(sizeof(task_context));
     if (contextMem != nullptr)
@@ -55,7 +55,7 @@ public:
 
     if (gpsTelemetry_ != nullptr)
     {
-      gpsTelemetry_->~GpsTelemetry();
+      gpsTelemetry_->~Telemetry<GpsData>();
       vPortFree(gpsTelemetry_);
     }
   }
@@ -69,7 +69,7 @@ public:
    * parsed and structured values of the Gps*/
   void fill_data();
 
-  GpsTelemetry* gpsTelemetry_;
+  Telemetry<GpsData>* gpsTelemetry_;
   task_context* context_;
 
 private:

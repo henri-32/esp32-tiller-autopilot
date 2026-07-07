@@ -3,7 +3,7 @@
 
 BaseType_t QueueServer::init()
 {
-  gpsDataQueue_ = xQueueCreate(1, sizeof(Data));
+  gpsDataQueue_ = xQueueCreate(1, sizeof(GpsData));
   gpsPerformanceQueue_ = xQueueCreate(1, sizeof(Performance));
 
   // TODO Size of Error unbekannt

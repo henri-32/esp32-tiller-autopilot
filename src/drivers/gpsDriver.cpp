@@ -36,11 +36,11 @@ esp_err_t GpsDriver::init(QueueBundle bundle)
   ESP_LOGI(TAG, "uart_driver_install(): %s", esp_err_to_name(install));
 
   uart_config_t uart_config = {
-      .baud_rate = 3840,
-      .data_bits = UART_DATA_8_BITS,
-      .parity = UART_PARITY_DISABLE,
-      .stop_bits = UART_STOP_BITS_1,
-      .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+      .baud_rate = GpsConfig::baud_rate,
+      .data_bits = GpsConfig::data_bits,
+      .parity = GpsConfig::parity,
+      .stop_bits = GpsConfig::stop_bits,
+      .flow_ctrl = GpsConfig::flow_ctrl,
   };
 
   esp_err_t configure = uart_param_config(GpsConfig::uart_num, &uart_config);
@@ -135,6 +135,7 @@ void GpsDriver::parse_sentence(const char* sentence)
 };
 //}}}
 
+
 void GpsDriver::consume_uart_data()
 //{{{
 {
@@ -143,7 +144,7 @@ void GpsDriver::consume_uart_data()
     consume_byte(uart_data_[i]);
 
     // To print raw uart_data and debug/validate parsed input.
-    // printf("%c", uart_data_[i]);
+     printf("%c", uart_data_[i]);
   }
 }
 //}}}

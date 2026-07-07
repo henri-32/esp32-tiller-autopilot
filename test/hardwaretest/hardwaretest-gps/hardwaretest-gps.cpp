@@ -7,17 +7,16 @@
 
 #include <cstdio>
 
-
 void vPrintGpsTask(void* pvParameters)
 {
   task_context* context = static_cast<task_context*>(pvParameters);
 
   while (true)
   {
-    GpsTelemetry gpsTel{};
+    Telemetry<GpsData> gpsTel{};
 
     xQueueReceive(context->queueBundle.data, &gpsTel.data, pdMS_TO_TICKS(2000));
-	xQueueReceive(context->queueBundle.performance, &gpsTel.performance, pdMS_TO_TICKS(2000));
+    xQueueReceive(context->queueBundle.performance, &gpsTel.performance, pdMS_TO_TICKS(2000));
 
     printf("SOG: %f / expected: 0.0\nfixQuality: %d / expected: 0\nFreeTaskStackGPS: %d \n",
            gpsTel.data.speed_kts, gpsTel.data.fixQuality, gpsTel.performance.free_task_stack);
