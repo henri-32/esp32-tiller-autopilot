@@ -4,7 +4,7 @@
 #include "freertos/task.h"
 
 
-struct QueueBundle {
+struct QueueBundle_t {
   QueueHandle_t data= nullptr; 
   QueueHandle_t performance= nullptr; 
   QueueHandle_t error= nullptr; 
@@ -14,6 +14,6 @@ struct QueueBundle {
 struct task_context
 {
   void* THIS = nullptr;
-  QueueBundle  queueBundle;
+  QueueBundle_t  queueBundle;
 };
 

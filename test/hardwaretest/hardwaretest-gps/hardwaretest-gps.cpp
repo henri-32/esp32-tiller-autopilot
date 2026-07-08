@@ -1,9 +1,11 @@
+#include "core/dataStore.h"
 #include "core/queueServer.h"
 #include "driver/uart.h"
 #include "drivers/gpsDriver.h"
 #include "drivers/i2c_driver.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "logging/logger.h"
 
 #include <cstdio>
 
@@ -26,20 +28,32 @@ void vPrintGpsTask(void* pvParameters)
 int run_hardwaretest()
 {
   static QueueServer qServer;
-  static GpsDriver driver;
+  static GpsDriver driver{&qServer};
+  static DataStore store{&qServer};
+  static Logger logger{&qServer};
 
   BaseType_t qs = qServer.init();
 
-  esp_err_t di = driver.init(qServer.get_gps_bundle());
+  esp_err_t di;
+  BaseType_t li;
+  BaseType_t si;
+
+  if (qs == pdPASS)
+  {
+    di = driver.init();
+    si = store.init();
+
+    li = logger.init();
+  }
 
   BaseType_t tc;
 
   if (driver.context_ != nullptr)
   {
-    tc = xTaskCreate(vPrintGpsTask, "", 10000, driver.context_, 1, nullptr);
+     //tc = xTaskCreate(vPrintGpsTask, "", 10000, driver.context_, 1, nullptr);
   }
 
-  if (di == ESP_OK && qs == pdPASS && tc == pdPASS)
+  if (di == ESP_OK && qs == pdPASS && tc == pdPASS && li == pdPASS)
   {
     return 0;
   }

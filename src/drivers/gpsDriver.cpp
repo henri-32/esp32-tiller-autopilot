@@ -1,6 +1,7 @@
 #include "drivers/gpsDriver.h"
 #include "driver/uart.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "minmea.h"
@@ -17,17 +18,17 @@ void vGpsTask(void* pvParameters)
     GpsDriver* driver = static_cast<GpsDriver*>(context->THIS);
 
     driver->fill_data();
-	driver->gpsTelemetry_->performance.free_task_stack = uxTaskGetStackHighWaterMark(nullptr);
+    driver->gpsTelemetry_->performance.free_task_stack = uxTaskGetStackHighWaterMark(nullptr);
 
     xQueueOverwrite(context->queueBundle.data, &driver->gpsTelemetry_->data);
-	xQueueOverwrite(context->queueBundle.performance, &driver->gpsTelemetry_->performance);
+    xQueueOverwrite(context->queueBundle.performance, &driver->gpsTelemetry_->performance);
 
     vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
   vTaskDelete(nullptr);
 }
 
-esp_err_t GpsDriver::init(QueueBundle bundle)
+esp_err_t GpsDriver::init()
 //{{{
 {
   esp_err_t install = uart_driver_install(GpsConfig::uart_num, GpsConfig::RX_buffer,
@@ -49,7 +50,8 @@ esp_err_t GpsDriver::init(QueueBundle bundle)
                                    UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
   context_->THIS = this;
-  context_->queueBundle = bundle;
+  context_->queueBundle = qServer_->get_gps_bundle();
+  nmea_handle_ = qServer_->get_nmea_handle();
 
   const char* description = "GpsTask";
 
@@ -85,7 +87,7 @@ void GpsDriver::fill_data()
 };
 //}}}
 
-void GpsDriver::parse_sentence(const char* sentence)
+void GpsDriver::consume_sentence(const char* sentence)
 //{{{
 {
   if (sentence == nullptr)
@@ -96,6 +98,13 @@ void GpsDriver::parse_sentence(const char* sentence)
   if (minmea_check(sentence, true))
 
   {
+
+    // Write into queue for direct use by the logger/OpenCPN bridge.
+    if (nmea_handle_ != nullptr)
+    {
+      xQueueSendToBack(nmea_handle_, sentence, 0);
+    }
+
     const enum minmea_sentence_id id = minmea_sentence_id(sentence, true);
     switch (id)
     {
@@ -118,7 +127,9 @@ void GpsDriver::parse_sentence(const char* sentence)
       {
         gpsTelemetry_->data.course_true = minmea_tofloat(&frame.true_track_degrees);
         gpsTelemetry_->data.speed_kts = minmea_tofloat(&frame.speed_knots);
+        gpsTelemetry_->data.timestamp = esp_timer_get_time();
       }
+
       break;
     }
 
@@ -135,7 +146,6 @@ void GpsDriver::parse_sentence(const char* sentence)
 };
 //}}}
 
-
 void GpsDriver::consume_uart_data()
 //{{{
 {
@@ -144,7 +154,7 @@ void GpsDriver::consume_uart_data()
     consume_byte(uart_data_[i]);
 
     // To print raw uart_data and debug/validate parsed input.
-     printf("%c", uart_data_[i]);
+    //printf("%c", uart_data_[i]);
   }
 }
 //}}}
@@ -152,47 +162,49 @@ void GpsDriver::consume_uart_data()
 void GpsDriver::consume_byte(char byte)
 //{{{
 {
-
-  // sentence_compl_ garantees that cut off sentences get discarded // $ marks beginning of nmea
-  // sentence
-  if (sentence_compl_ && byte == '$')
+  if (sentence_ == nullptr)
   {
-    // starting the sentence with $ and marking the sentence incomplete
-    sentence_len_ = 0;
-    sentence_[sentence_len_] = byte;
-    sentence_len_++;
-    sentence_compl_ = false;
+    return;
   }
 
-  //'\n' marks the end of nmea sentence
-  else if (byte == '\n')
+  // '$' marks the beginning of a NMEA sentence. Restarting here discards cut off sentences.
+  if (byte == '$')
   {
-    // marking the sentence complete, adding nullterminator and parsing it to the gpsData_ struct
+    sentence_len_ = 0;
+    sentence_[sentence_len_++] = byte;
+    sentence_compl_ = false;
+    return;
+  }
+
+  if (sentence_compl_)
+  {
+    return;
+  }
+
+  if (byte == '\r')
+  {
+    return;
+  }
+
+  // '\n' marks the end of a NMEA sentence.
+  if (byte == '\n')
+  {
     sentence_compl_ = true;
     sentence_[sentence_len_] = 0x00;
-    parse_sentence(sentence_);
+    consume_sentence(sentence_);
+    sentence_len_ = 0;
+    return;
   }
 
-  // normal characters
-  else
+  // Leave room for the null terminator.
+  if (sentence_len_ < GpsConfig::max_sentence_len - 1)
   {
-    // normal characters btw. sentences have to be noise
-    if (!sentence_compl_)
-    {
-      // Limiting sentence_len_ to prevent crashes if start byte gets decoded from garbage bytes
-      if (sentence_len_ < 2000)
-      {
-        // normal characters get written into the sentence
-        sentence_[sentence_len_] = byte;
-        sentence_len_++;
-      }
-      // Limiting sentence_len_
-      else
-      {
-        sentence_compl_ = true;
-        sentence_len_ = 0;
-      }
-    }
+    sentence_[sentence_len_++] = byte;
+    return;
   }
+
+  sentence_compl_ = true;
+  sentence_len_ = 0;
+  sentence_[0] = 0x00;
 }
 //}}}

@@ -1,5 +1,6 @@
 #pragma once
 #include "config/gps_hwconfig.h"
+#include "core/queueServer.h"
 #include "esp_err.h"
 #include "types/systemServiceTypes.h"
 #include "utils/debug_utils.h"
@@ -11,7 +12,7 @@ class IGpsDriver
 //{{{
 {
 public:
-  virtual esp_err_t init(QueueBundle bundle) = 0;
+  virtual esp_err_t init() = 0;
   ~IGpsDriver() = default;
 };
 //}}}
@@ -20,10 +21,11 @@ class GpsDriver : public IGpsDriver
 //{{{
 {
 public:
-  explicit GpsDriver()
+  explicit GpsDriver(const QueueServer* const qServer)
   //{{{
   {
     // structs are allocated in the freeRTOS heap
+    qServer_ = qServer;
     uart_data_ = static_cast<uint8_t*>(pvPortMalloc(GpsConfig::RX_buffer));
     sentence_ = static_cast<char*>(pvPortMalloc(GpsConfig::max_sentence_len));
 
@@ -63,7 +65,7 @@ public:
 
   /*init() configures the uart communication related to gps_hwconfig.h,
    * and returns ESP_FAIL or ESP_OK depending on success of the initialisation*/
-  esp_err_t init(QueueBundle bundle) override;
+  esp_err_t init() override;
 
   /*fill_data() reads the uart data, parses them and fills the gps::data struct with
    * parsed and structured values of the Gps*/
@@ -75,8 +77,10 @@ public:
 private:
   void consume_uart_data();
   void consume_byte(char byte);
-  void parse_sentence(const char* sentence);
+  void consume_sentence(const char* sentence);
 
+  const QueueServer* qServer_{};
+  QueueHandle_t nmea_handle_;
   const char* TAG = "GpsDriver";
   uint8_t* uart_data_;
   char* sentence_;

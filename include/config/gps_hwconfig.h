@@ -1,6 +1,7 @@
 #pragma once
 #include "driver/uart.h"
 #include "driver/gpio.h"
+#include "types/loggingTypes.h"
 
 #include <cstdint>
 
@@ -16,7 +17,7 @@ struct GpsConfig
   static constexpr uart_hw_flowcontrol_t flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
   static constexpr uint16_t RX_buffer = 2048; 
   static constexpr uint16_t TX_buffer = 256; 
-  static constexpr uint8_t max_sentence_len = 128;
+  static constexpr uint16_t max_sentence_len = NmeaConfig::max_sentence_len;
   static constexpr int event_queue_size = 0; 
   static constexpr QueueHandle_t* uart_queue = nullptr; 
   static constexpr int interrupt_alloc_flags = 0; 

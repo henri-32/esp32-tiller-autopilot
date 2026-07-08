@@ -11,10 +11,14 @@ public:
   ~QueueServer() = default;
 
   BaseType_t init();
-  QueueBundle get_gps_bundle();
+  QueueBundle_t get_gps_bundle()const;
+  QueueHandle_t get_nmea_handle()const;
+  QueueHandle_t get_source_log_handle() const;
 
 private: 
   QueueHandle_t gpsDataQueue_; 
   QueueHandle_t gpsPerformanceQueue_;
   QueueHandle_t gpsErrorQueue_;
+  QueueHandle_t gpsNMEAQueue_;
+  QueueHandle_t sourceLogMessageQueue_;
 };

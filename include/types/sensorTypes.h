@@ -1,30 +1,33 @@
 #pragma once
 #include "cstdint"
 
-
 template <typename T> struct SensorSample
 {
   T value{};
   bool valid{false};
-  uint32_t timestamp;
+  uint64_t timestamp{0};
 };
-struct Performance
+struct PerformanceData
 {
   uint16_t free_task_stack = 0;
 };
 
+struct ErrorData
+{
+};
 
 template <typename T> struct Telemetry
 {
   T data{};
-  Performance performance;
+  PerformanceData performance;
+  ErrorData error;
 };
 
 struct GpsData
 {
   // lat and long in decimaldegree format DD.DDD...
-  uint32_t latitude = 0;
-  uint32_t longitude = 0;
+  float latitude = 0.0F;
+  float longitude = 0.0F;
 
   // SOG in knots
   float speed_kts = 0;
@@ -38,5 +41,7 @@ struct GpsData
 
   // Number of satellites used for positioning
   uint8_t satellites_tracked = 0;
-};
 
+  // esp_get_time() from parsed VTG Sentence
+  uint64_t timestamp = 0;
+};
