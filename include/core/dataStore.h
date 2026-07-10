@@ -56,7 +56,7 @@ public:
   BaseType_t init();
   void readQueues();
   void sendQueues();
-  void setOwnFreeStack();
+  void sendOwnFreeStack();
 
 private:
   task_context* context_;

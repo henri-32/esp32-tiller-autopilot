@@ -12,7 +12,7 @@ void vDataStoreTask(void* pvParameters)
     DataStore* store = static_cast<DataStore*>(context->THIS);
 
     store->readQueues();
-    store->setOwnFreeStack();
+    store->sendOwnFreeStack();
     store->sendQueues();
 
     vTaskDelayUntil(&xLastWakeTime, xPeriod);
@@ -96,7 +96,7 @@ void DataStore::sendQueues()
   xQueueOverwrite(source_log_queue_, &msg);
 };
 
-void DataStore::setOwnFreeStack()
+void DataStore::sendOwnFreeStack()
 {
   performanceStored_.dataStoreFreeStack = uxTaskGetStackHighWaterMark(nullptr);
 };
