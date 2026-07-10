@@ -44,3 +44,22 @@ monitor_hardwaretest-gps:
 	@mkdir -p .logs
 	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-gps/hardwaretest-gps.elf 2>&1 | \
 	tee >(sed -u $$'s/\x1b\\[[0-9;]*m//g' > .logs/lastMonitor.log) 
+
+configure_hardwaretest-pwm: 
+	@$(SOURCE) && cmake --preset hardwaretest-pwm | tee .logs/lastBuild.log
+	@cp build/hardwaretest-pwm/compile_commands.json compile_commands.json 
+
+build_hardwaretest-pwm: 
+	@$(SOURCE) && cmake --build --preset hardwaretest-pwm -j8 | tee .logs/lastBuild.log
+	@cp build/hardwaretest-pwm/compile_commands.json compile_commands.json
+
+flash_hardwaretest-pwm: 
+	@$(SOURCE) && cmake --build --preset hardwaretest-pwm -j8 --target flash | tee .logs/lastBuild.log
+	@cp build/hardwaretest-pwm/compile_commands.json compile_commands.json
+
+monitor_hardwaretest-pwm: 
+	@mkdir -p .logs	
+	@$(SOURCE) && $(MONITOR) $(CURDIR)/build/hardwaretest-pwm/hardwaretest-pwm.elf 2>&1 | \
+	tee >(sed -u $$'s/\x1b\\[[0-9;]*m//g' > .logs/lastMonitor.log)
+	
+	

@@ -4,9 +4,9 @@
 
 struct SteeringMechanicsConfig
 {
-    uint8_t dutyCycleDefault = 40;
-    uint32_t steeringMinImpulse_ms = 100;
-    uint32_t steeringMaxImpulse_ms = 3000;
+    static constexpr uint8_t dutyCycleDefault = 40;
+    static constexpr uint32_t steeringMinImpulse_ms = 100;
+    static constexpr uint32_t steeringMaxImpulse_ms = 3000;
 };
 
 struct SteeringRegulationConfig

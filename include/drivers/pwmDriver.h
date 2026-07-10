@@ -15,13 +15,13 @@ public:
     High
   }; // gerade noch Platzhalter, das wird der duty cycle.
 
-  PwmDriver(SteeringMechanicsConfig& conf): m_config(conf){};
+  PwmDriver() {};
 
 
   void command(const PWMIntent &command);
+  esp_err_t init();
 
 private:
-  const SteeringMechanicsConfig &m_config;
   SteeringDirection m_lastDir;
   Force m_lastFrc = Force::Low;
 };

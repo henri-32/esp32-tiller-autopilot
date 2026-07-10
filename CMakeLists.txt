@@ -31,8 +31,8 @@ if (BUILD_HARDWARETEST)
 	add_subdirectory(test/hardwaretest)
 endif()
 
-option(BUILD_COMPASS_HARDWARE_TEST "Build path for compass hardware tests" OFF)
-if (BUILD_COMPASS_HARDWARE_TEST)
+option(BUILD_COMPASS_HARDWARETEST "Build path for compass hardware tests" OFF)
+if (BUILD_COMPASS_HARDWARETEST)
 	add_executable(hardwaretest-compass.elf 
 		test/hardwaretest/hardwaretest-compass/hardwaretest-compass.cpp
 	)
@@ -42,8 +42,8 @@ if (BUILD_COMPASS_HARDWARE_TEST)
 		
 endif()
 
-option(BUILD_GPS_HARDWARE_TEST "Build path for gps hardware tests" OFF) 
-if (BUILD_GPS_HARDWARE_TEST)
+option(BUILD_GPS_HARDWARETEST "Build path for gps hardware tests" OFF) 
+if (BUILD_GPS_HARDWARETEST)
 	add_executable(hardwaretest-gps.elf
 		test/hardwaretest/hardwaretest-gps/hardwaretest-gps.cpp
 	)
@@ -51,4 +51,15 @@ if (BUILD_GPS_HARDWARE_TEST)
 
 	idf_build_executable(hardwaretest-gps.elf)
  
+endif()
+
+option(BUILD_PWM_HARDWARETEST "Buildpath for pwm hardware test" OFF)
+if (BUILD_PWM_HARDWARETEST)
+	add_executable(hardwaretest-pwm.elf
+		test/hardwaretest/hardwaretest-pwm/hardwaretest-pwm.cpp
+	)
+	add_subdirectory(test/hardwaretest/hardwaretest-pwm)
+
+	idf_build_executable(hardwaretest-pwm.elf)
+
 endif()

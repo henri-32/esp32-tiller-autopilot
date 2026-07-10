@@ -10,7 +10,7 @@
         "CMAKE_BUILD_TYPE": "Debug", 
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
 		"BUILD_HARDWARETEST": "ON",
-        "BUILD_COMPASS_HARDWARE_TEST": "ON",
+        "BUILD_COMPASS_HARDWARETEST": "ON",
 		"MEM_LOG":"ON"
       }
     },
@@ -23,11 +23,26 @@
 	    "CMAKE_BUILD_TYPE": "Debug", 
 	    "CMAKE_EXPORT_COMPILE_COMMANDS": "ON", 
 	    "BUILD_HARDWARETEST": "ON", 
-		"BUILD_GPS_HARDWARE_TEST": "ON",
+		"BUILD_GPS_HARDWARETEST": "ON",
 		"MEM_LOG":"ON"
 	  }
-	}
+	},
+	{
+	  "name": "hardwaretest-pwm",
+	  "displayName": "hardwaretest-gps",
+	  "generator": "Ninja", 
+	  "binaryDir": "${sourceDir}/build/hardwaretest-pwm",
+	  "cacheVariables": {
+		"CMAKE_BUILD_TYPE": "Debug", 
+		"CMAKE_EXPORT_COMPILE_COMMANDS": "ON", 
+		"BUILD_HARDWARETEST": "ON",
+		"BUILD_PWM_HARDWARETEST": "ON",
+		"MEM_LOG": "ON"
+	  }
+	} 
   ], 
+
+
   "buildPresets":  [
     {
       "name": "hardwaretest-compass", 
@@ -43,6 +58,14 @@
 	  "configurePreset": "hardwaretest-gps", 
 	  "targets": [
 	  		"hardwaretest-gps.elf"
+	  ]
+	},
+	{
+	  "name": "hardwaretest-pwm", 
+	  "displayName": "hardwaretest-pwm", 
+	  "configurePreset": "hardwaretest-pwm",
+	  "targets": [
+		    "hardwaretest-pwm.elf"
 	  ]
 	} 
   ]

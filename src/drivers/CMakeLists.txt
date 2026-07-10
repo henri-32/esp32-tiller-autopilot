@@ -10,6 +10,10 @@ add_library(compassDriver STATIC
 	compassDriver.cpp
 ) 
 
+add_library(pwmDriver STATIC 
+	pwmDriver.cpp
+)
+
 target_link_libraries(i2cDriver PRIVATE 
 	i2c_hwconfig
 )
@@ -25,6 +29,12 @@ target_link_libraries(compassDriver PRIVATE
 	i2c_hwconfig
 )	
 
+target_link_libraries(pwmDriver PRIVATE
+	idf::freertos
+	idf::esp_driver_gpio
+	idf::esp_driver_ledc
+)
+
 target_include_directories(i2cDriver PRIVATE 
 	"${PROJECT_ROOT}/include"
 )
@@ -37,6 +47,10 @@ target_include_directories(compassDriver PRIVATE
 	"${PROJECT_ROOT}/include"
 )
 
+target_include_directories(pwmDriver PRIVATE 
+	"${PROJECT_ROOT}/include"
+)
+
 target_compile_options(i2cDriver PRIVATE 
 	-fstack-usage
 )
@@ -46,6 +60,10 @@ target_compile_options(gpsDriver PRIVATE
 )
 
 target_compile_options(compassDriver PRIVATE 
+	-fstack-usage
+)
+
+target_compile_options(pwmDriver PRIVATE 
 	-fstack-usage
 )
 
@@ -62,6 +80,11 @@ if(MEM_LOG)
 	)
 
 	target_compile_options(compassDriver PRIVATE 
+		-fstack-usage
+		-DMEM_LOG
+	)
+
+	target_compile_options(pwmDriver PRIVATE 
 		-fstack-usage
 		-DMEM_LOG
 	)
