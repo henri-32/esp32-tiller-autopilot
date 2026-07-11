@@ -1,7 +1,7 @@
 #pragma once 
 #include <cstdint> 
 
-enum class SteeringDirection { Left, Right };
+enum class SteeringDirection { portside, starbord };
 
 struct SteeringIntent {
   SteeringDirection dir;
@@ -11,6 +11,8 @@ struct SteeringIntent {
 struct PWMIntent {
   SteeringDirection dir;
   uint16_t filteredAbstractImpulse_0_100;
-  uint8_t dutyCycle;
+  uint16_t duration;
+
+
 };
 

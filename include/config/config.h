@@ -1,10 +1,9 @@
 #pragma once
 #include <cstdint>
-#include "driver/gpio.h"
 
 struct SteeringMechanicsConfig
 {
-    static constexpr uint8_t dutyCycleDefault = 40;
+    static constexpr uint8_t dutyCycleDefault = 100;
     static constexpr uint32_t steeringMinImpulse_ms = 100;
     static constexpr uint32_t steeringMaxImpulse_ms = 3000;
 };
