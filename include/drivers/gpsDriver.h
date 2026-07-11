@@ -1,38 +1,11 @@
 #pragma once
 #include "config/gps_hwconfig.h"
+#include "core/queueServer.h"
 #include "esp_err.h"
+#include "types/systemServiceTypes.h"
 #include "utils/debug_utils.h"
+#include "types/sensorTypes.h"
 #include <new>
-
-namespace gps {
-struct data
-{
-  // lat and long in decimaldegree format DD.DDD...
-  uint32_t latitude = 0;
-  uint32_t longitude = 0;
-
-  // SOG in knots
-  float speed_kts = 0;
-
-  // true COG
-  uint16_t course_true = 0;
-
-  // Quality of the satellite fix. 0 = invalid >0 are different types of valid (see nmea183
-  // standard)
-  uint8_t fixQuality = 0;
-
-  // Number of satellites used for positioning
-  uint8_t satellites_tracked = 0;
-
-};
-
-struct task_context
-{
-  void* THIS = nullptr;
-  QueueHandle_t gpsQueue = nullptr;
-  ADD_MEMORY_VALUES();
-};
-}
 
 
 class IGpsDriver
@@ -48,22 +21,23 @@ class GpsDriver : public IGpsDriver
 //{{{
 {
 public:
-  explicit GpsDriver()
+  explicit GpsDriver(const QueueServer* const qServer)
   //{{{
   {
     // structs are allocated in the freeRTOS heap
+    qServer_ = qServer;
     uart_data_ = static_cast<uint8_t*>(pvPortMalloc(GpsConfig::RX_buffer));
     sentence_ = static_cast<char*>(pvPortMalloc(GpsConfig::max_sentence_len));
 
-    void* dataMem = pvPortMalloc(sizeof(gps::data));
-    if (dataMem != nullptr)
+    void* telMem = pvPortMalloc(sizeof(Telemetry<GpsData>));
+    if (telMem != nullptr)
     {
-      gpsData_ = new (dataMem) gps::data{};
+      gpsTelemetry_ = new (telMem) Telemetry<GpsData>{};
     }
-    void* contextMem = pvPortMalloc(sizeof(gps::task_context));
+    void* contextMem = pvPortMalloc(sizeof(task_context));
     if (contextMem != nullptr)
     {
-      context_ = new (contextMem) gps::task_context{};
+      context_ = new (contextMem) task_context{};
     }
   }
   //}}}
@@ -81,10 +55,10 @@ public:
       vPortFree(sentence_);
     }
 
-    if (gpsData_ != nullptr)
+    if (gpsTelemetry_ != nullptr)
     {
-      gpsData_->~data();
-      vPortFree(gpsData_);
+      gpsTelemetry_->~Telemetry<GpsData>();
+      vPortFree(gpsTelemetry_);
     }
   }
   //}}}
@@ -97,14 +71,16 @@ public:
    * parsed and structured values of the Gps*/
   void fill_data();
 
-  gps::data* gpsData_;
-  gps::task_context* context_;
+  Telemetry<GpsData>* gpsTelemetry_;
+  task_context* context_;
 
 private:
   void consume_uart_data();
   void consume_byte(char byte);
-  void parse_sentence(const char* sentence);
+  void consume_sentence(const char* sentence);
 
+  const QueueServer* qServer_{};
+  QueueHandle_t nmea_handle_;
   const char* TAG = "GpsDriver";
   uint8_t* uart_data_;
   char* sentence_;

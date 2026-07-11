@@ -5,7 +5,3 @@ int run_hardwaretest();
 
 extern "C" void app_main();
 
-static bool testRan = false;
-static bool askedForTest = false;
-uint8_t test_return_val;
-

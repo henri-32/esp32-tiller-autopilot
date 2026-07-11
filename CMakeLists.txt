@@ -24,7 +24,9 @@ idf_build_process("${IDF_TARGET}")
 
 add_subdirectory(include)
 add_subdirectory(lib)
+add_subdirectory(src/core)
 add_subdirectory(src/drivers) 
+add_subdirectory(src/logging)
 
 option(BUILD_HARDWARETEST "Build path for hardwaretests in general" OFF)
 if (BUILD_HARDWARETEST)
