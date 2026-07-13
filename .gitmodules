@@ -7,3 +7,6 @@
 [submodule "lib/minmea"]
 	path = lib/minmea
 	url = https://github.com/kosma/minmea.git
+[submodule "lib/fltk"]
+	path = lib/fltk
+	url = https://github.com/fltk/fltk.git

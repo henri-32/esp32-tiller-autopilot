@@ -13,6 +13,9 @@ targets:
 size: 
 	@$(SOURCE) && xtensa-esp32-elf-size $(ELF)
 
+logRouter:
+	@bear -- g++ logRouter/logRouter.cpp -o logRouter/logRouter
+
 configure_hardwaretest-compass: 
 	@$(SOURCE) && cmake --preset hardwaretest-compass | tee .logs/lastBuild.log
 	@cp build/hardwaretest-compass/compile_commands.json compile_commands.json
