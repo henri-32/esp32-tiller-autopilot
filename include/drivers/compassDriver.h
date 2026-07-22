@@ -17,7 +17,7 @@ public:
 class CompassDriver : public ICompassDriver
 {
 public:
-  explicit CompassDriver(i2c_master_bus_handle_t mh) : master_handle_(mh) {};
+  CompassDriver(i2c_master_bus_handle_t mh) : master_handle_(mh) {};
 
   esp_err_t init() override;
 

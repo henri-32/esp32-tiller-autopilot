@@ -5,20 +5,13 @@
 #include "drivers/windModule.h"
 #include "types/sensorTypes.h"
 #include "types/controllerTypes.h"
+#include "types/sensorTypes.h"
 #include <cstdint>
 
 class NavigationSensors {
 public:
-  explicit NavigationSensors() = default;
+  NavigationSensors() = default;
 
-  struct NavigationSnapshot {
-    SensorSample<uint16_t> compass_hdg_dg;
-    SensorSample<uint16_t> gps_cog_dg;
-    SensorSample<float> gps_sog_kts;
-    SensorSample<uint16_t> wind_angle_dg;
-    SensorSample<float> stw_kts;
-	NavigationSource LeadSource;
-  };
 
   struct SensorActivation {
     bool compass = false;

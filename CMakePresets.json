@@ -39,7 +39,7 @@
 		"BUILD_PWM_HARDWARETEST": "ON",
 		"MEM_LOG": "ON"
 	  }
-	} 
+	}
   ], 
 
 
@@ -67,6 +67,6 @@
 	  "targets": [
 		    "hardwaretest-pwm.elf"
 	  ]
-	} 
+	}
   ]
 }

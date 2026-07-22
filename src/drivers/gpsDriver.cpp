@@ -4,7 +4,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "minmea.h"
+#include "minmea/minmea.h"
 #include "utils/debug_utils.h"
 
 void vGpsTask(void* pvParameters)

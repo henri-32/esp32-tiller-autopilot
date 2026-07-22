@@ -1,5 +1,6 @@
 #pragma once
 #include "cstdint"
+#include "types/controllerTypes.h"
 
 template <typename T> struct SensorSample
 {
@@ -45,3 +46,4 @@ struct GpsData
   // esp_get_time() from parsed VTG Sentence
   uint64_t timestamp = 0;
 };
+

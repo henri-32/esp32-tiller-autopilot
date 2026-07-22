@@ -10,3 +10,9 @@
 [submodule "lib/fltk"]
 	path = lib/fltk
 	url = https://github.com/fltk/fltk.git
+[submodule "lib/cobs-c"]
+	path = lib/cobs-c
+	url = https://github.com/cmcqueen/cobs-c.git
+[submodule "lib/unity"]
+	path = lib/unity
+	url = https://github.com/ThrowTheSwitch/Unity.git

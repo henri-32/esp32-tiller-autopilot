@@ -29,7 +29,7 @@ int run_hardwaretest()
   {
   //  printf("x: %d \ny: %d \nz: %d \n", compassDriver.read_raw().x, compassDriver.read_raw().y,
    //        compassDriver.read_raw().z);
-  printf("x: %d \ny: %d \nz: %d \n",compassDriver.read_raw().x, compassDriver.read_raw().y, compassDriver.read_raw().z);  
+  //printf("x: %d \ny: %d \nz: %d \n",compassDriver.read_raw().x, compassDriver.read_raw().y, compassDriver.read_raw().z);  
 }
   return 0;
 }

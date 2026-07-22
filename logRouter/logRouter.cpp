@@ -4,17 +4,21 @@
 #include <sys/un.h>
 #include <termios.h>
 #include <unistd.h>
+#include <vector>
 
 #include <cstring>
-#include <iostream>
 #include <string>
+
+#include "cobs-c/cobs.h"
+#include "logging/message_protocol.h"
 
 static constexpr const char* nmeaPrefix = "@NMEA ";
 static constexpr const char* sourcePrefix = "@SOURCE ";
 
 int openSerial(const char* path, speed_t baud)
+//{{{
 {
-  int fd = open(path, O_RDONLY | O_NOCTTY);
+  int fd = open(path, O_RDONLY | O_NOCTTY | O_NONBLOCK);
   if (fd < 0)
   {
     perror("open serial");
@@ -51,80 +55,106 @@ int openSerial(const char* path, speed_t baud)
 
   return fd;
 }
+//}}}
 
-std::string extractNmea(const std::string& line)
+void consume_nav_msg(int fd, Message<NavigationSnapshot>* msg)
+//{{{
 {
-  const auto pos = line.find(nmeaPrefix);
-  if (pos == std::string::npos)
-  {
-    return {};
-  }
+  printf("SOG:%f \n", msg->payload.gps_sog_kts.value);
+  printf("SOG_valid: %d \n", msg->payload.gps_sog_kts.valid);
+  printf("COG:%d \n", msg->payload.gps_cog_dg.value);
+  printf("COG_valid:%d \n", msg->payload.gps_cog_dg.valid);
+};
+//}}}
 
-  std::string sentence = line.substr(pos + std::strlen(nmeaPrefix));
-
-  while (!sentence.empty() &&
-         (sentence.back() == '\n' || sentence.back() == '\r' || sentence.back() == ' '))
-  {
-    sentence.pop_back();
-  }
-
-  if (sentence.empty() || (sentence.front() != '$' && sentence.front() != '!'))
-  {
-    return {};
-  }
-
-  const auto star = sentence.find('*');
-  if (star != std::string::npos && sentence.size() >= star + 3)
-  {
-    sentence = sentence.substr(0, star + 3);
-  }
-
-  return sentence;
-}
-
-std::string extractSource(const std::string& line)
+void consume_nmea_msg(int file_descriptor, sockaddr_in* addr, Message<NmeaSentences>* sentences_ptr)
+//{{{
 {
-  const auto pos = line.find(sourcePrefix);
-  if (pos == std::string::npos)
+  for (int i = 0; i < sentences_ptr->payload.sentence_count; ++i)
   {
-    return {};
+
+    size_t length =
+        strnlen(sentences_ptr->payload.sentence[i], sizeof(sentences_ptr->payload.sentence[i]));
+
+    ssize_t send = sendto(file_descriptor, sentences_ptr->payload.sentence[i], length, MSG_DONTWAIT,
+                          reinterpret_cast<const sockaddr*>(addr), sizeof(*addr));
+
+    if (send < 0)
+    {
+      perror("send to udp port from consume_nmea_sentences");
+      break;
+    }
   }
-
-  std::string sentence = line.substr(pos + std::strlen(sourcePrefix));
-
-  while (!sentence.empty() &&
-         (sentence.back() == '\n' || sentence.back() == '\r' || sentence.back() == ' '))
-  {
-    sentence.pop_back();
-  }
-
-  if (sentence.empty() || sentence.front() != '&')
-  {
-    sentence = "";
-    return {};
-  }
-
-  return sentence;
 }
+//}}}
+
+void process_cobs_msg(int fd_udp_to_opencpn, sockaddr_in opencpn_addr,
+                      int fd_unix_socket_to_ap_display, sockaddr_un ap_display_addr,
+                      std::vector<uint8_t>* encoded_frame)
+//{{{
+{
+  std::vector<uint8_t> decoded_frame(encoded_frame->size());
+  cobs_decode_result dec_res = cobs_decode(decoded_frame.data(), decoded_frame.size(),
+                                           encoded_frame->data(), encoded_frame->size());
+  uint8_t* decoded_data = decoded_frame.data();
+
+  if (dec_res.status == COBS_DECODE_OK &&
+      dec_res.out_len >= MessageOffsets::payload)
+  {
+    MessageHeader header;
+    header.type = decoded_data[0];
+    header.payload_length =
+        static_cast<uint16_t>(decoded_data[1]) | (static_cast<uint16_t>(decoded_data[2]) << 8);
+
+    switch (header.type)
+    {
+    case static_cast<uint8_t>(PayloadType::NavigationSnapshot):
+      if (header.payload_length == NavigationPayloadOffsets::payload_length &&
+          dec_res.out_len >= MessageOffsets::payload + NavigationPayloadOffsets::payload_length)
+      {
+        Message<NavigationSnapshot> msg{};
+        msg = mp_read_NavigationMessage_from_buffer(decoded_data);
+        consume_nav_msg(fd_unix_socket_to_ap_display, &msg);
+        break;
+      }
+      break;
+
+    case static_cast<uint8_t>(PayloadType::NmeaSentences):
+      if (decoded_data[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] <= 20 &&
+          header.payload_length ==
+              NmeaPayloadOffsets::sentences +
+                  decoded_data[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] *
+                      sizeof(NmeaSentences::sentence[0]) &&
+          dec_res.out_len >= MessageOffsets::payload + NmeaPayloadOffsets::sentences +
+                                 (header.payload_length - NmeaPayloadOffsets::sentences))
+      {
+        Message<NmeaSentences> msg{};
+        msg = mp_read_NmeaMessage_from_buffer(decoded_data);
+        consume_nmea_msg(fd_udp_to_opencpn, &opencpn_addr, &msg);
+        break;
+      }
+      break;
+    };
+  }
+};
+//}}}
 
 int main(int argc, char** argv)
+//{{{
 {
-  if (argc < 2)
-  {
-    std::cerr << "Usage: " << argv[0] << " /dev/ttyUSB0 [udp_host] [udp_port]\n";
-    return 1;
-  }
-
-  const char* serialPath = argv[1];
+  // Setting Serial Path and UDP Variables from argv
+  const char* serialPath = argc >= 2 ? argv[1] : "/dev/ttyUSB0";
   const char* udpHost = argc >= 3 ? argv[2] : "127.0.0.1";
   int udpPort = argc >= 4 ? std::stoi(argv[3]) : 10110;
 
+  // Open and configure serial port
   int serialFd = openSerial(serialPath, B115200);
   if (serialFd < 0)
   {
     return 1;
   }
 
+  // Get UDP file descriptor
   int nmea_udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (nmea_udp_fd < 0)
   {
@@ -133,68 +163,70 @@ int main(int argc, char** argv)
     return 1;
   }
 
+  // Configure Adress of NMEA UDP Adress
   sockaddr_in nmea_udp_dest{};
   nmea_udp_dest.sin_family = AF_INET;
   nmea_udp_dest.sin_port = htons(udpPort);
   inet_pton(AF_INET, udpHost, &nmea_udp_dest.sin_addr);
 
-  int source_display_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
-  if (source_display_fd < 0)
+  // Get UNIX Socket file descriptor
+  int ap_display_unix_socket_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+  if (ap_display_unix_socket_fd < 0)
   {
     perror("source socket");
     return 1;
   }
-  sockaddr_un source_display_dest{};
-  source_display_dest.sun_family = AF_UNIX;
-  std::strncpy(source_display_dest.sun_path, "/tmp/autopilot.sock",
-               sizeof(source_display_dest.sun_path) - 1);
 
-  std::string line;
-  char c;
+  // Configure Adress of autopilotDisplay Socket
+  sockaddr_un ap_display_dest{};
+  ap_display_dest.sun_family = AF_UNIX;
+  std::strncpy(ap_display_dest.sun_path, "/tmp/autopilot.sock",
+               sizeof(ap_display_dest.sun_path) - 1);
 
+  // Buffer for received encoded UART Message
+  std::vector<uint8_t> msg_encoded;
+
+  printf("Reached while \n");
   while (true)
+
   {
-    ssize_t n = read(serialFd, &c, 1);
+    // Read serial Data into buffer
+    uint8_t read_buffer[256];
+    ssize_t n = read(serialFd, &read_buffer, sizeof(read_buffer));
     if (n <= 0)
     {
-      continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+      {
+        continue;
+      }
+      perror("read serial");
+      break;
     }
 
-    if (c == '\n')
+    // Parse Buffer for COBS Messages
+    for (int i = 0; i < n; ++i)
     {
-      std::cout << line << "\n";
+      const uint8_t byte = read_buffer[i];
 
-      std::string nmea = extractNmea(line);
-      std::string source = extractSource(line);
-      if (!nmea.empty())
+      if (byte == 0x00)
       {
-        nmea += "\r\n";
-        if (sendto(nmea_udp_fd, nmea.data(), nmea.size(), 0,
-                   reinterpret_cast<sockaddr*>(&nmea_udp_dest), sizeof(nmea_udp_dest)) < 0)
+        if (!msg_encoded.empty())
         {
-          perror("sendto nmea");
+          process_cobs_msg(nmea_udp_fd, nmea_udp_dest, ap_display_unix_socket_fd, ap_display_dest,
+                           &msg_encoded);
+          msg_encoded.clear();
         }
       }
-      else if (!source.empty())
+      else
       {
-        source += "\n";
-        if (sendto(source_display_fd, source.data(), source.size(), 0,
-                   reinterpret_cast<sockaddr*>(&source_display_dest),
-                   sizeof(source_display_dest)) < 0)
-        {
-          perror("sendto source display");
-        }
+        msg_encoded.push_back(byte);
       }
-
-      line.clear();
-    }
-    else if (c != '\r')
-    {
-      line.push_back(c);
     }
   }
 
+  // Free recources
   close(nmea_udp_fd);
-  close(source_display_fd);
+  close(ap_display_unix_socket_fd);
   close(serialFd);
 }
+//}}}

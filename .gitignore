@@ -25,9 +25,6 @@ compile_commands.json
 build.log 
 .logs/
 
-# Libraries
-lib/
-
 
 # Python venv (simulation analysis)
 sim/analysis/venv/
