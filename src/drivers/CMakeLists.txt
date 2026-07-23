@@ -14,6 +14,10 @@ add_library(pwmDriver STATIC
 	pwmDriver.cpp
 )
 
+add_library(uartDriver STATIC 
+	uartDriver.cpp
+)
+
 target_link_libraries(i2cDriver PRIVATE 
 	i2c_hwconfig
 )
@@ -25,6 +29,11 @@ target_link_libraries(gpsDriver PRIVATE
 	minmea
 	gps_hwconfig
 	queueServer
+)
+
+target_link_libraries(uartDriver PRIVATE
+	idf::esp_driver_uart
+	cobs
 )
 
 target_link_libraries(compassDriver PRIVATE 
@@ -50,6 +59,10 @@ target_include_directories(compassDriver PRIVATE
 )
 
 target_include_directories(pwmDriver PRIVATE 
+	"${PROJECT_ROOT}/include"
+)
+
+target_include_directories(uartDriver PRIVATE 
 	"${PROJECT_ROOT}/include"
 )
 

@@ -1,7 +1,7 @@
 #pragma once 
 #include <cstdint> 
 
-enum class SteeringDirection { portside, starbord };
+enum class SteeringDirection { NO_STEER, PORTSIDE, STARBOARD };
 
 struct SteeringIntent {
   SteeringDirection dir;

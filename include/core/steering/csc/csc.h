@@ -7,27 +7,29 @@
 #include "types/steeringTypes.h"
 #include <cstdint>
 #include <optional>
-struct CSCDebugSnapshot {
-  int16_t error = 0;
-  int16_t median = 0;
+struct CscLogValues
+{
+  int16_t hdg_error = 0;
+  int16_t hdg_median = 0;
   uint8_t sampleSize = 0;
   bool observationBlocked = false;
   bool intentBlocked = false;
 };
 
-class CoreSteeringController {
+class CoreSteeringController
+{
 public:
   // Contract:
   // Purpose: Decide if a steering impulse should be issued.
   // Inputs: current heading, internal target, regulation config slice.
   // Outputs/Side-effects: optional SteeringIntent; updates internal state.
-  explicit CoreSteeringController(const SteeringRegulationConfig &config);
+  explicit CoreSteeringController(const SteeringRegulationConfig& config);
 
   void currentHDG(uint16_t current);
   void setInternalTarget(uint16_t target);
   uint16_t getInternalTarget() const;
-  const CSCDebugSnapshot &getDebug() const;
-  std::optional<SteeringIntent> tick(uint32_t loopTimestamp);
+  const CscLogValues& getDebug() const;
+  SteeringIntent tick(uint32_t loopTimestamp);
 
 private:
   // --- Internal helpers ---
@@ -51,8 +53,8 @@ private:
   HeadingErrorCalculator m_errorCalculator;
   ObservationBuffer m_observationBuffer;
   SteeringGuard m_steeringGuard;
-  const SteeringRegulationConfig &m_config;
+  const SteeringRegulationConfig& m_config;
 
   // --- Debug ---
-  CSCDebugSnapshot m_debug;
+  CscLogValues m_log;
 };

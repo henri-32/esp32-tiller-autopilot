@@ -8,8 +8,7 @@ target_include_directories(Logger PRIVATE
 
 target_link_libraries(Logger PRIVATE 
 	idf::freertos
-	idf::esp_driver_uart
-	cobs
+	uartDriver
 )
 
 target_compile_options(Logger PRIVATE 

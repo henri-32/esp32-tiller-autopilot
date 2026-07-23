@@ -44,7 +44,7 @@ int openSerial(const char* path, speed_t baud)
   tty.c_cflag |= CS8;
 
   tty.c_cc[VMIN] = 0;
-  tty.c_cc[VTIME] = 10; // 1s timeout
+  tty.c_cc[VTIME] = 10; // Read timeout in deciseconds.
 
   if (tcsetattr(fd, TCSANOW, &tty) != 0)
   {
@@ -57,13 +57,25 @@ int openSerial(const char* path, speed_t baud)
 }
 //}}}
 
-void consume_nav_msg(int fd, Message<NavigationSnapshot>* msg)
+void consume_nav_msg(int fd, sockaddr_un* addr, Message<NavigationSnapshot>* msg)
 //{{{
 {
-  printf("SOG:%f \n", msg->payload.gps_sog_kts.value);
-  printf("SOG_valid: %d \n", msg->payload.gps_sog_kts.valid);
-  printf("COG:%d \n", msg->payload.gps_cog_dg.value);
-  printf("COG_valid:%d \n", msg->payload.gps_cog_dg.valid);
+  uint8_t raw_msg[sizeof(Message<NavigationSnapshot>)];
+  uint16_t size = mp_write_NavigationMessage_to_bytes(&raw_msg, msg);
+  uint8_t msg_encoded[size + size / 256 + 1];
+
+  cobs_encode_result encode_res = cobs_encode(&msg_encoded, sizeof(msg_encoded), raw_msg, size);
+
+  if (encode_res.status == COBS_ENCODE_OK)
+  {
+    int send = sendto(fd, msg_encoded, encode_res.out_len, MSG_DONTWAIT,
+                      reinterpret_cast<const sockaddr*>(addr), sizeof(*addr));
+
+    if (send < 0 && errno != ENOENT)
+    {
+      perror("send to unix socket from consume_nav_msg");
+    }
+  }
 };
 //}}}
 
@@ -98,8 +110,7 @@ void process_cobs_msg(int fd_udp_to_opencpn, sockaddr_in opencpn_addr,
                                            encoded_frame->data(), encoded_frame->size());
   uint8_t* decoded_data = decoded_frame.data();
 
-  if (dec_res.status == COBS_DECODE_OK &&
-      dec_res.out_len >= MessageOffsets::payload)
+  if (dec_res.status == COBS_DECODE_OK && dec_res.out_len >= MessageOffsets::payload)
   {
     MessageHeader header;
     header.type = decoded_data[0];
@@ -114,7 +125,7 @@ void process_cobs_msg(int fd_udp_to_opencpn, sockaddr_in opencpn_addr,
       {
         Message<NavigationSnapshot> msg{};
         msg = mp_read_NavigationMessage_from_buffer(decoded_data);
-        consume_nav_msg(fd_unix_socket_to_ap_display, &msg);
+        consume_nav_msg(fd_unix_socket_to_ap_display, &ap_display_addr, &msg);
         break;
       }
       break;
@@ -142,19 +153,19 @@ void process_cobs_msg(int fd_udp_to_opencpn, sockaddr_in opencpn_addr,
 int main(int argc, char** argv)
 //{{{
 {
-  // Setting Serial Path and UDP Variables from argv
+  // Read serial and UDP settings from command-line arguments.
   const char* serialPath = argc >= 2 ? argv[1] : "/dev/ttyUSB0";
   const char* udpHost = argc >= 3 ? argv[2] : "127.0.0.1";
   int udpPort = argc >= 4 ? std::stoi(argv[3]) : 10110;
 
-  // Open and configure serial port
+  // Open and configure the serial port.
   int serialFd = openSerial(serialPath, B115200);
   if (serialFd < 0)
   {
     return 1;
   }
 
-  // Get UDP file descriptor
+  // Create the NMEA UDP socket.
   int nmea_udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (nmea_udp_fd < 0)
   {
@@ -163,13 +174,13 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  // Configure Adress of NMEA UDP Adress
+  // Configure the NMEA UDP destination.
   sockaddr_in nmea_udp_dest{};
   nmea_udp_dest.sin_family = AF_INET;
   nmea_udp_dest.sin_port = htons(udpPort);
   inet_pton(AF_INET, udpHost, &nmea_udp_dest.sin_addr);
 
-  // Get UNIX Socket file descriptor
+  // Create the autopilot-display UNIX socket.
   int ap_display_unix_socket_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
   if (ap_display_unix_socket_fd < 0)
   {
@@ -177,20 +188,20 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  // Configure Adress of autopilotDisplay Socket
+  // Configure the autopilot-display socket destination.
   sockaddr_un ap_display_dest{};
   ap_display_dest.sun_family = AF_UNIX;
   std::strncpy(ap_display_dest.sun_path, "/tmp/autopilot.sock",
                sizeof(ap_display_dest.sun_path) - 1);
 
-  // Buffer for received encoded UART Message
+  // Accumulate encoded UART bytes until a frame delimiter arrives.
   std::vector<uint8_t> msg_encoded;
 
   printf("Reached while \n");
   while (true)
 
   {
-    // Read serial Data into buffer
+    // Read serial data into the receive buffer.
     uint8_t read_buffer[256];
     ssize_t n = read(serialFd, &read_buffer, sizeof(read_buffer));
     if (n <= 0)
@@ -203,7 +214,7 @@ int main(int argc, char** argv)
       break;
     }
 
-    // Parse Buffer for COBS Messages
+    // Split the stream into zero-delimited COBS frames.
     for (int i = 0; i < n; ++i)
     {
       const uint8_t byte = read_buffer[i];
@@ -224,7 +235,6 @@ int main(int argc, char** argv)
     }
   }
 
-  // Free recources
   close(nmea_udp_fd);
   close(ap_display_unix_socket_fd);
   close(serialFd);

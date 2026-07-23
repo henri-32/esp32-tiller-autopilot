@@ -187,7 +187,7 @@ inline Message<NmeaSentences> mp_read_NmeaMessage_from_buffer(void* decoded_nmea
 
 // Serializes a navigation snapshot into a wire frame and returns its total
 // size. Numeric payload fields are encoded in little-endian byte order.
-inline uint16_t mp_write_NavigationMessage_to_bytes(void* write_buffer, NavigationSnapshot snapshot)
+inline uint16_t mp_write_NavigationMessage_to_bytes(void* write_buffer, Message<NavigationSnapshot>* msg)
 //{{{
 {
   MessageHeader navigationHeader = {.type = static_cast<uint8_t>(PayloadType::NavigationSnapshot),
@@ -237,17 +237,17 @@ inline uint16_t mp_write_NavigationMessage_to_bytes(void* write_buffer, Navigati
   };
 
   write_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::compass_hdg_dg,
-                      snapshot.compass_hdg_dg);
+                      msg->payload.compass_hdg_dg);
   write_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::gps_cog_dg,
-                      snapshot.gps_cog_dg);
+                      msg->payload.gps_cog_dg);
   write_float_sample(MessageOffsets::payload + NavigationPayloadOffsets::gps_sog_kts,
-                     snapshot.gps_sog_kts);
+                     msg->payload.gps_sog_kts);
   write_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::wind_angle_dg,
-                      snapshot.wind_angle_dg);
+                      msg->payload.wind_angle_dg);
   write_float_sample(MessageOffsets::payload + NavigationPayloadOffsets::stw_kts,
-                     snapshot.stw_kts);
+                     msg->payload.stw_kts);
   navigation_message_frame[MessageOffsets::payload + NavigationPayloadOffsets::lead_source] =
-      static_cast<uint8_t>(snapshot.LeadSource);
+      static_cast<uint8_t>(msg->payload.LeadSource);
 
   return MessageOffsets::payload + NavigationPayloadOffsets::payload_length;
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "core/dataStore.h"
+#include "drivers/uartDriver.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "logging/message_protocol.h"
@@ -11,7 +12,7 @@ class Logger
 
 {
 public:
-  Logger(QueueServer* const qServer) : qServer_(qServer)
+  Logger(QueueServer* const qServer, UartDriver* const uartDriver) : qServer_(qServer), uartDriver_(uartDriver)
   //{{{
   {
     void* contextMem = pvPortMalloc(sizeof(task_context));
@@ -41,6 +42,7 @@ public:
 private:
   void write_delimiter();
   QueueServer* const qServer_;
+  UartDriver* const uartDriver_;
   task_context* context_;
   QueueHandle_t src_msg_handle_;
   QueueHandle_t nmea_handle_;

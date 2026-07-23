@@ -1,3 +1,5 @@
+#include "cobs-c/cobs.h"
+#include "logging/message_protocol.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Window.H>
@@ -10,6 +12,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+using std::string;
+
 struct fltk_handle
 {
   Fl_Window* window;
@@ -20,62 +24,6 @@ struct fltk_handle
   Fl_Box* position_box;
   Fl_Box* position_valid_box;
 };
-
-std::string extract_field(const std::string& buffer, const std::string& prefix)
-{
-  const size_t prefix_pos = buffer.find(prefix);
-  if (prefix_pos == std::string::npos)
-    return " ";
-
-  const size_t value_pos = prefix_pos + prefix.size();
-  const size_t value_end = buffer.find(' ', value_pos);
-  return buffer.substr(value_pos, value_end == std::string::npos ? std::string::npos
-                                                                   : value_end - value_pos);
-}
-
-std::string strip_sog(const std::string& buffer) { return extract_field(buffer, "&GPS -SOG:"); }
-std::string strip_cog(const std::string& buffer) { return extract_field(buffer, "&GPS -COG:"); }
-std::string validity_label(const std::string& value)
-{
-  if (value == "0") return "INVALID";
-  if (value == "1") return "VALID";
-  return value;
-}
-
-std::string check_sog_valid(const std::string& buffer)
-{
-  return extract_field(buffer, "&GPS -SOG:") == " " ? " " : validity_label(extract_field(buffer, "-valid:"));
-}
-
-std::string check_cog_valid(const std::string& buffer)
-{
-  return extract_field(buffer, "&GPS -COG:") == " " ? " " : validity_label(extract_field(buffer, "-valid:"));
-}
-
-void update_box(Fl_Box* box, std::string& last, const std::string& value, const std::string& label)
-{
-  if (value == " " || value == "nan" || value == last)
-    return;
-  last = value;
-  box->copy_label((label + value).c_str());
-  box->redraw();
-}
-
-void update_sog_box(const std::string& value, fltk_handle handle) { static std::string last; update_box(handle.sog_box, last, value, "SOG: "); }
-void update_cog_box(const std::string& value, fltk_handle handle) { static std::string last; update_box(handle.cog_box, last, value, "COG: "); }
-void update_sog_valid_box(const std::string& value, fltk_handle handle) { static std::string last; update_box(handle.sog_valid_box, last, value, "SOG valid: "); }
-void update_cog_valid_box(const std::string& value, fltk_handle handle) { static std::string last; update_box(handle.cog_valid_box, last, value, "COG valid: "); }
-void update_position_valid_box(const std::string& value, fltk_handle handle) { static std::string last; update_box(handle.position_valid_box, last, value, "Position valid: "); }
-
-void update_position_box(const std::string& buffer, fltk_handle handle)
-{
-  static std::string last;
-  const std::string lat = extract_field(buffer, "&GPS -LAT:");
-  const std::string lon = extract_field(buffer, "&GPS -LON:");
-  if (lat == " " || lon == " ") return;
-  const std::string value = "LAT/LON: " + lat + " / " + lon;
-  if (value != last) { last = value; handle.position_box->copy_label(value.c_str()); handle.position_box->redraw(); }
-}
 
 Fl_Box* make_box(int x, int y, int w, int h)
 {
@@ -94,39 +42,136 @@ fltk_handle fltk_setup()
   constexpr int gap = 10;
   constexpr int width = 280;
   constexpr int height = 60;
-  auto box = [&](int col, int row) { return make_box(margin + col * (width + gap), margin + row * (height + gap), width, height); };
+  auto box = [&](int col, int row)
+  { return make_box(margin + col * (width + gap), margin + row * (height + gap), width, height); };
 
-  auto* sog = box(0, 0); auto* cog = box(1, 0); auto* position = box(2, 0);
-  auto* sog_valid = box(0, 1); auto* cog_valid = box(1, 1); auto* position_valid = box(2, 1);
+  auto* sog = box(0, 0);
+  auto* cog = box(1, 0);
+  auto* position = box(2, 0);
+  auto* sog_valid = box(0, 1);
+  auto* cog_valid = box(1, 1);
+  auto* position_valid = box(2, 1);
   window->end();
   window->show();
-  return {.window = window, .sog_box = sog, .cog_box = cog, .sog_valid_box = sog_valid,
-          .cog_valid_box = cog_valid, .position_box = position,
+  return {.window = window,
+          .sog_box = sog,
+          .cog_box = cog,
+          .sog_valid_box = sog_valid,
+          .cog_valid_box = cog_valid,
+          .position_box = position,
           .position_valid_box = position_valid};
+}
+
+void process_NavigationMessage(void* data, uint16_t size, fltk_handle handle)
+{
+  std::vector<uint8_t> buf_dec(size);
+
+  cobs_decode_result dec_res = cobs_decode(buf_dec.data(), buf_dec.size(), data, size);
+
+  if (dec_res.status == COBS_DECODE_OK)
+  {
+    Message<NavigationSnapshot> msg = mp_read_NavigationMessage_from_buffer(buf_dec.data());
+    const auto sog = msg.payload.gps_sog_kts;
+    const auto cog = msg.payload.gps_cog_dg;
+    const auto hdg = msg.payload.compass_hdg_dg;
+
+    char text[64];
+
+    if (sog.valid)
+    {
+      std::snprintf(text, sizeof(text), "SOG: %.1f kts", sog.value);
+    }
+    else
+    {
+      std::snprintf(text, sizeof(text), "SOG: invalid");
+    }
+    handle.sog_box->copy_label(text);
+    handle.sog_box->redraw();
+
+    if (cog.valid)
+    {
+      std::snprintf(text, sizeof(text), "COG: %d deg", cog.value);
+    }
+    else
+    {
+      std::snprintf(text, sizeof(text), "COG: invalid");
+    }
+
+    handle.cog_box->copy_label(text);
+    handle.cog_box->redraw();
+
+    if (hdg.valid)
+    {
+      std::snprintf(text, sizeof(text), "HDG: %d deg", hdg.value);
+    }
+    else
+    {
+      std::snprintf(text, sizeof(text), "HDG : invalid");
+    }
+  }
+}
+
+void process_datagram(void* data, uint16_t size, fltk_handle handle)
+{
+  uint8_t type;
+
+  if (size >= 2 && static_cast<uint8_t*>(data)[0] > 1)
+  {
+    uint8_t type = static_cast<uint8_t*>(data)[1];
+    switch (type)
+    {
+
+    case static_cast<uint8_t>(PayloadType::NavigationSnapshot):
+    {
+      process_NavigationMessage(data, size, handle);
+    }
+    break;
+    }
+  }
 }
 
 int main()
 {
   const char* socket_path = "/tmp/autopilot.sock";
   unlink(socket_path);
-  const int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
-  if (fd < 0) { std::perror("socket"); return 1; }
-  sockaddr_un local_addr{}; local_addr.sun_family = AF_UNIX;
-  std::strncpy(local_addr.sun_path, socket_path, sizeof(local_addr.sun_path) - 1);
-  if (bind(fd, reinterpret_cast<sockaddr*>(&local_addr), sizeof(local_addr)) < 0)
-  { std::perror("bind"); close(fd); return 1; }
 
-  fltk_handle handle = fltk_setup(); char buffer[1024];
+  const int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+  if (fd < 0)
+  {
+    std::perror("socket");
+    return 1;
+  }
+  sockaddr_un local_addr{};
+  local_addr.sun_family = AF_UNIX;
+
+  std::strncpy(local_addr.sun_path, socket_path, sizeof(local_addr.sun_path) - 1);
+
+  if (bind(fd, reinterpret_cast<sockaddr*>(&local_addr), sizeof(local_addr)) < 0)
+  {
+    std::perror("bind");
+    close(fd);
+    return 1;
+  }
+
+  fltk_handle handle = fltk_setup();
+
   while (handle.window->shown())
   {
+    char buffer[2048];
     Fl::wait(0.01);
-    const ssize_t received = recvfrom(fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT, nullptr, nullptr);
-    if (received < 0) { if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue; break; }
-    buffer[received] = '\0'; const std::string data(buffer);
-    update_sog_box(strip_sog(data), handle); update_cog_box(strip_cog(data), handle);
-    update_sog_valid_box(check_sog_valid(data), handle); update_cog_valid_box(check_cog_valid(data), handle);
-    update_position_box(data, handle);
-    update_position_valid_box(check_sog_valid(data), handle);
+
+    const ssize_t received =
+        recvfrom(fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT, nullptr, nullptr);
+    if (received < 0)
+    {
+      if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+        continue;
+      break;
+    }
+
+    process_datagram(buffer, received, handle);
   }
-  close(fd); unlink(socket_path);
+
+  close(fd);
+  unlink(socket_path);
 }

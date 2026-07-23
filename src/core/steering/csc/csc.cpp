@@ -1,6 +1,5 @@
 ﻿#include "core/steering/csc/csc.h"
 
-
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"
@@ -8,57 +7,62 @@
 #include <cmath>
 #include <cstdint>
 
-CoreSteeringController::CoreSteeringController(const SteeringRegulationConfig &config)
-    : m_observationBuffer(config),m_steeringGuard(config),
-      m_config(config) {}
+CoreSteeringController::CoreSteeringController(const SteeringRegulationConfig& config)
+    : m_observationBuffer(config), m_steeringGuard(config), m_config(config)
+{
+}
 
-void CoreSteeringController::currentHDG(uint16_t current) {
+void CoreSteeringController::currentHDG(uint16_t current)
+{
   m_currentCourse = current;
 }
 
-void CoreSteeringController::setInternalTarget(uint16_t target) {
+void CoreSteeringController::setInternalTarget(uint16_t target)
+{
   m_internalTargetCourse = target;
 };
 
-uint16_t CoreSteeringController::getInternalTarget() const {
+uint16_t CoreSteeringController::getInternalTarget() const
+{
   return m_internalTargetCourse;
 };
 
-const CSCDebugSnapshot &CoreSteeringController::getDebug() const {
-  return m_debug;
+const CscLogValues& CoreSteeringController::getDebug() const
+{
+  return m_log;
 }
 
-std::optional<SteeringIntent>
-CoreSteeringController::tick(uint32_t loopTimestamp) {
+SteeringIntent CoreSteeringController::tick(uint32_t loopTimestamp)
+{
   // Debug flags are per-tick state, not latched state.
-  m_debug.observationBlocked = false;
-  m_debug.intentBlocked = false;
+  m_log.observationBlocked = false;
+  m_log.intentBlocked = false;
 
   /*CSC macht zwei Sachen
   - Beobachten
   - Intent zurückgeben
 
   Wenn er wegen Guards nicht beobachten darf early return*/
-  if (m_steeringGuard.observationBlocked(m_lastObsUpdate, m_lastIntent,
-                                         loopTimestamp)) {
-    m_debug.observationBlocked = true;
-    return std::nullopt;
+  if (m_steeringGuard.observationBlocked(m_lastObsUpdate, m_lastIntent, loopTimestamp))
+  {
+    m_log.observationBlocked = true;
+    return SteeringIntent::NO_STEER;
   }
 
-  int16_t error =
-      m_errorCalculator.calculateError(m_currentCourse, m_internalTargetCourse);
-  m_debug.error = error;
+  int16_t error = m_errorCalculator.calculateError(m_currentCourse, m_internalTargetCourse);
+  m_log.hdg_error = error;
 
   // Beim Fehler von 0 wird der Buffer zurückgesetzt, um schnelleres Reagieren
   // bei Richtungswechseln zu ermöglichen, dadurch dass der Median um null
   // weniger robust wird. Die steeringTolerance ermöglicht Oszillationen um 0
   // als no action zu behandeln, während große Fehler schneller signifikant
   // werden
-  // Harte Resets bei 0 haben meine counter Intents verhindert. Deswegen Reaktion auf sign flip im Bereich nahe 0 
-  const bool insideNoActionBand =
-      std::abs(error) <= m_config.steeringTolerance_deg;
-  const bool signFlip = ((error<0 && m_lastError >0) || (error > 0 && m_lastError < 0)); 
-  if (insideNoActionBand && signFlip) {
+  // Harte Resets bei 0 haben meine counter Intents verhindert. Deswegen Reaktion auf sign flip im
+  // Bereich nahe 0
+  const bool insideNoActionBand = std::abs(error) <= m_config.steeringTolerance_deg;
+  const bool signFlip = ((error < 0 && m_lastError > 0) || (error > 0 && m_lastError < 0));
+  if (insideNoActionBand && signFlip)
+  {
     m_observationBuffer.reset();
   }
 
@@ -71,30 +75,33 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   const uint8_t sampleSize = m_observationBuffer.getSampleSize();
   const float omega = m_observationBuffer.getOmega(loopTimestamp);
 
-  m_debug.median = median;
-  m_debug.sampleSize = sampleSize;
+  m_log.hdg_median = median;
+  m_log.sampleSize = sampleSize;
 
   /*Counter Intent steuert kurz vor Erreichen des Targets gegen.
   Siehe Doku iterations/3. counterImpulse
   Absichtlich außerhalb der regulären Intent-Guards, weil eigene counterGuards
-  Vor den regulären Intents, damit der counter nicht von deren Guards abgehalten
+  vor den regulären Intents, damit der counter nicht von deren Guards abgehalten
   wird*/
-  if (counterIntentNecessary(median, sampleSize, omega, loopTimestamp)) {
-    auto counter = counterIntent(omega);
+  if (counterIntentNecessary(median, sampleSize, omega, loopTimestamp))
+  {
+    auto counter_steer = counterIntent(omega);
     m_lastCounterIntent = loopTimestamp;
     m_lastIntent = loopTimestamp;
-    m_lastIntentValue = counter;
+    m_lastIntentValue = counter_steer;
     m_observationBuffer.reset();
-    return counter;
+    return counter_steer;
   }
 
   /*steering Guards.*/
-  if (m_steeringGuard.intentBlocked(m_lastIntent, median, sampleSize, omega,
-                                    loopTimestamp)) {
-    m_debug.intentBlocked = true;
+  if (m_steeringGuard.intentBlocked(m_lastIntent, median, sampleSize, omega, loopTimestamp))
+  {
+    m_log.intentBlocked = true;
 
-    return std::nullopt;
-  } else {
+    return SteeringIntent::NO_STEER;
+  }
+  else
+  {
 
     auto intent = calculateIntentFromObs();
     m_lastIntent = loopTimestamp;
@@ -104,7 +111,8 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
     m_observationBuffer.reset();
 
     /*Für Counter Intent wichtig*/
-    if (intent.has_value()) {
+    if (intent.has_value())
+    {
       m_lastIntentValue = intent;
     }
 
@@ -115,17 +123,21 @@ CoreSteeringController::tick(uint32_t loopTimestamp) {
   }
 }
 
-SteeringDirection
-CoreSteeringController::determineDirection(int16_t median) const {
-  if (median < 0) {
+SteeringDirection CoreSteeringController::determineDirection(int16_t median) const
+{
+  if (median < 0)
+  {
     return SteeringDirection::Left;
-  } else if (median > 0) {
+  }
+  else if (median > 0)
+  {
     return SteeringDirection::Right;
   };
   return SteeringDirection::Left;
 }
 
-std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
+std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs()
+{
 
   /* Der Median wird als robuster Mittelwert für die Entscheidung
   Action/NoAction und Richtungsentscheidung genutzt. Ein leicht geglätteter
@@ -144,7 +156,8 @@ std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
   int16_t currentError = m_observationBuffer.getSmoothedCurrentError();
 
   if (currentError < -m_config.smoothedMeanApplicationWindow_deg ||
-      currentError > m_config.smoothedMeanApplicationWindow_deg) {
+      currentError > m_config.smoothedMeanApplicationWindow_deg)
+  {
     return intent;
   };
 
@@ -155,55 +168,66 @@ std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs() {
 
   /*Wenn die obere (positive) Grenze des Windows 100% abstract Impulse bedeutet,
   wird so in linearem Verhältnis auf die Fehlergröße reagiert*/
-  float errorPercantage = static_cast<float>(currentError) /
-                          m_config.smoothedMeanApplicationWindow_deg;
+  float errorPercantage =
+      static_cast<float>(currentError) / m_config.smoothedMeanApplicationWindow_deg;
   intent.abstractImpulse_0_100 *= errorPercantage;
 
   return intent;
 };
 
-bool CoreSteeringController::counterIntentNecessary(int16_t median,
-                                                    uint8_t sampleSize,
-                                                    float omega,
-                                                    uint32_t loopTimestamp) {
+bool CoreSteeringController::counterIntentNecessary(int16_t median, uint8_t sampleSize, float omega,
+                                                    uint32_t loopTimestamp)
+{
   // nullopt kann aufgrund fehlender Richtung nicht Basis sein
-  if (!m_lastIntentValue.has_value()) {
+  if (!m_lastIntentValue.has_value())
+  {
     return false;
   }
 
   // FlipFlop Guard (nach FlipFlops in Sims) Bewusst auf reguläre Intents
   // bezogen
   if (loopTimestamp - m_lastIntent < m_config.counterTimerGuard_ms &&
-      m_lastIntentValue->dir != determineDirection(median)) {
+      m_lastIntentValue->dir != determineDirection(median))
+  {
     return false;
   }
   // Cooldown auf letzte counters bezogen
-  if (loopTimestamp - m_lastCounterIntent < m_config.counterCooldown_ms) {
+  if (loopTimestamp - m_lastCounterIntent < m_config.counterCooldown_ms)
+  {
     return false;
   }
 
   // Qualität von Omega
   if (sampleSize < m_config.counterOmegaMinSampleSize ||
-      std::abs(omega) < m_config.omegaThresholdForCounter) {
+      std::abs(omega) < m_config.omegaThresholdForCounter)
+  {
     return false;
   }
 
-  const int16_t absError = std::abs(m_debug.error);
+  const int16_t absError = std::abs(m_log.hdg_error);
   const bool nearTarget = absError <= m_config.counterNearTargetWindow_deg;
 
-  if (median < 0 && omega < 0 && nearTarget) {
+  if (median < 0 && omega < 0 && nearTarget)
+  {
     return true;
-  } else if (median > 0 && omega > 0 && nearTarget) {
+  }
+  else if (median > 0 && omega > 0 && nearTarget)
+  {
     return true;
-  } else
+  }
+  else
     return false;
 };
 
-SteeringIntent CoreSteeringController::counterIntent(float omega) {
+SteeringIntent CoreSteeringController::counterIntent(float omega)
+{
   SteeringIntent intent;
-  if (m_lastIntentValue->dir == SteeringDirection::Left) {
+  if (m_lastIntentValue->dir == SteeringDirection::Left)
+  {
     intent.dir = SteeringDirection::Right;
-  } else if (m_lastIntentValue->dir == SteeringDirection::Right) {
+  }
+  else if (m_lastIntentValue->dir == SteeringDirection::Right)
+  {
     intent.dir = SteeringDirection::Left;
   }
 

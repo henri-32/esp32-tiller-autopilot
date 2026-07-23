@@ -3,6 +3,7 @@
 #include "driver/uart.h"
 #include "drivers/gpsDriver.h"
 #include "drivers/i2c_driver.h"
+#include "drivers/uartDriver.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "logging/logger.h"
@@ -30,17 +31,21 @@ int run_hardwaretest()
   static QueueServer qServer;
   static GpsDriver driver{&qServer};
   static DataStore store{&qServer};
-  static Logger logger{&qServer};
+  static UartDriver uartDriver{};
+  static Logger logger{&qServer, &uartDriver};
 
   BaseType_t qs = qServer.init();
 
   esp_err_t di;
+  esp_err_t ui;
   BaseType_t li;
   BaseType_t si;
 
   if (qs == pdPASS)
   {
+
     di = driver.init();
+	ui = uartDriver.init();
     si = store.init();
 
     li = logger.init();
