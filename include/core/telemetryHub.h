@@ -6,7 +6,7 @@
 #include "types/systemServiceTypes.h"
 #include <new>
 
-struct DataStored
+struct TelemetrySnapshot
 {
   SensorSample<uint16_t> gps_cog{.value = 0};
   SensorSample<float> gps_sog{.value = 0.0F};
@@ -14,27 +14,27 @@ struct DataStored
   float gps_lon = 0.0F; 
 };
 
-struct ErrorStored
+struct TelemetryError
 {
   bool validFix = false;
 };
 
-struct PerformanceStored
+struct TelemetryPerformance
 {
   uint16_t gpsFreeStack = 0;
-  uint16_t dataStoreFreeStack = 0;
+  uint16_t telemetryHubFreeStack = 0;
 };
 
-struct SourceLogMessage
+struct TelemetryLogMessage
 {
-  DataStored data;
-  PerformanceStored performance;
+  TelemetrySnapshot snapshot;
+  TelemetryPerformance performance;
 };
 
-class DataStore
+class TelemetryHub
 {
 public:
-  DataStore(const QueueServer* const qServer)
+  TelemetryHub(const QueueServer* const qServer)
   {
     qServer_ = qServer;
 
@@ -45,7 +45,7 @@ public:
     }
   };
 
-  ~DataStore()
+  ~TelemetryHub()
   {
     if (context_ != nullptr)
     {
@@ -54,16 +54,16 @@ public:
   };
 
   BaseType_t init();
-  void readQueues();
-  void sendQueues();
-  void sendOwnFreeStack();
+  void collectTelemetry();
+  void publishTelemetry();
+  void updateOwnFreeStack();
 
 private:
   task_context* context_;
   const QueueServer* qServer_;
   QueueBundle_t gps_bundle_;
-  QueueHandle_t source_log_queue_;
-  DataStored dataStored_;
-  ErrorStored errorStored_;
-  PerformanceStored performanceStored_;
+  QueueHandle_t telemetry_log_queue_;
+  TelemetrySnapshot telemetrySnapshot_;
+  TelemetryError telemetryError_;
+  TelemetryPerformance telemetryPerformance_;
 };

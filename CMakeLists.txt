@@ -65,3 +65,12 @@ if (BUILD_PWM_HARDWARETEST)
 	idf_build_executable(hardwaretest-pwm.elf)
 
 endif()
+
+option(BUILD_FIRMARE "Buildpath for production firmware" OFF)
+if (BUILD_FIRMWARE)
+	add_executable(firmware 
+		src/main/main.cpp 
+	)
+	add_subdirectory(src/main)
+	idf_build_executable(firmware)
+endif()

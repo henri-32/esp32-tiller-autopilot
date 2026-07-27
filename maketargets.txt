@@ -3,6 +3,9 @@
 For every following component (*): 
 
 - hardwaretest-compass 
+- hardwaretest-gps 
+- hardwaretest-pwm 
+- firmware
 
 are the following variants of make targets provided: 
 

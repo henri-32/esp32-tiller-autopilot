@@ -13,10 +13,10 @@ targets:
 size: 
 	@$(SOURCE) && xtensa-esp32-elf-size $(ELF)
 
-.PHONY :logRouter
+.PHONY :autopilotGateway
 
-logRouter: 
-	@cd logRouter && cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && cmake --build build \
+autopilotGateway:
+	@cd autopilotGateway && cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && cmake --build build \
 	&& cp build/compile_commands.json ../compile_commands.json 
 
 configure_hardwaretest-compass: 
@@ -69,3 +69,15 @@ monitor_hardwaretest-pwm:
 	tee >(sed -u $$'s/\x1b\\[[0-9;]*m//g' > .logs/lastMonitor.log)
 	
 	
+configure_firmware: 
+	@$(SOURCE) && cmake --preset firmware | tee .logs/lastBuild.log
+	@cp build/firmware/compile_commands.json compile commands.json 
+
+build_firmware: 
+	@mkdir -p .ogs
+	@$(SOURCE) && cmake --build --preset firmware -j8 | tee .logs/lastBuild.log
+	@cp build/firmware/compile_commands.json compile_commands.json 
+
+flash_firmware: 
+	@$(SOURCE) && cmake --build --preset firmware --target flash -j8 | tee .logs/lastBuild.log
+	@cp build/firmware/compile_commands.json compile commands.json 

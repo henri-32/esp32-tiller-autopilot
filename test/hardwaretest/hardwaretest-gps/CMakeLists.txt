@@ -10,7 +10,7 @@ target_link_libraries(hardwaretest-gps.elf PRIVATE
 	idf::esp_timer
 
 	gpsDriver
- 	DataStore
+	TelemetryHub
 	Logger
 	inputHandler
 	hardwaretest_runner

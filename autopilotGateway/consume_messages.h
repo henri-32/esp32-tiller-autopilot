@@ -1,6 +1,6 @@
 #pragma once
 
-#include "logging/message_protocol.h"
+#include "protocol/autopilotWireProtocol.h"
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/un.h>

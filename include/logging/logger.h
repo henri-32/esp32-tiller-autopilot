@@ -1,8 +1,8 @@
 #pragma once
-#include "core/dataStore.h"
+#include "core/telemetryHub.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "logging/message_protocol.h"
+#include "protocol/autopilotWireProtocol.h"
 #include "types/loggingTypes.h"
 #include "types/systemServiceTypes.h"
 #include <new>
@@ -45,10 +45,10 @@ private:
   QueueServer* const qServer_;
   UartDriver* const uartDriver_;
   task_context* context_;
-  QueueHandle_t src_msg_handle_;
+  QueueHandle_t telemetry_log_handle_;
   QueueHandle_t nmea_handle_;
-  SourceLogMessage src_msg_{};
+  TelemetryLogMessage telemetry_log_message_{};
   NmeaSentences nmea_sentences_{};
-  bool src_msg_recieved_ = false;
+  bool telemetry_log_message_received_ = false;
   bool log_to_esp_usb_flag = true;
 };

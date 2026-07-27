@@ -1,8 +1,8 @@
 #include "logging/logger.h"
 #include "drivers/uartDriver.h"
-#include "logging/message_protocol.h"
+#include "protocol/autopilotWireProtocol.h"
 
-void vLogSourceAndPerformanceTask(void* pvParameters)
+void vTelemetryLoggingTask(void* pvParameters)
 {
   task_context* context = static_cast<task_context*>(pvParameters);
   Logger* logger = reinterpret_cast<Logger*>(context->THIS);
@@ -22,7 +22,7 @@ void vLogSourceAndPerformanceTask(void* pvParameters)
 BaseType_t Logger::init()
 //{{{
 {
-  src_msg_handle_ = qServer_->get_source_log_handle();
+  telemetry_log_handle_ = qServer_->get_telemetry_log_handle();
   nmea_handle_ = qServer_->get_nmea_handle();
 
   context_->THIS = this;
@@ -30,7 +30,7 @@ BaseType_t Logger::init()
   BaseType_t task;
   if (context_ != nullptr)
   {
-    task = xTaskCreate(vLogSourceAndPerformanceTask, "Logging", 10000, context_, 1, nullptr);
+    task = xTaskCreate(vTelemetryLoggingTask, "Logging", 10000, context_, 1, nullptr);
   }
 
   if (task == pdTRUE)
@@ -47,10 +47,10 @@ BaseType_t Logger::init()
 void Logger::readQueues()
 //{{{
 {
-  BaseType_t nmea_msg = xQueuePeek(src_msg_handle_, &src_msg_, 0);
-  if (nmea_msg == pdTRUE)
+  BaseType_t telemetry_message = xQueuePeek(telemetry_log_handle_, &telemetry_log_message_, 0);
+  if (telemetry_message == pdTRUE)
   {
-    src_msg_recieved_ = true;
+    telemetry_log_message_received_ = true;
   }
 
   nmea_sentences_.sentence_count = 0;
@@ -72,10 +72,10 @@ void Logger::log()
   // Log Navigation Snapshot
   // ===========================================================================
   NavigationSnapshot snapshot;
-  snapshot.gps_cog_dg.value = src_msg_.data.gps_cog.value;
-  snapshot.gps_cog_dg.valid = src_msg_.data.gps_cog.valid;
-  snapshot.gps_sog_kts.value = src_msg_.data.gps_sog.value;
-  snapshot.gps_sog_kts.valid = src_msg_.data.gps_sog.valid;
+  snapshot.gps_cog_dg.value = telemetry_log_message_.snapshot.gps_cog.value;
+  snapshot.gps_cog_dg.valid = telemetry_log_message_.snapshot.gps_cog.valid;
+  snapshot.gps_sog_kts.value = telemetry_log_message_.snapshot.gps_sog.value;
+  snapshot.gps_sog_kts.valid = telemetry_log_message_.snapshot.gps_sog.valid;
 
   Message<NavigationSnapshot> nav_msg{&snapshot};
   uint8_t nav_msg_bytes[MessageOffsets::payload + NavigationPayloadOffsets::payload_length];
@@ -94,4 +94,3 @@ void Logger::log()
 
   uartDriver_->write(UartInterface::USB_INTERFACE, nmea_msg_bytes, size);
 };
-

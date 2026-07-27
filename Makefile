@@ -24,7 +24,7 @@ compiledb_test:
 .PHONY: clean 
 clean: 
 	@rm -rf build 
-	@cd logRouter && rm -rf build
+	@cd autopilotGateway && rm -rf build
 	@echo 'removed all build artefacts (Libs excluded. To remove lib artefacts run "make clean_lib"'
 
 .PHONY: clean_test 
@@ -36,4 +36,3 @@ clean_test:
 clean_lib:
 	@rm -rf build_lib 
 	@echo 'removed library object files'
-

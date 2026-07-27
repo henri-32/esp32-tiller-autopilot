@@ -1,6 +1,6 @@
 #include "consume_messages.h"
 #include "cobs-c/cobs.h"
-#include "logging/message_protocol.h"
+#include "protocol/autopilotWireProtocol.h"
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -49,4 +49,3 @@ void consume_nmea_msg(int fd_opencpn, sockaddr_in* opencpn_addr, Message<NmeaSen
   }
 }
 //}}}
-

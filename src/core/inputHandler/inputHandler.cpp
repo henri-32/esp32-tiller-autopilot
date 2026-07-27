@@ -1,9 +1,9 @@
-#include "core/inputHandler/inputHandler.h"
+#include "core/inputHandler.h"
 #include "cobs-c/cobs.h"
 #include "drivers/uartDriver.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "logging/message_protocol.h"
+#include "protocol/autopilotWireProtocol.h"
 
 static struct Context
 {
@@ -62,7 +62,7 @@ void vInputHandlerTask(void* pvParameters)
         continue;
       }
 
-     if (decoded_len < sizeof(Message<InputHandleData>))
+      if (decoded_len < MessageOffsets::payload + InputHandlePayloadOffsets::payload_length)
       {
         continue;
       }

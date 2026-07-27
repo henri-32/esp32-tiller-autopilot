@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15) 
-project(nativeDisplay LANGUAGES C CXX)
+project(navigationMonitor LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17) 
 set(CMAKE_CXX_STANDARD_REQUIRED ON) 
@@ -10,18 +10,17 @@ add_subdirectory(
 	${CMAKE_BINARY_DIR}/fltk-build
 )
 
-add_executable(nativeDisplay 
-	nativeDisplay.cpp
+add_executable(navigationMonitor 
+	navigationMonitor.cpp
 	../lib/cobs-c/cobs.c
 )
 
 
-target_link_libraries(nativeDisplay PRIVATE
+target_link_libraries(navigationMonitor PRIVATE
 	fltk::fltk
 )
 
-target_include_directories(nativeDisplay PRIVATE 
+target_include_directories(navigationMonitor PRIVATE 
 	"${CMAKE_CURRENT_SOURCE_DIR}/../include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../lib"
 )
-

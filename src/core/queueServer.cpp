@@ -1,5 +1,5 @@
 #include "core/queueServer.h"
-#include "core/dataStore.h"
+#include "core/telemetryHub.h"
 #include "types/inputHandleTypes.h"
 #include "types/loggingTypes.h"
 #include "types/sensorTypes.h"
@@ -13,12 +13,12 @@ BaseType_t QueueServer::init()
   gpsErrorQueue_ = xQueueCreate(1, sizeof(uint16_t));
   gpsNMEAQueue_ = xQueueCreate(NmeaConfig::queue_depth, NmeaConfig::max_sentence_len);
 
-  sourceLogMessageQueue_ = xQueueCreate(1, sizeof(SourceLogMessage));
+  telemetryLogMessageQueue_ = xQueueCreate(1, sizeof(TelemetryLogMessage));
 
   inputDataQueue_ = xQueueCreate(5, sizeof(InputHandleData));
 
   if (gpsDataQueue_ != nullptr && gpsPerformanceQueue_ != nullptr && gpsErrorQueue_ != nullptr &&
-      gpsNMEAQueue_ != nullptr && sourceLogMessageQueue_ != nullptr)
+      gpsNMEAQueue_ != nullptr && telemetryLogMessageQueue_ != nullptr)
   {
     return pdPASS;
   }
@@ -42,9 +42,9 @@ QueueHandle_t QueueServer::get_nmea_handle() const
   return gpsNMEAQueue_;
 };
 
-QueueHandle_t QueueServer::get_source_log_handle() const
+QueueHandle_t QueueServer::get_telemetry_log_handle() const
 {
-  return sourceLogMessageQueue_;
+  return telemetryLogMessageQueue_;
 };
 
 QueueBundle_t QueueServer::get_input_handle() const

@@ -1,4 +1,4 @@
-#include "core/dataStore.h"
+#include "core/telemetryHub.h"
 #include "core/inputHandler/inputHandler.h"
 #include "core/queueServer.h"
 #include "driver/uart.h"
@@ -31,7 +31,7 @@ int run_hardwaretest()
 {
   static QueueServer qServer;
   static GpsDriver gpsDriver{&qServer};
-  static DataStore store{&qServer};
+  static TelemetryHub telemetryHub{&qServer};
   static UartDriver uartDriver{};
   static Logger logger{&qServer, &uartDriver};
   static InputHandler inputHandler{&qServer, &uartDriver};
@@ -48,7 +48,7 @@ int run_hardwaretest()
 
     di = gpsDriver.init();
 	ui = uartDriver.init();
-    si = store.init();
+    si = telemetryHub.init();
 
     li = logger.init();
   }

@@ -11,7 +11,7 @@
 
 #include "cobs-c/cobs.h"
 #include "consume_messages.h"
-#include "logging/message_protocol.h"
+#include "protocol/autopilotWireProtocol.h"
 
 int openSerial(const char* path, speed_t baud)
 //{{{
@@ -56,59 +56,47 @@ int openSerial(const char* path, speed_t baud)
 //}}}
 
 /**
- * Receives a Message<InputData> from the display program and forwards it
- * to the autopilot over the serial port.
+ * Receives a serialized Message<InputHandleData> from the control panel and
+ * forwards it as a COBS-framed message to the autopilot over the serial port.
  *
- * @param [in] fd_display
- *     File descriptor of the Unix-domain socket used by the displayProgram.
- *
- * @param [out] display_addr
- *     Address structure that receives the sender's Unix-domain socket address.
- *
- * @param [in,out] display_len
- *     On input, the available size of display_addr in bytes.
- *     On output, the actual size of the received sender address.
+ * @param [in] fd_gateway
+ *     File descriptor of the Unix-domain socket bound by this gateway.
  *
  * @param [in] serial_fd
  *     File descriptor of the serial port connected to the autopilot.
  */
 
-void forward_inputData_to_ap(int fd_display, sockaddr_un display_addr, socklen_t display_len,
-                             int fd_serial)
+void forward_inputData_to_ap(int fd_gateway, int fd_serial)
 //{{{
 {
+  uint8_t msg_buffer[MessageOffsets::payload + InputHandlePayloadOffsets::payload_length];
+  const int received = recv(fd_gateway, msg_buffer, sizeof(msg_buffer), MSG_DONTWAIT);
 
-/* Recieve InputData from displayProgram */
-  Message<InputHandleData> msg{};
-  int receive = recvfrom(fd_display, &msg, sizeof(Message<InputHandleData>), O_NONBLOCK,
-                         reinterpret_cast<sockaddr*>(&display_addr), &display_len);
-
-  if (receive <= 0)
+  if (received <= 0)
   {
     return;
   }
 
-/*Write raw byte buffer from structured InputData */
-  uint8_t msg_buffer[sizeof(msg)];
-  int size = mp_write_InputHandleMessage_to_bytes(msg_buffer, sizeof(msg_buffer), &msg);
-  if (size != sizeof(Message<InputHandleData>))
+  Message<InputHandleData> msg =
+      mp_read_InputHandleMessage_from_buffer(msg_buffer, static_cast<uint16_t>(received));
+  if (msg.header.type != static_cast<uint8_t>(PayloadType::InputHandleData))
   {
     return;
   }
 
-/*COBS encode Message */
-  uint8_t encoded_buffer[COBS_ENCODE_DST_BUF_LEN_MAX(sizeof(msg_buffer))];
+  uint8_t encoded_buffer[COBS_ENCODE_DST_BUF_LEN_MAX(sizeof(msg_buffer)) + 1];
   cobs_encode_result enc_res =
-      cobs_encode(&encoded_buffer, sizeof(encoded_buffer), msg_buffer, sizeof(msg_buffer));
+      cobs_encode(encoded_buffer, sizeof(encoded_buffer), msg_buffer, static_cast<size_t>(received));
   if (enc_res.status != COBS_ENCODE_OK)
   {
     return;
   }
 
-/*Send COBS Message over serial port */
-  if (send(fd_serial, encoded_buffer, enc_res.out_len, 0) <= 0)
+  encoded_buffer[enc_res.out_len] = 0x00;
+  if (write(fd_serial, encoded_buffer, enc_res.out_len + 1) !=
+      static_cast<ssize_t>(enc_res.out_len + 1))
   {
-    perror("send Input to serial");
+    perror("write input to serial");
   }
 };
 //}}}
@@ -208,7 +196,7 @@ int main(int argc, char** argv)
   nmea_udp_dest.sin_port = htons(udpPort);
   inet_pton(AF_INET, udpHost, &nmea_udp_dest.sin_addr);
 
-  // Create the autopilot-display UNIX socket.
+  // Create the UNIX socket used for both display output and UI input.
   int ap_display_unix_socket_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
   if (ap_display_unix_socket_fd < 0)
   {
@@ -216,11 +204,26 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  // Configure the autopilot-display socket destination.
-  sockaddr_un ap_display_dest{};
-  ap_display_dest.sun_family = AF_UNIX;
-  std::strncpy(ap_display_dest.sun_path, "/tmp/autopilot.sock",
-               sizeof(ap_display_dest.sun_path) - 1);
+  // Bind a dedicated local address for UI input.
+  constexpr const char* gateway_socket_path = "/tmp/autopilot-gateway.sock";
+  unlink(gateway_socket_path);
+  sockaddr_un gateway_addr{};
+  gateway_addr.sun_family = AF_UNIX;
+  std::strncpy(gateway_addr.sun_path, gateway_socket_path, sizeof(gateway_addr.sun_path) - 1);
+  if (bind(ap_display_unix_socket_fd, reinterpret_cast<sockaddr*>(&gateway_addr),
+           sizeof(gateway_addr)) < 0)
+  {
+    perror("bind gateway socket");
+    close(ap_display_unix_socket_fd);
+    close(nmea_udp_fd);
+    close(serialFd);
+    return 1;
+  }
+
+  // Configure the display destination for navigation snapshots.
+  sockaddr_un display_addr{};
+  display_addr.sun_family = AF_UNIX;
+  std::strncpy(display_addr.sun_path, "/tmp/autopilot.sock", sizeof(display_addr.sun_path) - 1);
 
   std::vector<uint8_t> msg_encoded;
   std::vector<uint8_t> msg_decoded;
@@ -229,8 +232,7 @@ int main(int argc, char** argv)
   while (true)
 
   {
-    forward_inputData_to_ap(ap_display_unix_socket_fd, ap_display_dest, sizeof(ap_display_dest),
-                            serialFd);
+    forward_inputData_to_ap(ap_display_unix_socket_fd, serialFd);
 
     // Read serial data into the receive buffer.
     uint8_t read_buffer[256];
@@ -272,7 +274,7 @@ int main(int argc, char** argv)
         continue;
       }
 
-      route_mp_msg(nmea_udp_fd, nmea_udp_dest, ap_display_unix_socket_fd, ap_display_dest,
+      route_mp_msg(nmea_udp_fd, nmea_udp_dest, ap_display_unix_socket_fd, display_addr,
                    msg_decoded.data(), dec_res.out_len);
 
       msg_encoded.clear();
@@ -281,6 +283,7 @@ int main(int argc, char** argv)
   }
   close(nmea_udp_fd);
   close(ap_display_unix_socket_fd);
+  unlink(gateway_socket_path);
   close(serialFd);
 }
 //}}}

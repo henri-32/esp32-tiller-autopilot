@@ -24,7 +24,7 @@ struct NmeaSentences
   char sentence[20][128]{};
 };
 //}}}
-// Payload types supported by the logging message protocol.
+// Payload types supported by the autopilot wire protocol.
 enum class PayloadType : uint8_t
 {
   NmeaSentences = 1,
@@ -450,23 +450,30 @@ inline uint16_t mp_write_InputHandleMessage_to_bytes(void* dest_buffer, uint16_t
                                                      Message<InputHandleData>* msg)
 //{{{
 {
-  MessageHeader inputHandleHeader = {.type = static_cast<uint8_t>(PayloadType::InputHandleData),
-                                     .payload_length = InputHandlePayloadOffsets::payload_length};
+  constexpr uint16_t message_size =
+      MessageOffsets::payload + InputHandlePayloadOffsets::payload_length;
+  if (buffer_size < message_size)
+  {
+    return 0;
+  }
 
   uint8_t* inputHandle_message_frame = static_cast<uint8_t*>(dest_buffer);
-  inputHandle_message_frame[MessageOffsets::type] = msg->header.type;
+  inputHandle_message_frame[MessageOffsets::type] =
+      static_cast<uint8_t>(PayloadType::InputHandleData);
   inputHandle_message_frame[MessageOffsets::payload_length_little_endian] =
-      msg->header.payload_length;
-  inputHandle_message_frame[MessageOffsets::payload_length_big_endian] = msg->header.payload_length
-                                                                         << 8;
+      static_cast<uint8_t>(InputHandlePayloadOffsets::payload_length);
+  inputHandle_message_frame[MessageOffsets::payload_length_big_endian] = 0;
 
-  inputHandle_message_frame[InputHandlePayloadOffsets::engage] = msg->payload.engage;
-  inputHandle_message_frame[InputHandlePayloadOffsets::target_course_little_endian] =
+  inputHandle_message_frame[MessageOffsets::payload + InputHandlePayloadOffsets::engage] =
+      msg->payload.engage;
+  inputHandle_message_frame[MessageOffsets::payload +
+                            InputHandlePayloadOffsets::target_course_little_endian] =
       msg->payload.target_course;
-  inputHandle_message_frame[InputHandlePayloadOffsets::target_course_big_endian] =
-      msg->payload.target_course << 8;
+  inputHandle_message_frame[MessageOffsets::payload +
+                            InputHandlePayloadOffsets::target_course_big_endian] =
+      static_cast<uint8_t>(msg->payload.target_course >> 8);
 
-  return MessageOffsets::payload + InputHandlePayloadOffsets::payload_length;
+  return message_size;
 };
 //}}}
 
@@ -495,19 +502,21 @@ inline Message<InputHandleData> mp_read_InputHandleMessage_from_buffer(void* buf
 
   uint16_t payload_length =
       (static_cast<uint16_t>(frame[MessageOffsets::payload_length_little_endian]) |
-       static_cast<uint16_t>(frame[MessageOffsets::payload_length_little_endian]));
+       (static_cast<uint16_t>(frame[MessageOffsets::payload_length_big_endian]) << 8));
 
   if (frame[MessageOffsets::type] != static_cast<uint8_t>(PayloadType::InputHandleData) ||
-      payload_length < sizeof(InputHandleData))
+      payload_length != InputHandlePayloadOffsets::payload_length)
   {
     return {};
   }
 
   InputHandleData data{};
-  data.engage = frame[InputHandlePayloadOffsets::engage];
+  data.engage = frame[MessageOffsets::payload + InputHandlePayloadOffsets::engage];
   data.target_course =
-      (static_cast<uint16_t>(frame[InputHandlePayloadOffsets::target_course_little_endian]) |
-       static_cast<uint16_t>(frame[InputHandlePayloadOffsets::target_course_big_endian]));
+      (static_cast<uint16_t>(frame[MessageOffsets::payload +
+                                  InputHandlePayloadOffsets::target_course_little_endian]) |
+       (static_cast<uint16_t>(frame[MessageOffsets::payload +
+                                   InputHandlePayloadOffsets::target_course_big_endian]) << 8));
 
   return {&data};
 };

@@ -3,7 +3,6 @@
 #include "core/queueServer.h"
 #include "esp_err.h"
 #include "types/systemServiceTypes.h"
-#include "utils/debug_utils.h"
 #include "types/sensorTypes.h"
 #include <new>
 

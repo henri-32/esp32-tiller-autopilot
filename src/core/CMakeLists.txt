@@ -2,8 +2,8 @@ add_library(queueServer STATIC
 	queueServer.cpp
 )
 
-add_library (DataStore STATIC 
-	dataStore.cpp
+add_library (TelemetryHub STATIC
+	telemetryHub.cpp
 )
 add_library(inputHandler STATIC 
 	inputHandler/inputHandler.cpp
@@ -13,7 +13,7 @@ target_link_libraries(queueServer PRIVATE
 	idf::freertos
 )
 
-target_link_libraries(DataStore PRIVATE 
+target_link_libraries(TelemetryHub PRIVATE
 	idf::freertos
 )
 
@@ -26,7 +26,7 @@ target_include_directories(queueServer PRIVATE
 	"${PROJECT_ROOT}/include"
 )
 
-target_include_directories(DataStore PRIVATE 
+target_include_directories(TelemetryHub PRIVATE
 	"${PROJECT_ROOT}/include"
 )
 
@@ -35,7 +35,7 @@ target_include_directories(inputHandler PRIVATE
 	"${PROJECT_ROOT}/platform"
 )
 
-target_compile_options(DataStore PRIVATE 
+target_compile_options(TelemetryHub PRIVATE
 	-fstack-usage
 )
 

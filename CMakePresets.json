@@ -39,6 +39,17 @@
 		"BUILD_PWM_HARDWARETEST": "ON",
 		"MEM_LOG": "ON"
 	  }
+	},
+	{
+	  "name": "firmware", 
+	  "displayName": "firmware", 
+	  "generator": "Ninja", 
+	  "binaryDir": "${sourceDir}/build/firmware", 
+	  "cacheVariables": {
+		"CMAKE_BUILD_TYPE": "Production", 
+		"CMAKE_EXPORT_COMPILE_COMMANDS": "ON", 
+		"BUILD_FIRMWARE": "ON"
+	  }
 	}
   ], 
 
@@ -67,6 +78,14 @@
 	  "targets": [
 		    "hardwaretest-pwm.elf"
 	  ]
+	},
+	{
+	  "name": "firmware", 
+	  "displayName": "firmware", 
+		"configurePreset": "firmware", 
+		"targets": [
+			"firmware"
+		]
 	}
   ]
 }

@@ -22,13 +22,16 @@ target_link_libraries(i2cDriver PRIVATE
 	i2c_hwconfig
 )
 
-target_link_libraries(gpsDriver PRIVATE
-	idf::esp_driver_uart 
-	idf::freertos
-	idf::esp_timer
-	minmea
-	gps_hwconfig
-	queueServer
+target_link_libraries(gpsDriver 
+	PRIVATE
+		idf::esp_driver_uart 
+		idf::freertos
+		idf::esp_timer
+		minmea
+		queueServer
+
+	PUBLIC
+		gps_hwconfig
 )
 
 target_link_libraries(uartDriver 

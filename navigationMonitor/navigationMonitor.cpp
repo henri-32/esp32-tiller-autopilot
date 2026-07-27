@@ -1,5 +1,5 @@
 #include "cobs-c/cobs.h"
-#include "logging/message_protocol.h"
+#include "protocol/autopilotWireProtocol.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Window.H>
@@ -15,7 +15,7 @@
 using std::string;
 
 /*TODO
-Globale inputDaten überprüfen. aktuell müssten die lokalen Daten verändert werden und an logRouter
+Globale inputDaten überprüfen. aktuell müssten die lokalen Daten verändert werden und an autopilotGateway
 geschrieben werden. Der müsste zukünftig an esp (rdwr muss noch gesetzt werden) senden, da in
 systemcontroller und wieder raus den ganzen weg zurück, damit das interne target angezeigt wird,
 nicht das was ich hier setze.
@@ -171,8 +171,19 @@ int keyboard_handler(int event)
 void send_ap_input(const int fd, sockaddr_un* addr, socklen_t len, InputHandleData* data,
                    fltk_handle* handle)
 {
-  sendto(fd, data, sizeof(InputHandleData), MSG_DONTWAIT, reinterpret_cast<const sockaddr*>(addr),
-         len);
+  Message<InputHandleData> msg{data};
+  uint8_t msg_buffer[MessageOffsets::payload + InputHandlePayloadOffsets::payload_length];
+  const uint16_t msg_size = mp_write_InputHandleMessage_to_bytes(msg_buffer, sizeof(msg_buffer), &msg);
+  if (msg_size == 0)
+  {
+    return;
+  }
+
+  if (sendto(fd, msg_buffer, msg_size, MSG_DONTWAIT, reinterpret_cast<const sockaddr*>(addr), len) < 0)
+  {
+    std::perror("send input to gateway");
+    return;
+  }
   char text[100];
   std::snprintf(text, sizeof(text), "TARGET: %d deg \n", data->target_course);
   handle->target_cog_box->copy_label(text);
@@ -182,8 +193,9 @@ void send_ap_input(const int fd, sockaddr_un* addr, socklen_t len, InputHandleDa
 
 int main()
 {
-  const char* socket_path = "/tmp/autopilot.sock";
-  unlink(socket_path);
+  const char* display_socket_path = "/tmp/autopilot.sock";
+  const char* gateway_socket_path = "/tmp/autopilot-gateway.sock";
+  unlink(display_socket_path);
 
   const int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
   if (fd < 0)
@@ -194,7 +206,7 @@ int main()
   sockaddr_un local_addr{};
   local_addr.sun_family = AF_UNIX;
 
-  std::strncpy(local_addr.sun_path, socket_path, sizeof(local_addr.sun_path) - 1);
+  std::strncpy(local_addr.sun_path, display_socket_path, sizeof(local_addr.sun_path) - 1);
 
   if (bind(fd, reinterpret_cast<sockaddr*>(&local_addr), sizeof(local_addr)) < 0)
   {
@@ -205,6 +217,10 @@ int main()
 
   fltk_handle handle = fltk_setup();
   Fl::add_handler(keyboard_handler);
+
+  sockaddr_un gateway_addr{};
+  gateway_addr.sun_family = AF_UNIX;
+  std::strncpy(gateway_addr.sun_path, gateway_socket_path, sizeof(gateway_addr.sun_path) - 1);
 
   char buffer[2048];
 
@@ -221,9 +237,9 @@ int main()
       break;
     }
     process_datagram(buffer, received, handle);
-    send_ap_input(fd, &local_addr, sizeof(local_addr), &ihData, &handle);
+    send_ap_input(fd, &gateway_addr, sizeof(gateway_addr), &ihData, &handle);
   }
 
   close(fd);
-  unlink(socket_path);
+  unlink(display_socket_path);
 }
