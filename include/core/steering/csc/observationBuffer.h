@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/config.h"
+#include "config/config.h"
 #include <array>
 #include <cstdint>
 

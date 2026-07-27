@@ -7,8 +7,8 @@
 #include <cmath>
 #include <cstdint>
 
-CoreSteeringController::CoreSteeringController(const SteeringRegulationConfig& config)
-    : m_observationBuffer(config), m_steeringGuard(config), m_config(config)
+CoreSteeringController::CoreSteeringController(QueueServer* qServer)
+    : m_observationBuffer(m_config), m_steeringGuard(m_config)
 {
 }
 
@@ -46,7 +46,7 @@ SteeringIntent CoreSteeringController::tick(uint32_t loopTimestamp)
   if (m_steeringGuard.observationBlocked(m_lastObsUpdate, m_lastIntent, loopTimestamp))
   {
     m_log.observationBlocked = true;
-    return SteeringIntent::NO_STEER;
+    return {.dir = SteeringDirection::NO_STEER};
   }
 
   int16_t error = m_errorCalculator.calculateError(m_currentCourse, m_internalTargetCourse);
@@ -98,7 +98,7 @@ SteeringIntent CoreSteeringController::tick(uint32_t loopTimestamp)
   {
     m_log.intentBlocked = true;
 
-    return SteeringIntent::NO_STEER;
+    return{.dir = SteeringDirection::NO_STEER};
   }
   else
   {
@@ -111,7 +111,7 @@ SteeringIntent CoreSteeringController::tick(uint32_t loopTimestamp)
     m_observationBuffer.reset();
 
     /*Für Counter Intent wichtig*/
-    if (intent.has_value())
+    if (intent.dir != SteeringDirection::NO_STEER)
     {
       m_lastIntentValue = intent;
     }
@@ -127,16 +127,16 @@ SteeringDirection CoreSteeringController::determineDirection(int16_t median) con
 {
   if (median < 0)
   {
-    return SteeringDirection::Left;
+    return SteeringDirection::PORTSIDE;
   }
   else if (median > 0)
   {
-    return SteeringDirection::Right;
+    return SteeringDirection::STARBOARD;
   };
-  return SteeringDirection::Left;
+  return SteeringDirection::PORTSIDE;
 }
 
-std::optional<SteeringIntent> CoreSteeringController::calculateIntentFromObs()
+SteeringIntent CoreSteeringController::calculateIntentFromObs()
 {
 
   /* Der Median wird als robuster Mittelwert für die Entscheidung
@@ -222,13 +222,13 @@ bool CoreSteeringController::counterIntentNecessary(int16_t median, uint8_t samp
 SteeringIntent CoreSteeringController::counterIntent(float omega)
 {
   SteeringIntent intent;
-  if (m_lastIntentValue->dir == SteeringDirection::Left)
+  if (m_lastIntentValue->dir == SteeringDirection::PORTSIDE)
   {
-    intent.dir = SteeringDirection::Right;
+    intent.dir = SteeringDirection::STARBOARD;
   }
-  else if (m_lastIntentValue->dir == SteeringDirection::Right)
+  else if (m_lastIntentValue->dir == SteeringDirection::STARBOARD)
   {
-    intent.dir = SteeringDirection::Left;
+    intent.dir = SteeringDirection::PORTSIDE;
   }
 
   /*TODO Der abstract Impulse sollte auf die ersten realen Testergebnisse

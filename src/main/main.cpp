@@ -1,6 +1,7 @@
 #include "core/queueServer.h"
 #include "core/telemetryHub.h"
 #include "core/inputHandler.h"
+#include "core/steering/csc/csc.h"
 #include "drivers/gpsDriver.h"
 #include "drivers/uartDriver.h"
 #include "freertos/FreeRTOS.h"
@@ -18,6 +19,8 @@ extern "C" void app_main()
 
   static Logger logger{&qServer, &uartDriver};
   static InputHandler inputHandler{&qServer, &uartDriver};
+
+  static CoreSteeringController csc{&qServer};
 
   vTaskDelete(nullptr);
 }

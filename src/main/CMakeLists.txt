@@ -9,6 +9,7 @@ target_link_libraries(firmware PRIVATE
 	TelemetryHub
 	Logger
 	inputHandler
+	csc
 )
 
 
