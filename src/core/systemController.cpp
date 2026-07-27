@@ -10,7 +10,7 @@ SystemController::SystemController()
 {
 }
 
-void operator(uint32_t loopTimestamp)
+void SystemController::tick(uint32_t loopTimestamp)
 {
     // 1. Überblick übers System
     const auto nav_snapshot = m_navigationSensors.createSnapshot();
@@ -37,6 +37,7 @@ void operator(uint32_t loopTimestamp)
     // 4. Diagnostics
     // Gerade noch getrennt, weil tick wahrscheinlich mehr machen wird als den
     // snapshot
+    //
     m_diagnostics.tick(loopTimestamp);
     const auto diagnostics_snapshot = m_diagnostics.snapshot();
 

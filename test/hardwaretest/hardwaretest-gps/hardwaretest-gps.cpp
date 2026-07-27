@@ -1,4 +1,5 @@
 #include "core/dataStore.h"
+#include "core/inputHandler/inputHandler.h"
 #include "core/queueServer.h"
 #include "driver/uart.h"
 #include "drivers/gpsDriver.h"
@@ -29,10 +30,11 @@ void vPrintGpsTask(void* pvParameters)
 int run_hardwaretest()
 {
   static QueueServer qServer;
-  static GpsDriver driver{&qServer};
+  static GpsDriver gpsDriver{&qServer};
   static DataStore store{&qServer};
   static UartDriver uartDriver{};
   static Logger logger{&qServer, &uartDriver};
+  static InputHandler inputHandler{&qServer, &uartDriver};
 
   BaseType_t qs = qServer.init();
 
@@ -44,7 +46,7 @@ int run_hardwaretest()
   if (qs == pdPASS)
   {
 
-    di = driver.init();
+    di = gpsDriver.init();
 	ui = uartDriver.init();
     si = store.init();
 
@@ -53,7 +55,7 @@ int run_hardwaretest()
 
   BaseType_t tc;
 
-  if (driver.context_ != nullptr)
+  if (gpsDriver.context_ != nullptr)
   {
      //tc = xTaskCreate(vPrintGpsTask, "", 10000, driver.context_, 1, nullptr);
   }

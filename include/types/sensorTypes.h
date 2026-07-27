@@ -1,6 +1,5 @@
 #pragma once
 #include "cstdint"
-#include "types/controllerTypes.h"
 
 template <typename T> struct SensorSample
 {

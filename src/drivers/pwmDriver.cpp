@@ -14,14 +14,14 @@ void PwmDriver::command(const PWMIntent& cmd)
   uint8_t mapIntentToDuty =
       static_cast<uint8_t>((cmd.filteredAbstractImpulse_0_100 * 255) / 100);
 
-  if (cmd.dir == SteeringDirection::portside && starbordDuty_ == 0)
+  if (cmd.dir == SteeringDirection::PORTSIDE && starbordDuty_ == 0)
   {
     portsideDuty_ = mapIntentToDuty;
     ledc_set_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(portsideChannel_),
                   mapIntentToDuty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(portsideChannel_));
   }
-  else if (cmd.dir == SteeringDirection::starbord && portsideDuty_ == 0)
+  else if (cmd.dir == SteeringDirection::STARBOARD && portsideDuty_ == 0)
   {
     starbordDuty_ = mapIntentToDuty;
     ledc_set_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(starbordChannel_),
@@ -42,7 +42,6 @@ void PwmDriver::command(const PWMIntent& cmd)
   // consumed and the dutys should be zero. In the future it might be a constant steering over a
   // continous updata of the duty cycle. In this case the pwm controller only steers the current
   // command
-
   ledc_set_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(portsideChannel_), 0);
   ledc_set_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(starbordChannel_), 0);
   ledc_update_duty(LEDC_LOW_SPEED_MODE, static_cast<ledc_channel_t>(portsideChannel_));

@@ -31,9 +31,12 @@ target_link_libraries(gpsDriver PRIVATE
 	queueServer
 )
 
-target_link_libraries(uartDriver PRIVATE
-	idf::esp_driver_uart
-	cobs
+target_link_libraries(uartDriver 
+	PRIVATE
+	  idf::esp_driver_uart
+	  cobs
+	PUBLIC 
+	  idf::esp_common
 )
 
 target_link_libraries(compassDriver PRIVATE 

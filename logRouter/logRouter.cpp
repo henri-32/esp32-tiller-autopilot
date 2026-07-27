@@ -10,15 +10,13 @@
 #include <string>
 
 #include "cobs-c/cobs.h"
+#include "consume_messages.h"
 #include "logging/message_protocol.h"
-
-static constexpr const char* nmeaPrefix = "@NMEA ";
-static constexpr const char* sourcePrefix = "@SOURCE ";
 
 int openSerial(const char* path, speed_t baud)
 //{{{
 {
-  int fd = open(path, O_RDONLY | O_NOCTTY | O_NONBLOCK);
+  int fd = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK);
   if (fd < 0)
   {
     perror("open serial");
@@ -57,95 +55,125 @@ int openSerial(const char* path, speed_t baud)
 }
 //}}}
 
-void consume_nav_msg(int fd, sockaddr_un* addr, Message<NavigationSnapshot>* msg)
+/**
+ * Receives a Message<InputData> from the display program and forwards it
+ * to the autopilot over the serial port.
+ *
+ * @param [in] fd_display
+ *     File descriptor of the Unix-domain socket used by the displayProgram.
+ *
+ * @param [out] display_addr
+ *     Address structure that receives the sender's Unix-domain socket address.
+ *
+ * @param [in,out] display_len
+ *     On input, the available size of display_addr in bytes.
+ *     On output, the actual size of the received sender address.
+ *
+ * @param [in] serial_fd
+ *     File descriptor of the serial port connected to the autopilot.
+ */
+
+void forward_inputData_to_ap(int fd_display, sockaddr_un display_addr, socklen_t display_len,
+                             int fd_serial)
 //{{{
 {
-  uint8_t raw_msg[sizeof(Message<NavigationSnapshot>)];
-  uint16_t size = mp_write_NavigationMessage_to_bytes(&raw_msg, msg);
-  uint8_t msg_encoded[size + size / 256 + 1];
 
-  cobs_encode_result encode_res = cobs_encode(&msg_encoded, sizeof(msg_encoded), raw_msg, size);
+/* Recieve InputData from displayProgram */
+  Message<InputHandleData> msg{};
+  int receive = recvfrom(fd_display, &msg, sizeof(Message<InputHandleData>), O_NONBLOCK,
+                         reinterpret_cast<sockaddr*>(&display_addr), &display_len);
 
-  if (encode_res.status == COBS_ENCODE_OK)
+  if (receive <= 0)
   {
-    int send = sendto(fd, msg_encoded, encode_res.out_len, MSG_DONTWAIT,
-                      reinterpret_cast<const sockaddr*>(addr), sizeof(*addr));
+    return;
+  }
 
-    if (send < 0 && errno != ENOENT)
-    {
-      perror("send to unix socket from consume_nav_msg");
-    }
+/*Write raw byte buffer from structured InputData */
+  uint8_t msg_buffer[sizeof(msg)];
+  int size = mp_write_InputHandleMessage_to_bytes(msg_buffer, sizeof(msg_buffer), &msg);
+  if (size != sizeof(Message<InputHandleData>))
+  {
+    return;
+  }
+
+/*COBS encode Message */
+  uint8_t encoded_buffer[COBS_ENCODE_DST_BUF_LEN_MAX(sizeof(msg_buffer))];
+  cobs_encode_result enc_res =
+      cobs_encode(&encoded_buffer, sizeof(encoded_buffer), msg_buffer, sizeof(msg_buffer));
+  if (enc_res.status != COBS_ENCODE_OK)
+  {
+    return;
+  }
+
+/*Send COBS Message over serial port */
+  if (send(fd_serial, encoded_buffer, enc_res.out_len, 0) <= 0)
+  {
+    perror("send Input to serial");
   }
 };
 //}}}
 
-void consume_nmea_msg(int file_descriptor, sockaddr_in* addr, Message<NmeaSentences>* sentences_ptr)
+/**
+ * Routes the message protocol Message towards different files/programs depending
+ * on the message type
+ *
+ * @param [in] fd_opencpn
+ * 		File descriptor of the UDP socket used by opencpn
+ *
+ * @param [in] opencpn_addr
+ * 		Adress of the UDP socket used by opencpn
+ *
+ * @param [in] fd_display
+ * 		File descriptor of the Unix-domain socket used by the displayProgram
+ *
+ * @param [in] display_addr
+ * 		Adress of the Unix-domain socket used by the displayProgram
+ *
+ * @param [in] msg_buf
+ * 		Ptr to the buffer where the message is stored
+ *
+ * @param [in] msg_len
+ *		Length of the msg
+ */
+void route_mp_msg(int fd_opencpn, sockaddr_in opencpn_addr, int fd_display,
+                  sockaddr_un display_addr, uint8_t* msg_buf, int msg_len)
 //{{{
+#include <netinet/in.h>
 {
-  for (int i = 0; i < sentences_ptr->payload.sentence_count; ++i)
+
+  MessageHeader header;
+  header.type = msg_buf[0];
+  header.payload_length =
+      static_cast<uint16_t>(msg_buf[1]) | (static_cast<uint16_t>(msg_buf[2]) << 8);
+
+  switch (header.type)
   {
-
-    size_t length =
-        strnlen(sentences_ptr->payload.sentence[i], sizeof(sentences_ptr->payload.sentence[i]));
-
-    ssize_t send = sendto(file_descriptor, sentences_ptr->payload.sentence[i], length, MSG_DONTWAIT,
-                          reinterpret_cast<const sockaddr*>(addr), sizeof(*addr));
-
-    if (send < 0)
+  case static_cast<uint8_t>(PayloadType::NavigationSnapshot):
+    if (header.payload_length == NavigationPayloadOffsets::payload_length &&
+        msg_len >= MessageOffsets::payload + NavigationPayloadOffsets::payload_length)
     {
-      perror("send to udp port from consume_nmea_sentences");
+      Message<NavigationSnapshot> msg{};
+      msg = mp_read_NavigationMessage_from_buffer(msg_buf, msg_len);
+      consume_nav_msg(fd_display, &display_addr, &msg);
       break;
     }
-  }
-}
-//}}}
 
-void process_cobs_msg(int fd_udp_to_opencpn, sockaddr_in opencpn_addr,
-                      int fd_unix_socket_to_ap_display, sockaddr_un ap_display_addr,
-                      std::vector<uint8_t>* encoded_frame)
-//{{{
-{
-  std::vector<uint8_t> decoded_frame(encoded_frame->size());
-  cobs_decode_result dec_res = cobs_decode(decoded_frame.data(), decoded_frame.size(),
-                                           encoded_frame->data(), encoded_frame->size());
-  uint8_t* decoded_data = decoded_frame.data();
-
-  if (dec_res.status == COBS_DECODE_OK && dec_res.out_len >= MessageOffsets::payload)
-  {
-    MessageHeader header;
-    header.type = decoded_data[0];
-    header.payload_length =
-        static_cast<uint16_t>(decoded_data[1]) | (static_cast<uint16_t>(decoded_data[2]) << 8);
-
-    switch (header.type)
+  case static_cast<uint8_t>(PayloadType::NmeaSentences):
+    if (msg_len >= MessageOffsets::payload + NmeaPayloadOffsets::sentences &&
+        msg_buf[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] <= 20 &&
+        header.payload_length ==
+            NmeaPayloadOffsets::sentences +
+                msg_buf[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] *
+                    sizeof(NmeaSentences::sentence[0]) &&
+        msg_len >= MessageOffsets::payload + NmeaPayloadOffsets::sentences +
+                       (header.payload_length - NmeaPayloadOffsets::sentences))
     {
-    case static_cast<uint8_t>(PayloadType::NavigationSnapshot):
-      if (header.payload_length == NavigationPayloadOffsets::payload_length &&
-          dec_res.out_len >= MessageOffsets::payload + NavigationPayloadOffsets::payload_length)
-      {
-        Message<NavigationSnapshot> msg{};
-        msg = mp_read_NavigationMessage_from_buffer(decoded_data);
-        consume_nav_msg(fd_unix_socket_to_ap_display, &ap_display_addr, &msg);
-        break;
-      }
+      Message<NmeaSentences> msg{};
+      msg = mp_read_NmeaMessage_from_buffer(msg_buf, msg_len);
+      consume_nmea_msg(fd_opencpn, &opencpn_addr, &msg);
       break;
-
-    case static_cast<uint8_t>(PayloadType::NmeaSentences):
-      if (decoded_data[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] <= 20 &&
-          header.payload_length ==
-              NmeaPayloadOffsets::sentences +
-                  decoded_data[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] *
-                      sizeof(NmeaSentences::sentence[0]) &&
-          dec_res.out_len >= MessageOffsets::payload + NmeaPayloadOffsets::sentences +
-                                 (header.payload_length - NmeaPayloadOffsets::sentences))
-      {
-        Message<NmeaSentences> msg{};
-        msg = mp_read_NmeaMessage_from_buffer(decoded_data);
-        consume_nmea_msg(fd_udp_to_opencpn, &opencpn_addr, &msg);
-        break;
-      }
-      break;
-    };
+    }
+    break;
   }
 };
 //}}}
@@ -194,13 +222,16 @@ int main(int argc, char** argv)
   std::strncpy(ap_display_dest.sun_path, "/tmp/autopilot.sock",
                sizeof(ap_display_dest.sun_path) - 1);
 
-  // Accumulate encoded UART bytes until a frame delimiter arrives.
   std::vector<uint8_t> msg_encoded;
+  std::vector<uint8_t> msg_decoded;
 
-  printf("Reached while \n");
+  //===================================================================================================================================================
   while (true)
 
   {
+    forward_inputData_to_ap(ap_display_unix_socket_fd, ap_display_dest, sizeof(ap_display_dest),
+                            serialFd);
+
     // Read serial data into the receive buffer.
     uint8_t read_buffer[256];
     ssize_t n = read(serialFd, &read_buffer, sizeof(read_buffer));
@@ -219,22 +250,35 @@ int main(int argc, char** argv)
     {
       const uint8_t byte = read_buffer[i];
 
-      if (byte == 0x00)
-      {
-        if (!msg_encoded.empty())
-        {
-          process_cobs_msg(nmea_udp_fd, nmea_udp_dest, ap_display_unix_socket_fd, ap_display_dest,
-                           &msg_encoded);
-          msg_encoded.clear();
-        }
-      }
-      else
+      if (byte != 0x00)
       {
         msg_encoded.push_back(byte);
+        continue;
       }
+
+      if (msg_encoded.empty())
+      {
+        continue;
+      }
+
+      msg_decoded.resize(msg_encoded.size());
+      cobs_decode_result dec_res = cobs_decode(msg_decoded.data(), msg_decoded.size(),
+                                               msg_encoded.data(), msg_encoded.size());
+
+      if (dec_res.status != COBS_DECODE_OK)
+      {
+        msg_decoded.clear();
+        msg_encoded.clear();
+        continue;
+      }
+
+      route_mp_msg(nmea_udp_fd, nmea_udp_dest, ap_display_unix_socket_fd, ap_display_dest,
+                   msg_decoded.data(), dec_res.out_len);
+
+      msg_encoded.clear();
+      msg_decoded.clear();
     }
   }
-
   close(nmea_udp_fd);
   close(ap_display_unix_socket_fd);
   close(serialFd);

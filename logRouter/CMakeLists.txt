@@ -4,6 +4,7 @@ project(logRouter C CXX)
 
 add_executable(logRouter  
 	logRouter.cpp
+	consume_messages.cpp
 )
 
 add_library(cobs STATIC

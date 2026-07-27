@@ -14,6 +14,7 @@ public:
   PwmDriver() {};
 
 
+/* This function should only be called from the systemController so that its running in the steering*/
   void command(const PWMIntent &cmd);
 
   esp_err_t init();

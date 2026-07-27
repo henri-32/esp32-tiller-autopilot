@@ -79,9 +79,9 @@ void Logger::log()
 
   Message<NavigationSnapshot> nav_msg{&snapshot};
   uint8_t nav_msg_bytes[MessageOffsets::payload + NavigationPayloadOffsets::payload_length];
-  uint16_t nav_msg_size = mp_write_NavigationMessage_to_bytes(nav_msg_bytes, &nav_msg);
+  uint16_t nav_msg_size = mp_write_NavigationMessage_to_bytes(nav_msg_bytes,sizeof(nav_msg_bytes),  &nav_msg);
 
-  uartDriver_->write(uartInterface::USB_OUT, nav_msg_bytes, nav_msg_size);
+  uartDriver_->write(UartInterface::USB_INTERFACE, nav_msg_bytes, nav_msg_size);
 
   // Log raw NMEA
   // =====================================================================================
@@ -90,8 +90,8 @@ void Logger::log()
   uint8_t nmea_msg_bytes[MessageOffsets::payload + NmeaPayloadOffsets::sentences +
                          sizeof(nmea_sentences_.sentence)];
 
-  uint16_t size = mp_write_NmeaMessage_to_bytes(&nmea_msg_bytes, &nmea_msg);
+  uint16_t size = mp_write_NmeaMessage_to_bytes(nmea_msg_bytes, sizeof(nmea_msg_bytes), &nmea_msg);
 
-  uartDriver_->write(uartInterface::USB_OUT, nmea_msg_bytes, size);
+  uartDriver_->write(UartInterface::USB_INTERFACE, nmea_msg_bytes, size);
 };
 

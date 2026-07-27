@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config/config.h"
 #include "core/config.h"
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"

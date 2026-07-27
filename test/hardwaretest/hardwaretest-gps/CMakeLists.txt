@@ -12,6 +12,7 @@ target_link_libraries(hardwaretest-gps.elf PRIVATE
 	gpsDriver
  	DataStore
 	Logger
+	inputHandler
 	hardwaretest_runner
 )
 

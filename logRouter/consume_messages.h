@@ -1,0 +1,38 @@
+#pragma once
+
+#include "logging/message_protocol.h"
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+
+/**
+ * Consumes Messages with NavigationSnapshot payloads which contains
+ * - forwarding to displayProgram
+ * - FUTURE write to logfile
+ *
+ * @param [in] fd_display
+ * 		File descriptor of the Unix-domain socket used by the displayProgram
+ *
+ * @param [in] display_addr
+ * 		Ptr to adress of the Unix-domain socked used by the displayProgram
+ *
+ * @param [in] msg
+ * 		Ptr to message to be consumed
+ */
+void consume_nav_msg(int fd, sockaddr_un* addr, Message<NavigationSnapshot>* msg);
+
+/**
+ * Consumes Messages with NmeaSentences payloads which contains
+ * - forwarding to OpenCPN via UDP
+ *
+ * @param [in] fd_opencpn
+ * 		File descriptor of the UDP socket used by OpenCPN
+ *
+ * @param [in] opencpn_addr
+ * 		Ptr to adress of the UDP socket used by OpenCPN
+ *
+ * @param [in] msg
+ *		Ptr to message to be consumed
+ */
+void consume_nmea_msg(int file_descriptor, sockaddr_in* addr,
+                      Message<NmeaSentences>* sentences_ptr);

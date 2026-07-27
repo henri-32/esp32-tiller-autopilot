@@ -14,11 +14,19 @@
 
 using std::string;
 
+/*TODO
+Globale inputDaten überprüfen. aktuell müssten die lokalen Daten verändert werden und an logRouter
+geschrieben werden. Der müsste zukünftig an esp (rdwr muss noch gesetzt werden) senden, da in
+systemcontroller und wieder raus den ganzen weg zurück, damit das interne target angezeigt wird,
+nicht das was ich hier setze.
+*/
+
 struct fltk_handle
 {
   Fl_Window* window;
   Fl_Box* sog_box;
   Fl_Box* cog_box;
+  Fl_Box* target_cog_box;
   Fl_Box* sog_valid_box;
   Fl_Box* cog_valid_box;
   Fl_Box* position_box;
@@ -47,20 +55,22 @@ fltk_handle fltk_setup()
 
   auto* sog = box(0, 0);
   auto* cog = box(1, 0);
-  auto* position = box(2, 0);
-  auto* sog_valid = box(0, 1);
-  auto* cog_valid = box(1, 1);
-  auto* position_valid = box(2, 1);
+  auto* target_cog = box(0, 1);
+
+  //  auto* position = box(2, 0);
+  // auto* sog_valid = box(0, 1);
+  // auto* cog_valid = box(1, 1);
+  // auto* position_valid = box(2, 1);
   window->end();
   window->show();
-  return {.window = window,
-          .sog_box = sog,
-          .cog_box = cog,
-          .sog_valid_box = sog_valid,
-          .cog_valid_box = cog_valid,
-          .position_box = position,
-          .position_valid_box = position_valid};
-}
+  return {
+      .window = window, .sog_box = sog, .cog_box = cog, .target_cog_box = target_cog
+      //       .sog_valid_box = sog_valid,
+      //      .cog_valid_box = cog_valid,
+      //     .position_box = position,
+      //    .position_valid_box = position_valid
+  };
+};
 
 void process_NavigationMessage(void* data, uint16_t size, fltk_handle handle)
 {
@@ -70,7 +80,8 @@ void process_NavigationMessage(void* data, uint16_t size, fltk_handle handle)
 
   if (dec_res.status == COBS_DECODE_OK)
   {
-    Message<NavigationSnapshot> msg = mp_read_NavigationMessage_from_buffer(buf_dec.data());
+    Message<NavigationSnapshot> msg =
+        mp_read_NavigationMessage_from_buffer(buf_dec.data(), buf_dec.size());
     const auto sog = msg.payload.gps_sog_kts;
     const auto cog = msg.payload.gps_cog_dg;
     const auto hdg = msg.payload.compass_hdg_dg;
@@ -130,6 +141,45 @@ void process_datagram(void* data, uint16_t size, fltk_handle handle)
   }
 }
 
+static InputHandleData ihData{};
+
+int keyboard_handler(int event)
+{
+
+  printf("FLTK event: %d\n", event);
+  if (event != FL_KEYDOWN && event != FL_SHORTCUT)
+  {
+    return 0;
+  }
+  printf("key=%d text = %s \n", Fl::event_key(), Fl::event_text());
+  if (Fl::event_key() == '+')
+  {
+    ihData.target_course++;
+    printf("+ \n");
+    return 1;
+  }
+  else if (Fl::event_key() == '-')
+  {
+
+    ihData.target_course--;
+    printf("- \n");
+    return 1;
+  }
+  return 0;
+};
+
+void send_ap_input(const int fd, sockaddr_un* addr, socklen_t len, InputHandleData* data,
+                   fltk_handle* handle)
+{
+  sendto(fd, data, sizeof(InputHandleData), MSG_DONTWAIT, reinterpret_cast<const sockaddr*>(addr),
+         len);
+  char text[100];
+  std::snprintf(text, sizeof(text), "TARGET: %d deg \n", data->target_course);
+  handle->target_cog_box->copy_label(text);
+  handle->target_cog_box->redraw();
+  printf("%d \n", data->target_course);
+};
+
 int main()
 {
   const char* socket_path = "/tmp/autopilot.sock";
@@ -154,10 +204,12 @@ int main()
   }
 
   fltk_handle handle = fltk_setup();
+  Fl::add_handler(keyboard_handler);
+
+  char buffer[2048];
 
   while (handle.window->shown())
   {
-    char buffer[2048];
     Fl::wait(0.01);
 
     const ssize_t received =
@@ -168,8 +220,8 @@ int main()
         continue;
       break;
     }
-
     process_datagram(buffer, received, handle);
+    send_ap_input(fd, &local_addr, sizeof(local_addr), &ihData, &handle);
   }
 
   close(fd);

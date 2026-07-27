@@ -1,5 +1,7 @@
 #pragma once
 
+#include "types/controllerTypes.h"
+#include "types/inputHandleTypes.h"
 #include "types/sensorTypes.h"
 #include <cstdint>
 #include <cstring>
@@ -10,24 +12,10 @@
 struct MessageHeader
 //{{{
 {
-  uint8_t type;
-  uint16_t payload_length;
+  uint8_t type = 0;
+  uint16_t payload_length = 0;
 };
 //}}}
-
-// Navigation values and their validity/timestamp metadata.
-struct NavigationSnapshot
-//{{{
-{
-  SensorSample<uint16_t> compass_hdg_dg;
-  SensorSample<uint16_t> gps_cog_dg;
-  SensorSample<float> gps_sog_kts;
-  SensorSample<uint16_t> wind_angle_dg;
-  SensorSample<float> stw_kts;
-  NavigationSource LeadSource;
-};
-//}}}
-
 // Up to 20 fixed-width NMEA sentence buffers.
 struct NmeaSentences
 //{{{
@@ -36,12 +24,12 @@ struct NmeaSentences
   char sentence[20][128]{};
 };
 //}}}
-
 // Payload types supported by the logging message protocol.
 enum class PayloadType : uint8_t
 {
   NmeaSentences = 1,
-  NavigationSnapshot = 2
+  NavigationSnapshot = 2,
+  InputHandleData = 3
 };
 
 // In-memory representation of a typed message. The wire format is defined by
@@ -51,6 +39,14 @@ enum class PayloadType : uint8_t
 template <typename T> struct Message
 //{{{
 {
+  /**
+   * @brief Creates a message from an existing payload.
+   *
+   * The payload is copied into the message and the header is initialized with
+   * the payload type and its size.
+   *
+   * @param payload Pointer to the payload to copy. Its type must match `T`.
+   */
   Message(void* payload)
   {
     if constexpr (std::is_same_v<T, NmeaSentences>)
@@ -65,8 +61,21 @@ template <typename T> struct Message
       header.payload_length = sizeof(*(static_cast<NavigationSnapshot*>(payload)));
       this->payload = *(static_cast<NavigationSnapshot*>(payload));
     }
+    else if constexpr (std::is_same_v<T, InputHandleData>)
+    {
+      header.type = static_cast<uint8_t>(PayloadType::InputHandleData);
+      header.payload_length = sizeof(*(static_cast<InputHandleData*>(payload)));
+      this->payload = *(static_cast<InputHandleData*>(payload));
+    }
   };
 
+  /**
+   * @brief Creates an empty message with its payload value-initialized.
+   *
+   * For payload types with a protocol mapping, the header type is initialized
+   * accordingly. The payload length remains zero until a payload is assigned
+   * or otherwise initialized by the caller.
+   */
   Message()
   {
     if constexpr (std::is_same_v<T, NmeaSentences>)
@@ -80,8 +89,8 @@ template <typename T> struct Message
   }
   //}}}
 
-  MessageHeader header;
-  T payload;
+  MessageHeader header{};
+  T payload{};
 };
 
 // Byte offsets shared by every serialized message. Multi-byte values use
@@ -105,6 +114,14 @@ struct NmeaPayloadOffsets
 };
 //}}}
 
+struct InputHandlePayloadOffsets
+{
+  static constexpr uint8_t engage = 0;
+  static constexpr uint8_t target_course_little_endian = 1;
+  static constexpr uint8_t target_course_big_endian = 2;
+  static constexpr uint8_t payload_length = target_course_big_endian + 1;
+};
+
 // Byte offsets in a navigation payload. Each sample contains its value,
 // validity flag, and timestamp; all multi-byte fields are little-endian.
 struct NavigationPayloadOffsets
@@ -123,30 +140,48 @@ struct NavigationPayloadOffsets
 // Serializes populated NMEA sentences into write_buffer and returns the number
 // of bytes written. The caller must provide space for the 3-byte wire header,
 // the sentence count, and 128 bytes for each populated sentence.
-inline uint16_t mp_write_NmeaMessage_to_bytes(void* write_buffer, Message<NmeaSentences>* msg)
+/**
+ * @brief Serializes an NMEA message into a byte buffer.
+ *
+ * The serialized frame contains a three-byte header followed by the sentence
+ * count and the populated fixed-width sentence buffers.
+ *
+ * @param dest_buffer Destination buffer for the serialized frame.
+ * @param buffer_size Available size of @p dest_buffer in bytes.
+ * @param msg Message containing the NMEA sentences to serialize.
+ * @return Number of bytes written, or `0` if the buffer is too small.
+ */
+inline uint16_t mp_write_NmeaMessage_to_bytes(void* dest_buffer, uint16_t buffer_size,
+                                              Message<NmeaSentences>* msg)
 //{{{
 {
+  if (buffer_size < sizeof(Message<NmeaSentences>))
+  {
+    return 0;
+  }
 
-  MessageHeader nmeaMessageHeader = {.type = static_cast<uint8_t>(PayloadType::NmeaSentences),
-                                     .payload_length = static_cast<uint16_t>(
-                                         NmeaPayloadOffsets::sentences +
-                                         msg->payload.sentence_count * sizeof(msg->payload.sentence[0]))};
+  MessageHeader nmeaMessageHeader = {
+      .type = static_cast<uint8_t>(PayloadType::NmeaSentences),
+      .payload_length =
+          static_cast<uint16_t>(NmeaPayloadOffsets::sentences +
+                                msg->payload.sentence_count * sizeof(msg->payload.sentence[0]))};
 
-  static_cast<uint8_t*>(write_buffer)[MessageOffsets::type] =
+  static_cast<uint8_t*>(dest_buffer)[MessageOffsets::type] =
       static_cast<uint8_t>(nmeaMessageHeader.type);
-  static_cast<uint8_t*>(write_buffer)[MessageOffsets::payload_length_little_endian] =
+  static_cast<uint8_t*>(dest_buffer)[MessageOffsets::payload_length_little_endian] =
       static_cast<uint8_t>(nmeaMessageHeader.payload_length);
-  static_cast<uint8_t*>(write_buffer)[MessageOffsets::payload_length_big_endian] =
+  static_cast<uint8_t*>(dest_buffer)[MessageOffsets::payload_length_big_endian] =
       static_cast<uint8_t>(nmeaMessageHeader.payload_length << 8);
-  static_cast<uint8_t*>(write_buffer)[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] =
+  static_cast<uint8_t*>(dest_buffer)[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] =
       static_cast<uint8_t>(msg->payload.sentence_count);
 
   for (int i = 0; i < msg->payload.sentence_count; i++)
   {
     for (int ii = 0; ii < 128; ii++)
     {
-      static_cast<uint8_t*>(write_buffer)[MessageOffsets::payload + NmeaPayloadOffsets::sentences +
-                                           i * 128 + ii] = msg->payload.sentence[i][ii];
+      static_cast<uint8_t*>(
+          dest_buffer)[MessageOffsets::payload + NmeaPayloadOffsets::sentences + i * 128 + ii] =
+          msg->payload.sentence[i][ii];
     }
   }
   return MessageOffsets::payload + NmeaPayloadOffsets::sentences +
@@ -154,19 +189,45 @@ inline uint16_t mp_write_NmeaMessage_to_bytes(void* write_buffer, Message<NmeaSe
 }
 //}}}
 
-// Decodes a validated NMEA wire frame from decoded_nmea_message_ptr. Sentence
-// counts above the protocol maximum are capped at 20.
-inline Message<NmeaSentences> mp_read_NmeaMessage_from_buffer(void* decoded_nmea_message_ptr)
+// Decodes an NMEA wire frame. buffer_size must be the decoded frame length.
+/**
+ * @brief Decodes an NMEA message from a byte buffer.
+ *
+ * The frame type, payload length, sentence count, and available buffer size
+ * are validated before the sentences are copied.
+ *
+ * @param buffer Buffer containing the decoded NMEA frame.
+ * @param buffer_size Length of @p buffer in bytes.
+ * @return The decoded message, or an empty message if the frame is invalid or
+ *         the buffer is too small.
+ */
+inline Message<NmeaSentences> mp_read_NmeaMessage_from_buffer(void* buffer, uint16_t buffer_size)
 //{{{
 {
-  const uint8_t* decoded_nmea_message_frame =
-      static_cast<const uint8_t*>(decoded_nmea_message_ptr);
-  uint8_t sentence_count = decoded_nmea_message_frame[MessageOffsets::payload +
-                                                      NmeaPayloadOffsets::sentence_count];
+  constexpr uint16_t minimum_message_size = MessageOffsets::payload + NmeaPayloadOffsets::sentences;
 
-  if (sentence_count > 20)
+  if (buffer_size < minimum_message_size)
   {
-    sentence_count = 20;
+    return {};
+  }
+
+  const uint8_t* decoded_nmea_message_frame = static_cast<const uint8_t*>(buffer);
+  const uint16_t payload_length =
+      static_cast<uint16_t>(
+          decoded_nmea_message_frame[MessageOffsets::payload_length_little_endian]) |
+      (static_cast<uint16_t>(decoded_nmea_message_frame[MessageOffsets::payload_length_big_endian])
+       << 8);
+  const uint8_t sentence_count =
+      decoded_nmea_message_frame[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count];
+  const uint16_t expected_payload_length =
+      NmeaPayloadOffsets::sentences + sentence_count * sizeof(NmeaSentences::sentence[0]);
+
+  if (decoded_nmea_message_frame[MessageOffsets::type] !=
+          static_cast<uint8_t>(PayloadType::NmeaSentences) ||
+      sentence_count > 20 || payload_length != expected_payload_length ||
+      buffer_size < MessageOffsets::payload + expected_payload_length)
+  {
+    return {};
   }
 
   NmeaSentences sentences{};
@@ -187,13 +248,29 @@ inline Message<NmeaSentences> mp_read_NmeaMessage_from_buffer(void* decoded_nmea
 
 // Serializes a navigation snapshot into a wire frame and returns its total
 // size. Numeric payload fields are encoded in little-endian byte order.
-inline uint16_t mp_write_NavigationMessage_to_bytes(void* write_buffer, Message<NavigationSnapshot>* msg)
+/**
+ * @brief Serializes a navigation snapshot into a byte buffer.
+ *
+ * Numeric fields and timestamps are encoded in little-endian byte order.
+ *
+ * @param dest_buffer Destination buffer for the serialized frame.
+ * @param buffer_size Available size of @p dest_buffer in bytes.
+ * @param msg Message containing the navigation snapshot to serialize.
+ * @return Number of bytes written, or `0` if the buffer is too small.
+ */
+inline uint16_t mp_write_NavigationMessage_to_bytes(void* dest_buffer, uint16_t buffer_size,
+                                                    Message<NavigationSnapshot>* msg)
 //{{{
 {
+  if (buffer_size < sizeof(Message<NavigationSnapshot>))
+  {
+    return 0;
+  }
+
   MessageHeader navigationHeader = {.type = static_cast<uint8_t>(PayloadType::NavigationSnapshot),
                                     .payload_length = NavigationPayloadOffsets::payload_length};
 
-  uint8_t* navigation_message_frame = static_cast<uint8_t*>(write_buffer);
+  uint8_t* navigation_message_frame = static_cast<uint8_t*>(dest_buffer);
   navigation_message_frame[MessageOffsets::type] = navigationHeader.type;
   navigation_message_frame[MessageOffsets::payload_length_little_endian] =
       static_cast<uint8_t>(navigationHeader.payload_length);
@@ -253,76 +330,185 @@ inline uint16_t mp_write_NavigationMessage_to_bytes(void* write_buffer, Message<
 }
 //}}}
 
-// Decodes a validated navigation wire frame from decoded_navigation_message_ptr.
-inline Message<NavigationSnapshot>
-mp_read_NavigationMessage_from_buffer(void* decoded_navigation_message_ptr)
+// Decodes a navigation wire frame. buffer_size must be the decoded frame length.
+/**
+ * @brief Decodes a navigation message from a byte buffer.
+ *
+ * The frame type and payload length are validated before the snapshot is
+ * decoded. Numeric fields and timestamps are interpreted as little-endian.
+ *
+ * @param buffer Buffer containing the decoded navigation frame.
+ * @param buffer_size Length of @p buffer in bytes.
+ * @return The decoded message, or an empty message if the frame is invalid or
+ *         the buffer is too small.
+ */
+inline Message<NavigationSnapshot> mp_read_NavigationMessage_from_buffer(void* buffer,
+                                                                         uint16_t buffer_size)
 //{{{
 {
-  uint8_t decoded_navigation_message_frame[MessageOffsets::payload +
-                                           NavigationPayloadOffsets::payload_length];
-  for (uint8_t i = 0; i < sizeof(decoded_navigation_message_frame); i++)
+  constexpr uint16_t message_size =
+      MessageOffsets::payload + NavigationPayloadOffsets::payload_length;
+
+  if (buffer_size >= message_size)
   {
-    decoded_navigation_message_frame[i] = static_cast<uint8_t*>(decoded_navigation_message_ptr)[i];
+    const uint8_t* decoded_navigation_message_frame = static_cast<const uint8_t*>(buffer);
+    const uint16_t payload_length =
+        static_cast<uint16_t>(
+            decoded_navigation_message_frame[MessageOffsets::payload_length_little_endian]) |
+        (static_cast<uint16_t>(
+             decoded_navigation_message_frame[MessageOffsets::payload_length_big_endian])
+         << 8);
+
+    if (decoded_navigation_message_frame[MessageOffsets::type] !=
+            static_cast<uint8_t>(PayloadType::NavigationSnapshot) ||
+        payload_length != NavigationPayloadOffsets::payload_length)
+    {
+      return {};
+    }
+
+    auto read_uint16 = [&decoded_navigation_message_frame](uint8_t offset)
+    {
+      return static_cast<uint16_t>(decoded_navigation_message_frame[offset]) |
+             (static_cast<uint16_t>(decoded_navigation_message_frame[offset + 1]) << 8);
+    };
+    auto read_uint64 = [&decoded_navigation_message_frame](uint8_t offset)
+    {
+      uint64_t value = 0;
+      for (uint8_t i = 0; i < 8; i++)
+      {
+        value |= static_cast<uint64_t>(decoded_navigation_message_frame[offset + i]) << (i * 8);
+      }
+      return value;
+    };
+    auto read_uint32 = [&decoded_navigation_message_frame](uint8_t offset)
+    {
+      uint32_t value = 0;
+      for (uint8_t i = 0; i < 4; i++)
+      {
+        value |= static_cast<uint32_t>(decoded_navigation_message_frame[offset + i]) << (i * 8);
+      }
+      return value;
+    };
+    auto read_uint16_sample =
+        [&read_uint16, &read_uint64, &decoded_navigation_message_frame](uint8_t offset)
+    {
+      SensorSample<uint16_t> sample{};
+      sample.value = read_uint16(offset);
+      sample.valid = decoded_navigation_message_frame[offset + 2] != 0;
+      sample.timestamp = read_uint64(offset + 3);
+      return sample;
+    };
+    auto read_float_sample =
+        [&read_uint32, &read_uint64, &decoded_navigation_message_frame](uint8_t offset)
+    {
+      SensorSample<float> sample{};
+      uint32_t value = read_uint32(offset);
+      std::memcpy(&sample.value, &value, sizeof(value));
+      sample.valid = decoded_navigation_message_frame[offset + 4] != 0;
+      sample.timestamp = read_uint64(offset + 5);
+      return sample;
+    };
+
+    NavigationSnapshot snapshot{};
+    snapshot.compass_hdg_dg =
+        read_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::compass_hdg_dg);
+    snapshot.gps_cog_dg =
+        read_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::gps_cog_dg);
+    snapshot.gps_sog_kts =
+        read_float_sample(MessageOffsets::payload + NavigationPayloadOffsets::gps_sog_kts);
+    snapshot.wind_angle_dg =
+        read_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::wind_angle_dg);
+    snapshot.stw_kts =
+        read_float_sample(MessageOffsets::payload + NavigationPayloadOffsets::stw_kts);
+    snapshot.LeadSource = static_cast<NavigationSource>(
+        decoded_navigation_message_frame[MessageOffsets::payload +
+                                         NavigationPayloadOffsets::lead_source]);
+
+    return {&snapshot};
+  }
+  // if the given buffer is to small no read operations are done, and the function returns a default
+  // initialized Message
+  else
+  {
+    return {};
+  }
+}
+//}}}
+
+// Writes a given InputHandleData Message to a byte buffer
+/**
+ * @brief Serializes an input-handle message into a byte buffer.
+ *
+ * The target course is encoded in little-endian byte order.
+ *
+ * @param dest_buffer Destination buffer for the serialized frame.
+ * @param buffer_size Available size of @p dest_buffer in bytes.
+ * @param msg Message containing the input-handle data to serialize.
+ * @return Number of bytes in the serialized frame.
+ */
+inline uint16_t mp_write_InputHandleMessage_to_bytes(void* dest_buffer, uint16_t buffer_size,
+                                                     Message<InputHandleData>* msg)
+//{{{
+{
+  MessageHeader inputHandleHeader = {.type = static_cast<uint8_t>(PayloadType::InputHandleData),
+                                     .payload_length = InputHandlePayloadOffsets::payload_length};
+
+  uint8_t* inputHandle_message_frame = static_cast<uint8_t*>(dest_buffer);
+  inputHandle_message_frame[MessageOffsets::type] = msg->header.type;
+  inputHandle_message_frame[MessageOffsets::payload_length_little_endian] =
+      msg->header.payload_length;
+  inputHandle_message_frame[MessageOffsets::payload_length_big_endian] = msg->header.payload_length
+                                                                         << 8;
+
+  inputHandle_message_frame[InputHandlePayloadOffsets::engage] = msg->payload.engage;
+  inputHandle_message_frame[InputHandlePayloadOffsets::target_course_little_endian] =
+      msg->payload.target_course;
+  inputHandle_message_frame[InputHandlePayloadOffsets::target_course_big_endian] =
+      msg->payload.target_course << 8;
+
+  return MessageOffsets::payload + InputHandlePayloadOffsets::payload_length;
+};
+//}}}
+
+/**
+ * @brief Decodes an input-handle message from a byte buffer.
+ *
+ * The frame type and payload length are checked before the input-handle data
+ * is decoded.
+ *
+ * @param buffer Buffer containing the decoded input-handle frame.
+ * @param buffer_size Length of @p buffer in bytes.
+ * @return The decoded message, or an empty message if the frame is invalid or
+ *         the buffer is too small.
+ */
+inline Message<InputHandleData> mp_read_InputHandleMessage_from_buffer(void* buffer,
+                                                                       uint16_t buffer_size)
+//{{{
+{
+  uint16_t message_size = MessageOffsets::payload + InputHandlePayloadOffsets::payload_length;
+  if (buffer_size < message_size)
+  {
+    return {};
   }
 
-  auto read_uint16 = [&decoded_navigation_message_frame](uint8_t offset)
-  {
-    return static_cast<uint16_t>(decoded_navigation_message_frame[offset]) |
-           (static_cast<uint16_t>(decoded_navigation_message_frame[offset + 1]) << 8);
-  };
-  auto read_uint64 = [&decoded_navigation_message_frame](uint8_t offset)
-  {
-    uint64_t value = 0;
-    for (uint8_t i = 0; i < 8; i++)
-    {
-      value |= static_cast<uint64_t>(decoded_navigation_message_frame[offset + i]) << (i * 8);
-    }
-    return value;
-  };
-  auto read_uint32 = [&decoded_navigation_message_frame](uint8_t offset)
-  {
-    uint32_t value = 0;
-    for (uint8_t i = 0; i < 4; i++)
-    {
-      value |= static_cast<uint32_t>(decoded_navigation_message_frame[offset + i]) << (i * 8);
-    }
-    return value;
-  };
-  auto read_uint16_sample =
-      [&read_uint16, &read_uint64, &decoded_navigation_message_frame](uint8_t offset)
-  {
-    SensorSample<uint16_t> sample{};
-    sample.value = read_uint16(offset);
-    sample.valid = decoded_navigation_message_frame[offset + 2] != 0;
-    sample.timestamp = read_uint64(offset + 3);
-    return sample;
-  };
-  auto read_float_sample =
-      [&read_uint32, &read_uint64, &decoded_navigation_message_frame](uint8_t offset)
-  {
-    SensorSample<float> sample{};
-    uint32_t value = read_uint32(offset);
-    std::memcpy(&sample.value, &value, sizeof(value));
-    sample.valid = decoded_navigation_message_frame[offset + 4] != 0;
-    sample.timestamp = read_uint64(offset + 5);
-    return sample;
-  };
+  uint8_t* frame = static_cast<uint8_t*>(buffer);
 
-  NavigationSnapshot snapshot{};
-  snapshot.compass_hdg_dg =
-      read_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::compass_hdg_dg);
-  snapshot.gps_cog_dg =
-      read_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::gps_cog_dg);
-  snapshot.gps_sog_kts =
-      read_float_sample(MessageOffsets::payload + NavigationPayloadOffsets::gps_sog_kts);
-  snapshot.wind_angle_dg =
-      read_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::wind_angle_dg);
-  snapshot.stw_kts =
-      read_float_sample(MessageOffsets::payload + NavigationPayloadOffsets::stw_kts);
-  snapshot.LeadSource = static_cast<NavigationSource>(
-      decoded_navigation_message_frame[MessageOffsets::payload + NavigationPayloadOffsets::lead_source]);
+  uint16_t payload_length =
+      (static_cast<uint16_t>(frame[MessageOffsets::payload_length_little_endian]) |
+       static_cast<uint16_t>(frame[MessageOffsets::payload_length_little_endian]));
 
+  if (frame[MessageOffsets::type] != static_cast<uint8_t>(PayloadType::InputHandleData) ||
+      payload_length < sizeof(InputHandleData))
+  {
+    return {};
+  }
 
-  return {&snapshot};
-}
+  InputHandleData data{};
+  data.engage = frame[InputHandlePayloadOffsets::engage];
+  data.target_course =
+      (static_cast<uint16_t>(frame[InputHandlePayloadOffsets::target_course_little_endian]) |
+       static_cast<uint16_t>(frame[InputHandlePayloadOffsets::target_course_big_endian]));
+
+  return {&data};
+};
 //}}}

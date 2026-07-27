@@ -30,15 +30,15 @@ esp_err_t UartDriver::init()
   }
 };
 
-int UartDriver::write(uartInterface channel, const void* src, size_t size)
+int UartDriver::write(UartInterface channel, const void* src, size_t size)
 {
-    uint8_t delimiter = 0x00;
-    uart_port_t port;
+  uint8_t delimiter = 0x00;
+  uart_port_t port;
 
-    auto write_delimiter = [delimiter, port]()
-    { return uart_write_bytes(port, &delimiter, sizeof(delimiter)); };
+  auto write_delimiter = [delimiter, port]()
+  { return uart_write_bytes(port, &delimiter, sizeof(delimiter)); };
 
-  if (channel == uartInterface::USB_OUT)
+  if (channel == UartInterface::USB_INTERFACE)
   {
     uint8_t encoded[COBS_ENCODE_DST_BUF_LEN_MAX(size)];
     cobs_encode_result result = cobs_encode(encoded, sizeof(encoded), src, size);
@@ -61,7 +61,40 @@ int UartDriver::write(uartInterface channel, const void* src, size_t size)
       return -1;
     }
   }
-  // Currently only USB_OUT is supported
+  // Currently only USB_INTERFACE is supported
+  else
+  {
+    return -1;
+  }
+};
+
+int UartDriver::read(UartInterface channel, void* dest, uint16_t dest_buf_len, TickType_t timeout)
+{
+  uart_port_t port;
+  if (channel == UartInterface::USB_INTERFACE)
+  {
+    port = UART_NUM_0;
+    uint8_t buf_enc[1024];
+
+    if (uart_read_bytes(port, buf_enc, sizeof(buf_enc), timeout) <= 0)
+    {
+      return -1;
+    }
+    else
+    {
+
+      cobs_decode_result dec_res = cobs_decode(buf_enc, sizeof(buf_enc), dest, dest_buf_len);
+      if (dec_res.status == COBS_DECODE_OK)
+      {
+        return dec_res.out_len;
+      }
+      else
+      {
+        return -1;
+      }
+    }
+  }
+// currently only USB_INTERFACE is supported
   else
   {
     return -1;

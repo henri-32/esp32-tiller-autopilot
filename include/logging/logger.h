@@ -1,12 +1,13 @@
 #pragma once
 #include "core/dataStore.h"
-#include "drivers/uartDriver.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "logging/message_protocol.h"
 #include "types/loggingTypes.h"
 #include "types/systemServiceTypes.h"
 #include <new>
+
+class UartDriver;
 
 class Logger
 

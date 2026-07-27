@@ -1,7 +1,8 @@
 #include "core/queueServer.h"
 #include "core/dataStore.h"
-#include "types/sensorTypes.h"
+#include "types/inputHandleTypes.h"
 #include "types/loggingTypes.h"
+#include "types/sensorTypes.h"
 
 BaseType_t QueueServer::init()
 {
@@ -13,6 +14,8 @@ BaseType_t QueueServer::init()
   gpsNMEAQueue_ = xQueueCreate(NmeaConfig::queue_depth, NmeaConfig::max_sentence_len);
 
   sourceLogMessageQueue_ = xQueueCreate(1, sizeof(SourceLogMessage));
+
+  inputDataQueue_ = xQueueCreate(5, sizeof(InputHandleData));
 
   if (gpsDataQueue_ != nullptr && gpsPerformanceQueue_ != nullptr && gpsErrorQueue_ != nullptr &&
       gpsNMEAQueue_ != nullptr && sourceLogMessageQueue_ != nullptr)
@@ -34,11 +37,18 @@ QueueBundle_t QueueServer::get_gps_bundle() const
   };
 }
 
-QueueHandle_t QueueServer::get_nmea_handle() const {
+QueueHandle_t QueueServer::get_nmea_handle() const
+{
   return gpsNMEAQueue_;
 };
 
 QueueHandle_t QueueServer::get_source_log_handle() const
 {
   return sourceLogMessageQueue_;
+};
+
+QueueBundle_t QueueServer::get_input_handle() const
+{
+  return {
+      .data = inputDataQueue_, .performance = inputPerformanceQueue_, .error = inputErrorQueue_};
 };
