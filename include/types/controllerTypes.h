@@ -18,7 +18,7 @@ struct Intent {
 
 
 // Navigation values and their validity/timestamp metadata.
-struct NavigationSnapshot
+struct NavigationSnapshot_t
 //{{{
 {
   SensorSample<uint16_t> compass_hdg_dg;

@@ -1,5 +1,6 @@
 #pragma once
 #include "cstdint"
+#include "types/loggingTypes.h"
 
 template <typename T> struct SensorSample
 {
@@ -7,23 +8,19 @@ template <typename T> struct SensorSample
   bool valid{false};
   uint64_t timestamp{0};
 };
-struct PerformanceData
-{
-  uint16_t free_task_stack = 0;
-};
 
-struct ErrorData
+struct ErrorData_t
 {
 };
 
 template <typename T> struct Telemetry
 {
   T data{};
-  PerformanceData performance;
-  ErrorData error;
+  RuntimeLog_t rl;
+  ErrorData_t error;
 };
 
-struct GpsData
+struct gpsDriverData_t
 {
   // lat and long in decimaldegree format DD.DDD...
   float latitude = 0.0F;

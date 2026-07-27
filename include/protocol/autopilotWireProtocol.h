@@ -55,17 +55,17 @@ template <typename T> struct Message
       header.payload_length = sizeof(*(static_cast<NmeaSentences*>(payload)));
       this->payload = *(static_cast<NmeaSentences*>(payload));
     }
-    else if constexpr (std::is_same_v<T, NavigationSnapshot>)
+    else if constexpr (std::is_same_v<T, NavigationSnapshot_t>)
     {
       header.type = static_cast<uint8_t>(PayloadType::NavigationSnapshot);
-      header.payload_length = sizeof(*(static_cast<NavigationSnapshot*>(payload)));
-      this->payload = *(static_cast<NavigationSnapshot*>(payload));
+      header.payload_length = sizeof(*(static_cast<NavigationSnapshot_t*>(payload)));
+      this->payload = *(static_cast<NavigationSnapshot_t*>(payload));
     }
-    else if constexpr (std::is_same_v<T, InputHandleData>)
+    else if constexpr (std::is_same_v<T, InputHandleData_t>)
     {
       header.type = static_cast<uint8_t>(PayloadType::InputHandleData);
-      header.payload_length = sizeof(*(static_cast<InputHandleData*>(payload)));
-      this->payload = *(static_cast<InputHandleData*>(payload));
+      header.payload_length = sizeof(*(static_cast<InputHandleData_t*>(payload)));
+      this->payload = *(static_cast<InputHandleData_t*>(payload));
     }
   };
 
@@ -82,7 +82,7 @@ template <typename T> struct Message
     {
       header.type = static_cast<uint8_t>(PayloadType::NmeaSentences);
     }
-    else if constexpr (std::is_same_v<T, NavigationSnapshot>)
+    else if constexpr (std::is_same_v<T, NavigationSnapshot_t>)
     {
       header.type = static_cast<uint8_t>(PayloadType::NavigationSnapshot);
     }
@@ -259,10 +259,10 @@ inline Message<NmeaSentences> mp_read_NmeaMessage_from_buffer(void* buffer, uint
  * @return Number of bytes written, or `0` if the buffer is too small.
  */
 inline uint16_t mp_write_NavigationMessage_to_bytes(void* dest_buffer, uint16_t buffer_size,
-                                                    Message<NavigationSnapshot>* msg)
+                                                    Message<NavigationSnapshot_t>* msg)
 //{{{
 {
-  if (buffer_size < sizeof(Message<NavigationSnapshot>))
+  if (buffer_size < sizeof(Message<NavigationSnapshot_t>))
   {
     return 0;
   }
@@ -342,7 +342,7 @@ inline uint16_t mp_write_NavigationMessage_to_bytes(void* dest_buffer, uint16_t 
  * @return The decoded message, or an empty message if the frame is invalid or
  *         the buffer is too small.
  */
-inline Message<NavigationSnapshot> mp_read_NavigationMessage_from_buffer(void* buffer,
+inline Message<NavigationSnapshot_t> mp_read_NavigationMessage_from_buffer(void* buffer,
                                                                          uint16_t buffer_size)
 //{{{
 {
@@ -409,7 +409,7 @@ inline Message<NavigationSnapshot> mp_read_NavigationMessage_from_buffer(void* b
       return sample;
     };
 
-    NavigationSnapshot snapshot{};
+    NavigationSnapshot_t snapshot{};
     snapshot.compass_hdg_dg =
         read_uint16_sample(MessageOffsets::payload + NavigationPayloadOffsets::compass_hdg_dg);
     snapshot.gps_cog_dg =
@@ -447,7 +447,7 @@ inline Message<NavigationSnapshot> mp_read_NavigationMessage_from_buffer(void* b
  * @return Number of bytes in the serialized frame.
  */
 inline uint16_t mp_write_InputHandleMessage_to_bytes(void* dest_buffer, uint16_t buffer_size,
-                                                     Message<InputHandleData>* msg)
+                                                     Message<InputHandleData_t>* msg)
 //{{{
 {
   constexpr uint16_t message_size =
@@ -488,7 +488,7 @@ inline uint16_t mp_write_InputHandleMessage_to_bytes(void* dest_buffer, uint16_t
  * @return The decoded message, or an empty message if the frame is invalid or
  *         the buffer is too small.
  */
-inline Message<InputHandleData> mp_read_InputHandleMessage_from_buffer(void* buffer,
+inline Message<InputHandleData_t> mp_read_InputHandleMessage_from_buffer(void* buffer,
                                                                        uint16_t buffer_size)
 //{{{
 {
@@ -510,7 +510,7 @@ inline Message<InputHandleData> mp_read_InputHandleMessage_from_buffer(void* buf
     return {};
   }
 
-  InputHandleData data{};
+  InputHandleData_t data{};
   data.engage = frame[MessageOffsets::payload + InputHandlePayloadOffsets::engage];
   data.target_course =
       (static_cast<uint16_t>(frame[MessageOffsets::payload +

@@ -14,4 +14,5 @@ public:
 private:
   QueueServer* queueServer_;
   UartDriver* uartDriver_;
+  task_context context_;
 };

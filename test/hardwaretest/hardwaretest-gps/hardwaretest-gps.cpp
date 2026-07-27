@@ -17,10 +17,10 @@ void vPrintGpsTask(void* pvParameters)
 
   while (true)
   {
-    Telemetry<GpsData> gpsTel{};
+    Telemetry<gpsDriverData_t> gpsTel{};
 
     xQueueReceive(context->queueBundle.data, &gpsTel.data, pdMS_TO_TICKS(2000));
-    xQueueReceive(context->queueBundle.performance, &gpsTel.performance, pdMS_TO_TICKS(2000));
+    xQueueReceive(context->queueBundle.runtime_log, &gpsTel.performance, pdMS_TO_TICKS(2000));
 
     //printf("SOG: %f / expected: 0.0\nfixQuality: %d / expected: 0\nFreeTaskStackGPS: %d \n",
      //      gpsTel.data.speed_kts, gpsTel.data.fixQuality, gpsTel.performance.free_task_stack);

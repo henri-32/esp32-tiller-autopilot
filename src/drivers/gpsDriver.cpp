@@ -18,10 +18,10 @@ void vGpsTask(void* pvParameters)
     GpsDriver* driver = static_cast<GpsDriver*>(context->THIS);
 
     driver->fill_data();
-    driver->gpsTelemetry_->performance.free_task_stack = uxTaskGetStackHighWaterMark(nullptr);
+    driver->gpsTelemetry_->rl.free_task_stack = uxTaskGetStackHighWaterMark(nullptr);
 
     xQueueOverwrite(context->queueBundle.data, &driver->gpsTelemetry_->data);
-    xQueueOverwrite(context->queueBundle.performance, &driver->gpsTelemetry_->performance);
+    xQueueOverwrite(context->queueBundle.runtime_log, &driver->gpsTelemetry_->rl);
 
     vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
@@ -62,12 +62,19 @@ esp_err_t GpsDriver::init()
     task_create = xTaskCreate(vGpsTask, description, 10000, context_, 5, nullptr);
   }
 
+  RuntimeLog_t rl{};
+
   if (install != ESP_OK || configure != ESP_OK || set_pin != ESP_OK || task_create != pdPASS)
   {
+    rl.init_status = static_cast<uint8_t>(InitStatus::OK);
+    xQueueSend(context_->queueBundle.runtime_log, &rl, pdMS_TO_TICKS(100));
+
     return ESP_FAIL;
   }
   else
   {
+    rl.init_status = static_cast<uint8_t>(InitStatus::FAIL);
+    xQueueSend(context_->queueBundle.runtime_log, &rl, pdMS_TO_TICKS(100));
     return ESP_OK;
   }
 }
@@ -154,7 +161,7 @@ void GpsDriver::consume_uart_data()
     consume_byte(uart_data_[i]);
 
     // To print raw uart_data and debug/validate parsed input.
-    //printf("%c", uart_data_[i]);
+    // printf("%c", uart_data_[i]);
   }
 }
 //}}}

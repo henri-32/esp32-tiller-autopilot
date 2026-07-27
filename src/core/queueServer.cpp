@@ -6,18 +6,19 @@
 
 BaseType_t QueueServer::init()
 {
-  gpsDataQueue_ = xQueueCreate(1, sizeof(GpsData));
-  gpsPerformanceQueue_ = xQueueCreate(1, sizeof(PerformanceData));
+  gpsDataQueue_ = xQueueCreate(1, sizeof(gpsDriverData_t));
+  gpsRuntimeLogQueue_ = xQueueCreate(1, sizeof(RuntimeLog_t));
 
-  // TODO Size of Error unbekannt
+  // TODO Size of Error und Runtime Structs unbekannt
   gpsErrorQueue_ = xQueueCreate(1, sizeof(uint16_t));
   gpsNMEAQueue_ = xQueueCreate(NmeaConfig::queue_depth, NmeaConfig::max_sentence_len);
 
   telemetryLogMessageQueue_ = xQueueCreate(1, sizeof(TelemetryLogMessage));
 
-  inputDataQueue_ = xQueueCreate(5, sizeof(InputHandleData));
+  inputHandlerDataQueue_ = xQueueCreate(5, sizeof(InputHandleData_t));
+  inputHandlerRuntimeLogQueue_ = xQueueCreate(1, sizeof(RuntimeLog_t));
 
-  if (gpsDataQueue_ != nullptr && gpsPerformanceQueue_ != nullptr && gpsErrorQueue_ != nullptr &&
+  if (gpsDataQueue_ != nullptr && gpsRuntimeLogQueue_ != nullptr && gpsErrorQueue_ != nullptr &&
       gpsNMEAQueue_ != nullptr && telemetryLogMessageQueue_ != nullptr)
   {
     return pdPASS;
@@ -32,7 +33,7 @@ QueueBundle_t QueueServer::get_gps_bundle() const
 {
   return {
       .data = gpsDataQueue_,
-      .performance = gpsPerformanceQueue_,
+      .runtime_log = gpsRuntimeLogQueue_,
       .error = gpsErrorQueue_,
   };
 }
@@ -49,6 +50,5 @@ QueueHandle_t QueueServer::get_telemetry_log_handle() const
 
 QueueBundle_t QueueServer::get_input_handle() const
 {
-  return {
-      .data = inputDataQueue_, .performance = inputPerformanceQueue_, .error = inputErrorQueue_};
+  return {.data = inputHandlerDataQueue_, .runtime_log = inputHandlerRuntimeLogQueue_, .error = inputErrorQueue_};
 };

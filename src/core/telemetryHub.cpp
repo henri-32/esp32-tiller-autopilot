@@ -47,9 +47,9 @@ BaseType_t TelemetryHub::init()
 
 void TelemetryHub::collectTelemetry()
 {
-  Telemetry<GpsData> frame;
+  Telemetry<gpsDriverData_t> frame;
   xQueuePeek(gps_bundle_.data, &frame.data, 0);
-  xQueuePeek(gps_bundle_.performance, &frame.performance, 0);
+  xQueuePeek(gps_bundle_.runtime_log, &frame.rl, 0);
   xQueuePeek(gps_bundle_.error, &frame.error, 0);
 
   //==========Errors==========================
@@ -84,7 +84,7 @@ void TelemetryHub::collectTelemetry()
   telemetrySnapshot_.gps_cog.timestamp = frame.data.timestamp;
 
   //======== Perfomance =====================
-  telemetryPerformance_.gpsFreeStack = frame.performance.free_task_stack;
+  telemetryPerformance_.gpsFreeStack = frame.rl.free_task_stack;
 };
 
 void TelemetryHub::publishTelemetry()

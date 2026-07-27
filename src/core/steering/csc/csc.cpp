@@ -1,5 +1,4 @@
 ﻿#include "core/steering/csc/csc.h"
-
 #include "core/steering/csc/headingErrorCalculator.h"
 #include "core/steering/csc/observationBuffer.h"
 #include "core/steering/csc/steeringGuard.h"

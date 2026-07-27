@@ -71,13 +71,13 @@ void Logger::log()
 
   // Log Navigation Snapshot
   // ===========================================================================
-  NavigationSnapshot snapshot;
+  NavigationSnapshot_t snapshot;
   snapshot.gps_cog_dg.value = telemetry_log_message_.snapshot.gps_cog.value;
   snapshot.gps_cog_dg.valid = telemetry_log_message_.snapshot.gps_cog.valid;
   snapshot.gps_sog_kts.value = telemetry_log_message_.snapshot.gps_sog.value;
   snapshot.gps_sog_kts.valid = telemetry_log_message_.snapshot.gps_sog.valid;
 
-  Message<NavigationSnapshot> nav_msg{&snapshot};
+  Message<NavigationSnapshot_t> nav_msg{&snapshot};
   uint8_t nav_msg_bytes[MessageOffsets::payload + NavigationPayloadOffsets::payload_length];
   uint16_t nav_msg_size = mp_write_NavigationMessage_to_bytes(nav_msg_bytes,sizeof(nav_msg_bytes),  &nav_msg);
 

@@ -68,7 +68,7 @@ void vInputHandlerTask(void* pvParameters)
       }
 
       // Get Message from buffer
-      Message<InputHandleData> msg =
+      Message<InputHandleData_t> msg =
           mp_read_InputHandleMessage_from_buffer(decoded_buffer, decoded_len);
 
       // send the InputHandleData into the Queue
@@ -79,18 +79,22 @@ void vInputHandlerTask(void* pvParameters)
 
 esp_err_t InputHandler::init()
 {
-  Context context;
-  context.THIS = this;
-  context.queueBundle = queueServer_->get_input_handle();
+  context_.THIS = this;
+  context_.queueBundle = queueServer_->get_input_handle();
 
-  xTaskCreate(vInputHandlerTask, "inputHandler", 10000, &context, 5, nullptr);
+  xTaskCreate(vInputHandlerTask, "inputHandler", 10000, &context_, 5, nullptr);
 
-  if (context.queueBundle.data != nullptr)
+  RuntimeLog_t rl{};
+  if (context_.queueBundle.data != nullptr)
   {
+    rl.init_status = static_cast<uint8_t>(InitStatus::OK);
+    xQueueSend(context_.queueBundle.runtime_log, &rl, pdMS_TO_TICKS(100));
     return ESP_OK;
   }
   else
   {
+    rl.init_status = static_cast<uint8_t>(InitStatus::FAIL);
+    xQueueSend(context_.queueBundle.runtime_log, &rl, pdMS_TO_TICKS(100));
     return ESP_FAIL;
   }
 };

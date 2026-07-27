@@ -18,11 +18,11 @@ public:
 
 private: 
   QueueHandle_t gpsDataQueue_; 
-  QueueHandle_t gpsPerformanceQueue_;
+  QueueHandle_t gpsRuntimeLogQueue_;
   QueueHandle_t gpsErrorQueue_;
   QueueHandle_t gpsNMEAQueue_;
   QueueHandle_t telemetryLogMessageQueue_;
-  QueueHandle_t inputDataQueue_;
-  QueueHandle_t inputPerformanceQueue_;
+  QueueHandle_t inputHandlerDataQueue_;
   QueueHandle_t inputErrorQueue_;
+  QueueHandle_t inputHandlerRuntimeLogQueue_;
 };
