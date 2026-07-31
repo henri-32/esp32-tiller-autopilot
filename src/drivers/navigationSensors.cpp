@@ -1,3 +1,6 @@
+#if 0
+// Legacy synchronous sensor aggregation. TelemetryHub owns transformation in
+// the FreeRTOS-based architecture; this code remains as an ideas reference.
 #include "drivers/navigationSensors.h"
 #include "drivers/NASA_Duo.h"
 #include "types/sensorTypes.h"
@@ -46,3 +49,4 @@ NavigationSensors::NavigationSnapshot NavigationSensors::createSnapshot()
 
   return snapshot;
 };
+#endif

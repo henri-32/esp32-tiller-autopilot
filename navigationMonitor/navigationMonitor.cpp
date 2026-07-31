@@ -4,6 +4,7 @@
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Window.H>
 #include <cerrno>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -15,10 +16,10 @@
 using std::string;
 
 /*TODO
-Globale inputDaten überprüfen. aktuell müssten die lokalen Daten verändert werden und an autopilotGateway
-geschrieben werden. Der müsste zukünftig an esp (rdwr muss noch gesetzt werden) senden, da in
-systemcontroller und wieder raus den ganzen weg zurück, damit das interne target angezeigt wird,
-nicht das was ich hier setze.
+Globale inputDaten überprüfen. aktuell müssten die lokalen Daten verändert werden und an
+autopilotGateway geschrieben werden. Der müsste zukünftig an esp (rdwr muss noch gesetzt werden)
+senden, da in systemcontroller und wieder raus den ganzen weg zurück, damit das interne target
+angezeigt wird, nicht das was ich hier setze.
 */
 
 struct fltk_handle
@@ -27,10 +28,8 @@ struct fltk_handle
   Fl_Box* sog_box;
   Fl_Box* cog_box;
   Fl_Box* target_cog_box;
-  Fl_Box* sog_valid_box;
-  Fl_Box* cog_valid_box;
-  Fl_Box* position_box;
-  Fl_Box* position_valid_box;
+  Fl_Box* latitude_box;
+  Fl_Box* longitude_box;
 };
 
 Fl_Box* make_box(int x, int y, int w, int h)
@@ -55,93 +54,137 @@ fltk_handle fltk_setup()
 
   auto* sog = box(0, 0);
   auto* cog = box(1, 0);
-  auto* target_cog = box(0, 1);
+  auto* target_cog = box(2, 0);
+  auto* latitude = box(0, 1);
+  auto* longitude = box(1, 1);
 
-  //  auto* position = box(2, 0);
-  // auto* sog_valid = box(0, 1);
-  // auto* cog_valid = box(1, 1);
-  // auto* position_valid = box(2, 1);
   window->end();
   window->show();
-  return {
-      .window = window, .sog_box = sog, .cog_box = cog, .target_cog_box = target_cog
-      //       .sog_valid_box = sog_valid,
-      //      .cog_valid_box = cog_valid,
-      //     .position_box = position,
-      //    .position_valid_box = position_valid
-  };
+  return {.window = window,
+          .sog_box = sog,
+          .cog_box = cog,
+          .target_cog_box = target_cog,
+          .latitude_box = latitude,
+          .longitude_box = longitude};
 };
 
-void process_NavigationMessage(void* data, uint16_t size, fltk_handle handle)
+void format_coordinate_for_display(char* text, std::size_t text_size, const char* label,
+                                   float decimal_degrees, int degree_width,
+                                   char positive_hemisphere, char negative_hemisphere)
 {
-  std::vector<uint8_t> buf_dec(size);
+  const double absolute_degrees = std::fabs(static_cast<double>(decimal_degrees));
+  int degrees = static_cast<int>(absolute_degrees);
+  double decimal_minutes = (absolute_degrees - degrees) * 60.0;
 
-  cobs_decode_result dec_res = cobs_decode(buf_dec.data(), buf_dec.size(), data, size);
-
-  if (dec_res.status == COBS_DECODE_OK)
+  // Keep rounding from ever producing an invalid "60.000 minutes" display.
+  decimal_minutes = std::round(decimal_minutes * 1000.0) / 1000.0;
+  if (decimal_minutes >= 60.0)
   {
-    Message<NavigationSnapshot> msg =
-        mp_read_NavigationMessage_from_buffer(buf_dec.data(), buf_dec.size());
-    const auto sog = msg.payload.gps_sog_kts;
-    const auto cog = msg.payload.gps_cog_dg;
-    const auto hdg = msg.payload.compass_hdg_dg;
-
-    char text[64];
-
-    if (sog.valid)
-    {
-      std::snprintf(text, sizeof(text), "SOG: %.1f kts", sog.value);
-    }
-    else
-    {
-      std::snprintf(text, sizeof(text), "SOG: invalid");
-    }
-    handle.sog_box->copy_label(text);
-    handle.sog_box->redraw();
-
-    if (cog.valid)
-    {
-      std::snprintf(text, sizeof(text), "COG: %d deg", cog.value);
-    }
-    else
-    {
-      std::snprintf(text, sizeof(text), "COG: invalid");
-    }
-
-    handle.cog_box->copy_label(text);
-    handle.cog_box->redraw();
-
-    if (hdg.valid)
-    {
-      std::snprintf(text, sizeof(text), "HDG: %d deg", hdg.value);
-    }
-    else
-    {
-      std::snprintf(text, sizeof(text), "HDG : invalid");
-    }
+    decimal_minutes = 0.0;
+    ++degrees;
   }
+
+  const char hemisphere =
+      std::signbit(decimal_degrees) ? negative_hemisphere : positive_hemisphere;
+  std::snprintf(text, text_size, "%s: %0*d° %06.3f' %c", label, degree_width, degrees,
+                decimal_minutes, hemisphere);
 }
 
-void process_datagram(void* data, uint16_t size, fltk_handle handle)
+void process_AccumulatedLogMessage(const void* data, uint16_t size, fltk_handle handle)
 {
-  uint8_t type;
-
-  if (size >= 2 && static_cast<uint8_t*>(data)[0] > 1)
+  const Message<AccumulatedLogMessage> msg = mp_read_AccumulatedLogMessage_from_buffer(data, size);
+  if (msg.header.type != static_cast<uint8_t>(PayloadType::AccumulatedLogMessage))
   {
-    uint8_t type = static_cast<uint8_t*>(data)[1];
-    switch (type)
-    {
+    return;
+  }
 
-    case static_cast<uint8_t>(PayloadType::NavigationSnapshot):
-    {
-      process_NavigationMessage(data, size, handle);
-    }
+  const auto snapshot = msg.payload.snapshot;
+  const auto sog = msg.payload.snapshot.gps_sog_kts;
+  const auto cog = msg.payload.snapshot.gps_cog_dg;
+  char text[128];
+
+//================================ Print SOG Box =========================================
+  if (sog.valid)
+  {
+    std::snprintf(text, sizeof(text), "SOG: %.1f kts", sog.value);
+  }
+  else
+  {
+    std::snprintf(text, sizeof(text), "SOG: invalid");
+  }
+  handle.sog_box->copy_label(text);
+  handle.sog_box->redraw();
+
+//================================ Print COG Box =========================================
+  if (cog.valid)
+  {
+    std::snprintf(text, sizeof(text), "COG: %d deg", cog.value);
+  }
+  else
+  {
+    std::snprintf(text, sizeof(text), "COG: invalid");
+  }
+  handle.cog_box->copy_label(text);
+  handle.cog_box->redraw();
+
+//================================ Print LAT/LON Box =========================================
+  if (msg.payload.error.validFix)
+  {
+    format_coordinate_for_display(text, sizeof(text), "LAT",snapshot.gps_lat, 2, 'N',
+                                  'S');
+  }
+  else
+  {
+    std::snprintf(text, sizeof(text), "LAT: invalid");
+  }
+  handle.latitude_box->copy_label(text);
+  handle.latitude_box->redraw();
+
+  if (msg.payload.error.validFix)
+  {
+    format_coordinate_for_display(text, sizeof(text), "LON",snapshot.gps_lon, 3, 'E',
+                                  'W');
+  }
+  else
+  {
+    std::snprintf(text, sizeof(text), "LON: invalid");
+  }
+  handle.longitude_box->copy_label(text);
+  handle.longitude_box->redraw();
+
+//================================ Print Target Box =========================================
+  std::snprintf(text, sizeof(text), "TARGET: %d deg \n",snapshot.target_course);
+  handle.target_cog_box->copy_label(text);
+  handle.target_cog_box->redraw();
+}
+
+void process_datagram(const void* data, uint16_t size, fltk_handle handle)
+{
+  if (data == nullptr || size == 0)
+  {
+    return;
+  }
+
+  std::vector<uint8_t> decoded(size);
+  const cobs_decode_result decode_result = cobs_decode(decoded.data(), decoded.size(), data, size);
+  if (decode_result.status != COBS_DECODE_OK || decode_result.out_len < MessageOffsets::payload)
+  {
+    return;
+  }
+
+  switch (decoded[MessageOffsets::type])
+  {
+  case static_cast<uint8_t>(PayloadType::AccumulatedLogMessage):
+    process_AccumulatedLogMessage(decoded.data(), static_cast<uint16_t>(decode_result.out_len),
+                                handle);
     break;
-    }
+
+  default:
+    break;
   }
 }
 
-static InputHandleData ihData{};
+static InputHandleData_t ihData{};
 
 int keyboard_handler(int event)
 {
@@ -168,26 +211,24 @@ int keyboard_handler(int event)
   return 0;
 };
 
-void send_ap_input(const int fd, sockaddr_un* addr, socklen_t len, InputHandleData* data,
+void send_ap_input(const int fd, sockaddr_un* addr, socklen_t len, InputHandleData_t* data,
                    fltk_handle* handle)
 {
-  Message<InputHandleData> msg{data};
+  Message<InputHandleData_t> msg{data};
   uint8_t msg_buffer[MessageOffsets::payload + InputHandlePayloadOffsets::payload_length];
-  const uint16_t msg_size = mp_write_InputHandleMessage_to_bytes(msg_buffer, sizeof(msg_buffer), &msg);
+  const uint16_t msg_size =
+      mp_write_InputHandleMessage_to_bytes(msg_buffer, sizeof(msg_buffer), &msg);
   if (msg_size == 0)
   {
     return;
   }
 
-  if (sendto(fd, msg_buffer, msg_size, MSG_DONTWAIT, reinterpret_cast<const sockaddr*>(addr), len) < 0)
+  if (sendto(fd, msg_buffer, msg_size, MSG_DONTWAIT, reinterpret_cast<const sockaddr*>(addr), len) <
+      0)
   {
     std::perror("send input to gateway");
     return;
   }
-  char text[100];
-  std::snprintf(text, sizeof(text), "TARGET: %d deg \n", data->target_course);
-  handle->target_cog_box->copy_label(text);
-  handle->target_cog_box->redraw();
   printf("%d \n", data->target_course);
 };
 

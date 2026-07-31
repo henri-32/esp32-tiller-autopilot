@@ -1,100 +1,66 @@
 #include "core/inputHandler.h"
-#include "cobs-c/cobs.h"
 #include "drivers/uartDriver.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "protocol/autopilotWireProtocol.h"
-
-static struct Context
-{
-  void* THIS = nullptr;
-  QueueBundle_t queueBundle;
-  UartDriver* uartDriver;
-} context;
+#include "protocol/internalMessageProtocol.h"
+#include "telemetry/runtimeTypes.h"
 
 void vInputHandlerTask(void* pvParameters)
 {
-  QueueBundle_t bundle = static_cast<Context*>(pvParameters)->queueBundle;
-  UartDriver* uartDriver = static_cast<Context*>(pvParameters)->uartDriver;
-  uint8_t read_buffer[1024];
+  InputHandler* inputHandler = static_cast<InputHandler*>(pvParameters);
+  constexpr uint16_t input_message_size =
+      MessageOffsets::payload + InputHandlePayloadOffsets::payload_length;
+  uint8_t read_buffer[input_message_size];
 
-  uint8_t decoded_buffer[256];
-  uint16_t decoded_len = 0;
-  uint8_t encoded_buffer[256];
-  uint16_t encoded_len = 0;
-  uint8_t byte = 0;
   while (true)
   {
-    // Read from Uart Buffer
-    uint16_t bytes_read = uartDriver->read(UartInterface::USB_INTERFACE, read_buffer,
-                                           sizeof(read_buffer), portMAX_DELAY);
-
-    // COBS Decode Buffer
-    for (int i = 0; i < bytes_read; ++i)
+    // Blocking read from Uart Buffer
+    const int bytes_read = inputHandler->uartDriver_->read(UartInterface::GATEWAY, read_buffer,
+                                                           sizeof(read_buffer), portMAX_DELAY);
+    if (bytes_read != static_cast<int>(input_message_size))
     {
-      byte = read_buffer[i];
-
-      if (byte != 0x00)
-      {
-        if (encoded_len >= sizeof(encoded_buffer))
-        {
-          encoded_len = 0;
-          continue;
-        }
-        encoded_buffer[encoded_len] = byte;
-        encoded_len++;
-        continue;
-      }
-
-      if (encoded_len == 0)
-      {
-        continue;
-      }
-
-      // This Code is reachable with byte == 0x00 so encoded_buffer is a complete COBS encoded
-      // Message
-      cobs_decode_result dec_res =
-          cobs_decode(decoded_buffer, sizeof(decoded_buffer), encoded_buffer, encoded_len);
-      decoded_len = dec_res.out_len;
-      encoded_len = 0;
-      if (dec_res.status != COBS_DECODE_OK)
-      {
-        continue;
-      }
-
-      if (decoded_len < MessageOffsets::payload + InputHandlePayloadOffsets::payload_length)
-      {
-        continue;
-      }
-
-      // Get Message from buffer
-      Message<InputHandleData_t> msg =
-          mp_read_InputHandleMessage_from_buffer(decoded_buffer, decoded_len);
-
-      // send the InputHandleData into the Queue
-      xQueueSend(bundle.data, &msg.payload, 0);
+      continue;
     }
+
+    // Get Message from buffer
+    const Message<InputHandleData_t> msg = mp_read_InputHandleMessage_from_buffer(
+        read_buffer, static_cast<uint16_t>(bytes_read));
+    if (msg.header.type != static_cast<uint8_t>(CommandType::InputHandleData))
+    {
+      continue;
+    }
+
+    TelemetryMessage int_msg = initialize_TelemetryMessage_with_payload(msg.payload);
+
+    xQueueSend(inputHandler->queueBundle_.telemetry_msg, &int_msg, 0);
   }
 };
 
 esp_err_t InputHandler::init()
 {
-  context_.THIS = this;
-  context_.queueBundle = queueServer_->get_input_handle();
-
-  xTaskCreate(vInputHandlerTask, "inputHandler", 10000, &context_, 5, nullptr);
-
-  RuntimeLog_t rl{};
-  if (context_.queueBundle.data != nullptr)
+  queueBundle_ = queueServer_->get_telemetry_bundle();
+  if (uartDriver_ == nullptr || queueBundle_.telemetry_msg == nullptr ||
+      queueBundle_.runtime_log == nullptr)
   {
-    rl.init_status = static_cast<uint8_t>(InitStatus::OK);
-    xQueueSend(context_.queueBundle.runtime_log, &rl, pdMS_TO_TICKS(100));
+    runtimeLogMessage_.payload.init_status = static_cast<uint8_t>(InitStatus::FAIL);
+    if (queueBundle_.runtime_log != nullptr)
+    {
+      xQueueSend(queueBundle_.runtime_log, &runtimeLogMessage_, pdMS_TO_TICKS(100));
+    }
+    return ESP_FAIL;
+  }
+
+  if (xTaskCreate(vInputHandlerTask, "inputHandler", 10000, this, 5, nullptr) == pdPASS)
+  {
+    runtimeLogMessage_.payload.init_status = static_cast<uint8_t>(InitStatus::OK);
+    xQueueSend(queueBundle_.runtime_log, &runtimeLogMessage_, pdMS_TO_TICKS(100));
     return ESP_OK;
   }
   else
   {
-    rl.init_status = static_cast<uint8_t>(InitStatus::FAIL);
-    xQueueSend(context_.queueBundle.runtime_log, &rl, pdMS_TO_TICKS(100));
+    runtimeLogMessage_.payload.init_status = static_cast<uint8_t>(InitStatus::FAIL);
+    xQueueSend(queueBundle_.runtime_log, &runtimeLogMessage_, pdMS_TO_TICKS(100));
     return ESP_FAIL;
   }
 };

@@ -56,7 +56,7 @@ int openSerial(const char* path, speed_t baud)
 //}}}
 
 /**
- * Receives a serialized Message<InputHandleData> from the control panel and
+ * Receives a serialized Message<InputHandleData_t> from the control panel and
  * forwards it as a COBS-framed message to the autopilot over the serial port.
  *
  * @param [in] fd_gateway
@@ -77,16 +77,16 @@ void forward_inputData_to_ap(int fd_gateway, int fd_serial)
     return;
   }
 
-  Message<InputHandleData> msg =
+  Message<InputHandleData_t> msg =
       mp_read_InputHandleMessage_from_buffer(msg_buffer, static_cast<uint16_t>(received));
-  if (msg.header.type != static_cast<uint8_t>(PayloadType::InputHandleData))
+  if (msg.header.type != static_cast<uint8_t>(CommandType::InputHandleData))
   {
     return;
   }
 
   uint8_t encoded_buffer[COBS_ENCODE_DST_BUF_LEN_MAX(sizeof(msg_buffer)) + 1];
-  cobs_encode_result enc_res =
-      cobs_encode(encoded_buffer, sizeof(encoded_buffer), msg_buffer, static_cast<size_t>(received));
+  cobs_encode_result enc_res = cobs_encode(encoded_buffer, sizeof(encoded_buffer), msg_buffer,
+                                           static_cast<size_t>(received));
   if (enc_res.status != COBS_ENCODE_OK)
   {
     return;
@@ -128,39 +128,44 @@ void route_mp_msg(int fd_opencpn, sockaddr_in opencpn_addr, int fd_display,
 //{{{
 #include <netinet/in.h>
 {
+  if (msg_buf == nullptr || msg_len < MessageOffsets::payload)
+  {
+    return;
+  }
 
   MessageHeader header;
-  header.type = msg_buf[0];
+  header.type = msg_buf[MessageOffsets::type];
   header.payload_length =
-      static_cast<uint16_t>(msg_buf[1]) | (static_cast<uint16_t>(msg_buf[2]) << 8);
+      wire_detail::read_uint16(msg_buf, MessageOffsets::payload_length_little_endian);
 
   switch (header.type)
   {
-  case static_cast<uint8_t>(PayloadType::NavigationSnapshot):
-    if (header.payload_length == NavigationPayloadOffsets::payload_length &&
-        msg_len >= MessageOffsets::payload + NavigationPayloadOffsets::payload_length)
+  case static_cast<uint8_t>(PayloadType::AccumulatedLogMessage):
+    if (header.payload_length == AccumulatedLogMessagePayloadOffsets::payload_length &&
+        msg_len >= MessageOffsets::payload + AccumulatedLogMessagePayloadOffsets::payload_length)
     {
-      Message<NavigationSnapshot> msg{};
-      msg = mp_read_NavigationMessage_from_buffer(msg_buf, msg_len);
-      consume_nav_msg(fd_display, &display_addr, &msg);
-      break;
+      const Message<AccumulatedLogMessage> msg =
+          mp_read_AccumulatedLogMessage_from_buffer(msg_buf, static_cast<uint16_t>(msg_len));
+      if (msg.header.type == static_cast<uint8_t>(PayloadType::AccumulatedLogMessage))
+      {
+        consume_telemetry_log_msg(fd_display, &display_addr, &msg);
+      }
     }
+    break;
 
   case static_cast<uint8_t>(PayloadType::NmeaSentences):
-    if (msg_len >= MessageOffsets::payload + NmeaPayloadOffsets::sentences &&
-        msg_buf[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] <= 20 &&
-        header.payload_length ==
-            NmeaPayloadOffsets::sentences +
-                msg_buf[MessageOffsets::payload + NmeaPayloadOffsets::sentence_count] *
-                    sizeof(NmeaSentences::sentence[0]) &&
-        msg_len >= MessageOffsets::payload + NmeaPayloadOffsets::sentences +
-                       (header.payload_length - NmeaPayloadOffsets::sentences))
+    if (msg_len >= MessageOffsets::payload + NmeaPayloadOffsets::sentences)
     {
-      Message<NmeaSentences> msg{};
-      msg = mp_read_NmeaMessage_from_buffer(msg_buf, msg_len);
-      consume_nmea_msg(fd_opencpn, &opencpn_addr, &msg);
-      break;
+      const Message<NmeaSentences> msg =
+          mp_read_NmeaMessage_from_buffer(msg_buf, static_cast<uint16_t>(msg_len));
+      if (msg.header.type == static_cast<uint8_t>(PayloadType::NmeaSentences))
+      {
+        consume_nmea_msg(fd_opencpn, &opencpn_addr, &msg);
+      }
     }
+    break;
+
+  default:
     break;
   }
 };
@@ -229,6 +234,7 @@ int main(int argc, char** argv)
   std::vector<uint8_t> msg_decoded;
 
   //===================================================================================================================================================
+  printf("gateway running... \n");
   while (true)
 
   {

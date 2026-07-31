@@ -1,27 +1,28 @@
 #include "drivers/gpsDriver.h"
-#include "driver/uart.h"
-#include "esp_log.h"
+#include "drivers/uartDriver.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "minmea/minmea.h"
-#include "utils/debug_utils.h"
 
 void vGpsTask(void* pvParameters)
 {
   TickType_t xLastWakeTime = xTaskGetTickCount();
-  const TickType_t xPeriod = pdMS_TO_TICKS(GpsConfig::task_period);
+  const TickType_t xPeriod = pdMS_TO_TICKS(500);
 
   while (true)
   {
-    task_context* context = static_cast<task_context*>(pvParameters);
-    GpsDriver* driver = static_cast<GpsDriver*>(context->THIS);
+    GpsDriver* driver = static_cast<GpsDriver*>(pvParameters);
 
-    driver->fill_data();
-    driver->gpsTelemetry_->rl.free_task_stack = uxTaskGetStackHighWaterMark(nullptr);
+    driver->fill_payload();
 
-    xQueueOverwrite(context->queueBundle.data, &driver->gpsTelemetry_->data);
-    xQueueOverwrite(context->queueBundle.runtime_log, &driver->gpsTelemetry_->rl);
+    TelemetryMessage tel_msg = initialize_TelemetryMessage_with_payload(driver->module_payload_);
+    RuntimeLogMessage rl_msg{driver->id_};
+
+    rl_msg.payload.free_task_stack = uxTaskGetStackHighWaterMark(nullptr);
+
+    xQueueSend(driver->queueBundle_.telemetry_msg, &tel_msg, 0);
+    xQueueSend(driver->queueBundle_.runtime_log, &rl_msg, 0);
 
     vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
@@ -31,56 +32,23 @@ void vGpsTask(void* pvParameters)
 esp_err_t GpsDriver::init()
 //{{{
 {
-  esp_err_t install = uart_driver_install(GpsConfig::uart_num, GpsConfig::RX_buffer,
-                                          GpsConfig::TX_buffer, GpsConfig::event_queue_size,
-                                          GpsConfig::uart_queue, GpsConfig::interrupt_alloc_flags);
-  ESP_LOGI(TAG, "uart_driver_install(): %s", esp_err_to_name(install));
-
-  uart_config_t uart_config = {
-      .baud_rate = GpsConfig::baud_rate,
-      .data_bits = GpsConfig::data_bits,
-      .parity = GpsConfig::parity,
-      .stop_bits = GpsConfig::stop_bits,
-      .flow_ctrl = GpsConfig::flow_ctrl,
-  };
-
-  esp_err_t configure = uart_param_config(GpsConfig::uart_num, &uart_config);
-
-  esp_err_t set_pin = uart_set_pin(GpsConfig::uart_num, GpsConfig::TX_GPIO, GpsConfig::RX_GPIO,
-                                   UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-
-  context_->THIS = this;
-  context_->queueBundle = qServer_->get_gps_bundle();
+  queueBundle_ = qServer_->get_telemetry_bundle();
   nmea_handle_ = qServer_->get_nmea_handle();
 
-  const char* description = "GpsTask";
-
-  BaseType_t task_create;
-
-  if (context_->queueBundle.data != nullptr)
+  if (xTaskCreate(vGpsTask, "GpsTask", 10000, this, 5, nullptr) != pdPASS)
   {
-    task_create = xTaskCreate(vGpsTask, description, 10000, context_, 5, nullptr);
-  }
-
-  RuntimeLog_t rl{};
-
-  if (install != ESP_OK || configure != ESP_OK || set_pin != ESP_OK || task_create != pdPASS)
-  {
-    rl.init_status = static_cast<uint8_t>(InitStatus::OK);
-    xQueueSend(context_->queueBundle.runtime_log, &rl, pdMS_TO_TICKS(100));
-
+    runtimeLogMessage_.payload.init_status = static_cast<uint8_t>(InitStatus::FAIL);
+    xQueueSend(queueBundle_.runtime_log, &runtimeLogMessage_, pdMS_TO_TICKS(100));
     return ESP_FAIL;
   }
-  else
-  {
-    rl.init_status = static_cast<uint8_t>(InitStatus::FAIL);
-    xQueueSend(context_->queueBundle.runtime_log, &rl, pdMS_TO_TICKS(100));
-    return ESP_OK;
-  }
+
+  runtimeLogMessage_.payload.init_status = static_cast<uint8_t>(InitStatus::OK);
+  xQueueSend(queueBundle_.runtime_log, &runtimeLogMessage_, pdMS_TO_TICKS(100));
+  return ESP_OK;
 }
 //}}}
 
-void GpsDriver::fill_data()
+void GpsDriver::fill_payload()
 //{{{
 {
   if (uart_data_ == nullptr)
@@ -88,8 +56,9 @@ void GpsDriver::fill_data()
     return;
   }
 
-  bytes_read_ = uart_read_bytes(GpsConfig::uart_num, uart_data_, GpsConfig::RX_buffer,
-                                20 / portTICK_PERIOD_MS);
+//TODO remove ardcoded buffer size here and in construcor of GpsDriver
+  bytes_read_ =
+      uartDriver_->read(UartInterface::GPS, uart_data_, 1024, pdMS_TO_TICKS(50));
   consume_uart_data();
 };
 //}}}
@@ -106,7 +75,7 @@ void GpsDriver::consume_sentence(const char* sentence)
 
   {
 
-    // Write into queue for direct use by the logger/OpenCPN bridge.
+    // Write into queue for direct use by the logger/gateway.
     if (nmea_handle_ != nullptr)
     {
       xQueueSendToBack(nmea_handle_, sentence, 0);
@@ -120,10 +89,10 @@ void GpsDriver::consume_sentence(const char* sentence)
       minmea_sentence_gga frame{};
       if (minmea_parse_gga(&frame, sentence))
       {
-        gpsTelemetry_->data.fixQuality = frame.fix_quality;
-        gpsTelemetry_->data.satellites_tracked = frame.satellites_tracked;
-        gpsTelemetry_->data.latitude = minmea_tocoord(&frame.latitude);
-        gpsTelemetry_->data.longitude = minmea_tocoord(&frame.longitude);
+        module_payload_.fixQuality = frame.fix_quality;
+        module_payload_.satellites_tracked = frame.satellites_tracked;
+        module_payload_.latitude = minmea_tocoord(&frame.latitude);
+        module_payload_.longitude = minmea_tocoord(&frame.longitude);
       }
       break;
     }
@@ -132,9 +101,9 @@ void GpsDriver::consume_sentence(const char* sentence)
       minmea_sentence_vtg frame{};
       if (minmea_parse_vtg(&frame, sentence))
       {
-        gpsTelemetry_->data.course_true = minmea_tofloat(&frame.true_track_degrees);
-        gpsTelemetry_->data.speed_kts = minmea_tofloat(&frame.speed_knots);
-        gpsTelemetry_->data.timestamp = esp_timer_get_time();
+        module_payload_.course_true = minmea_tofloat(&frame.true_track_degrees);
+        module_payload_.speed_kts = minmea_tofloat(&frame.speed_knots);
+        module_payload_.timestamp = esp_timer_get_time();
       }
 
       break;
@@ -152,6 +121,7 @@ void GpsDriver::consume_sentence(const char* sentence)
   };
 };
 //}}}
+
 
 void GpsDriver::consume_uart_data()
 //{{{

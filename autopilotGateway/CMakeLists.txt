@@ -23,3 +23,14 @@ target_include_directories(cobs PUBLIC
 target_link_libraries(autopilotGateway PRIVATE 
 	cobs
 )
+
+include(CTest)
+if(BUILD_TESTING)
+	add_executable(autopilotWireProtocolTest
+		../test/autopilotWireProtocol_test.cpp
+	)
+	target_include_directories(autopilotWireProtocolTest PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/../include"
+	)
+	add_test(NAME autopilotWireProtocolTest COMMAND autopilotWireProtocolTest)
+endif()

@@ -1,5 +1,7 @@
 #include "core/telemetryHub.h"
 #include "config/config.h"
+#include "drivers/gpsTypes.h"
+#include "protocol/internalMessageProtocol.h"
 
 void vTelemetryHubTask(void* pvParameters)
 {
@@ -8,10 +10,10 @@ void vTelemetryHubTask(void* pvParameters)
 
   while (true)
   {
-    task_context* context = static_cast<task_context*>(pvParameters);
-    TelemetryHub* hub = static_cast<TelemetryHub*>(context->THIS);
+    TelemetryHub* hub = static_cast<TelemetryHub*>(pvParameters);
 
     hub->collectTelemetry();
+    hub->collectRuntimeLogs();
     hub->updateOwnFreeStack();
     hub->publishTelemetry();
 
@@ -22,81 +24,122 @@ void vTelemetryHubTask(void* pvParameters)
 
 BaseType_t TelemetryHub::init()
 {
-  context_->THIS = this;
-  gps_bundle_ = qServer_->get_gps_bundle();
+  BaseType_t create_res = pdFAIL;
+  telemetry_bundle_ = qServer_->get_telemetry_bundle();
   telemetry_log_queue_ = qServer_->get_telemetry_log_handle();
 
-  if (gps_bundle_.data != nullptr && context_ != nullptr)
+  if (telemetry_bundle_.telemetry_msg != nullptr && telemetry_log_queue_ != nullptr)
   {
-    return xTaskCreate(vTelemetryHubTask, "TelemetryHub", 50000, context_, 4, nullptr);
-  }
-  else
-  {
-    return pdFALSE;
+    log_msg_.runtime_log.tHub.init_status = static_cast<uint8_t>(InitStatus::OK);
+    create_res = xTaskCreate(vTelemetryHubTask, "TelemetryHub", 50000, THIS, 4, nullptr);
   }
 
-  if (telemetry_log_queue_ != nullptr)
+  if (create_res == pdPASS)
   {
-    return pdTRUE;
+    return pdPASS;
   }
   else
   {
+    log_msg_.runtime_log.tHub.init_status = static_cast<uint8_t>(InitStatus::FAIL);
+    if (telemetry_log_queue_ != nullptr)
+    {
+      xQueueSend(telemetry_log_queue_, &log_msg_, pdMS_TO_TICKS(100));
+    }
     return pdFALSE;
   }
 };
 
 void TelemetryHub::collectTelemetry()
 {
-  Telemetry<gpsDriverData_t> frame;
-  xQueuePeek(gps_bundle_.data, &frame.data, 0);
-  xQueuePeek(gps_bundle_.runtime_log, &frame.rl, 0);
-  xQueuePeek(gps_bundle_.error, &frame.error, 0);
 
-  //==========Errors==========================
-  bool gps_valid = false;
-  if (frame.data.fixQuality == 0)
+  TelemetryMessage frame{};
+  xQueueReceive(telemetry_bundle_.telemetry_msg, &frame, 0);
+
+  switch (frame.id)
   {
-    gps_valid = false;
-  }
-  else
+
+  case ModuleID::GPS:
   {
-    gps_valid = true;
+    {
+      //==========Validity==========================
+      bool gps_valid = false;
+      if (frame.payload.gpsData.fixQuality == 0)
+      {
+        gps_valid = false;
+      }
+      else
+      {
+        gps_valid = true;
+      }
+
+      //========= Telemetry ======================
+      log_msg_.snapshot.gps_sog_kts.value = frame.payload.gpsData.speed_kts;
+      log_msg_.snapshot.gps_cog_dg.value = frame.payload.gpsData.course_true;
+      log_msg_.snapshot.gps_lat = frame.payload.gpsData.latitude;
+      log_msg_.snapshot.gps_lon = frame.payload.gpsData.longitude;
+
+      if (gps_valid &&
+          log_msg_.snapshot.gps_sog_kts.value > SteeringSourceHandlingConfig::minGpsSpeedForUse)
+      {
+        log_msg_.snapshot.gps_sog_kts.valid = true;
+        log_msg_.snapshot.gps_cog_dg.valid = true;
+      }
+      else
+      {
+        log_msg_.snapshot.gps_sog_kts.valid = false;
+        log_msg_.snapshot.gps_cog_dg.valid = false;
+      }
+
+      log_msg_.snapshot.gps_sog_kts.timestamp = frame.payload.gpsData.timestamp;
+      log_msg_.snapshot.gps_cog_dg.timestamp = frame.payload.gpsData.timestamp;
+      log_msg_.error.validFix = gps_valid;
+    }
+    break;
   }
 
-  //========= Telemetry ======================
-  telemetrySnapshot_.gps_sog.value = frame.data.speed_kts;
-  telemetrySnapshot_.gps_cog.value = frame.data.course_true;
-  telemetrySnapshot_.gps_lat = frame.data.latitude;
-  telemetrySnapshot_.gps_lon = frame.data.longitude;
-
-  if (gps_valid && telemetrySnapshot_.gps_sog.value > SteeringSourceHandlingConfig::minGpsSpeedForUse)
+  case ModuleID::INPUT_HANDLER:
   {
-    telemetrySnapshot_.gps_sog.valid = true;
-    telemetrySnapshot_.gps_cog.valid = true;
+    log_msg_.snapshot.steering_engaged = frame.payload.inputHandleData.steering_engaged;
+	log_msg_.snapshot.target_course = frame.payload.inputHandleData.target_course;
   }
-  else
+  }
+};
+
+//==========================================================================================================
+//==========================================================================================================
+
+void TelemetryHub::collectRuntimeLogs()
+{
+  RuntimeLogMessage frame{ModuleID::THUB};
+  xQueueReceive(telemetry_bundle_.runtime_log, &frame, 0);
+
+  switch (frame.id)
   {
-    telemetrySnapshot_.gps_sog.valid = false;
-    telemetrySnapshot_.gps_cog.valid = false;
+  case ModuleID::GPS:
+  {
+    log_msg_.runtime_log.gps.free_task_stack = frame.payload.free_task_stack;
+    log_msg_.runtime_log.gps.init_status = frame.payload.init_status;
+    break;
   }
 
-  telemetrySnapshot_.gps_sog.timestamp = frame.data.timestamp;
-  telemetrySnapshot_.gps_cog.timestamp = frame.data.timestamp;
-
-  //======== Perfomance =====================
-  telemetryPerformance_.gpsFreeStack = frame.rl.free_task_stack;
+  case ModuleID::INPUT_HANDLER:
+  {
+    log_msg_.runtime_log.inputHandler.free_task_stack = frame.payload.free_task_stack;
+    log_msg_.runtime_log.inputHandler.init_status = frame.payload.init_status;
+    break;
+  }
+  case ModuleID::THUB:
+    break;
+  };
 };
 
 void TelemetryHub::publishTelemetry()
 {
-  TelemetryLogMessage msg{};
-  msg.snapshot = telemetrySnapshot_;
-  msg.performance = telemetryPerformance_;
 
-  xQueueOverwrite(telemetry_log_queue_, &msg);
+  xQueueOverwrite(telemetry_log_queue_, &log_msg_);
 };
 
 void TelemetryHub::updateOwnFreeStack()
 {
-  telemetryPerformance_.telemetryHubFreeStack = uxTaskGetStackHighWaterMark(nullptr);
+  log_msg_.runtime_log.tHub.free_task_stack = uxTaskGetStackHighWaterMark(nullptr);
 };

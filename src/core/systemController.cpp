@@ -1,7 +1,10 @@
-﻿#include "core/systemController.h"
+﻿#if 0
+// Legacy synchronous architecture. Kept as reference until its remaining
+// ideas have been migrated to the FreeRTOS-based implementation.
+#include "core/systemController.h"
 #include "types/controllerTypes.h"
-#include "types/steeringTypes.h"
 #include "types/sensorTypes.h"
+#include "types/steeringTypes.h"
 #include <cstdint>
 
 SystemController::SystemController()
@@ -64,3 +67,4 @@ SystemState SystemController::stateUpdate(const DiagnosticSnapshot& snapshot)
 
     return state;
 }
+#endif

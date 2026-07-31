@@ -1,32 +1,27 @@
 #pragma once
-#include <cstdint> 
-#include "types/sensorTypes.h"
+#include "navigation/navigationTypes.h"
+#include <cstdint>
 
-enum class NavigationSource { Compass, Gps, Wind };
-
-struct SystemState {
-  enum class SystemMode { INIT, OK, AISonly, SAFE };
+#if 0
+// Legacy synchronous SystemController/UI model. Kept as reference while the
+// remaining ideas are migrated to the FreeRTOS-based architecture.
+struct SystemState
+{
+  enum class SystemMode
+  {
+    INIT,
+    OK,
+    AISonly,
+    SAFE
+  };
   SystemMode systemMode = SystemMode::INIT;
 };
 
-struct Intent {
+struct Intent
+{
   bool steeringEngaged = false;
   uint16_t generalTarget = 0;
   NavigationSource activeSource = NavigationSource::Compass;
   SystemState requestedState;
 };
-
-
-// Navigation values and their validity/timestamp metadata.
-struct NavigationSnapshot_t
-//{{{
-{
-  SensorSample<uint16_t> compass_hdg_dg;
-  SensorSample<uint16_t> gps_cog_dg;
-  SensorSample<float> gps_sog_kts;
-  SensorSample<uint16_t> wind_angle_dg;
-  SensorSample<float> stw_kts;
-  NavigationSource LeadSource;
-};
-//}}}
-
+#endif

@@ -1,4 +1,8 @@
 #pragma once
+
+#if 0
+// Legacy synchronous architecture. Kept as reference until its remaining
+// ideas have been migrated to the FreeRTOS-based implementation.
 #include "core/config.h"
 
 #include "core/steering/sourceHandling.h"
@@ -44,3 +48,4 @@ private:
   // So bleibt die Zustandslogik testbar und vom Tick-Ablauf entkoppelt.
   SystemState stateUpdate(const DiagnosticSnapshot &snapshot);
 };
+#endif

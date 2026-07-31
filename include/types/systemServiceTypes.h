@@ -1,19 +1,5 @@
-#pragma once 
-#include "freertos/FreeRTOS.h"
-#include "freertos/idf_additions.h"
-#include "freertos/task.h"
+#pragma once
 
-
-struct QueueBundle_t {
-  QueueHandle_t data= nullptr; 
-  QueueHandle_t runtime_log= nullptr; 
-  QueueHandle_t error= nullptr; 
-  
-};
-
-struct task_context
-{
-  void* THIS = nullptr;
-  QueueBundle_t  queueBundle;
-};
-
+// Compatibility include for legacy code. FreeRTOS-specific infrastructure is
+// owned by core rather than the shared domain types.
+#include "core/freertosTypes.h"

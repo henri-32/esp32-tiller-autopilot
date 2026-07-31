@@ -1,9 +1,9 @@
 #include "drivers/compassDriver.h"
+#include "config/i2c_hwconfig.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "config/i2c_hwconfig.h"
-#include "types/sensorTypes.h"
+#include "navigation/navigationTypes.h"
 #include <cstdint>
 #include <math.h>
 
@@ -67,4 +67,3 @@ bool CompassDriver::data_is_rdy()
   return (data[0] & 0b00000001) != 0;
 }
 //}}}
-

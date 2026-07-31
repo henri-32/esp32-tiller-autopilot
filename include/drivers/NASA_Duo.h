@@ -2,8 +2,9 @@
 NMEA183 Protokoll
 Weil das Ausgewertet werden muss, ist es ein eigenes Modul*/
 #pragma once
-#include "types/sensorTypes.h"
-class NASA_Duo {
+#include "navigation/navigationTypes.h"
+class NASA_Duo
+{
 public:
   // Contract:
   // Purpose: Read speed through water (STW) via NMEA.

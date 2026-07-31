@@ -1,9 +1,10 @@
 #pragma once
-#include "types/sensorTypes.h"
+#include "navigation/navigationTypes.h"
 #include <cstdint>
 #include <cstdlib>
 
-class WindModule {
+class WindModule
+{
 public:
   // Contract:
   // Purpose: Read wind angle.

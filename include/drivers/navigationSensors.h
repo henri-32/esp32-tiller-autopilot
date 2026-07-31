@@ -1,9 +1,12 @@
 #pragma once
+
+#if 0
+// Legacy synchronous sensor aggregation. TelemetryHub owns transformation in
+// the FreeRTOS-based architecture; this code remains as an ideas reference.
 #include "drivers/NASA_Duo.h"
 #include "drivers/compassDriver.h"
 #include "drivers/gpsDriver.h"
 #include "drivers/windModule.h"
-#include "types/sensorTypes.h"
 #include "types/controllerTypes.h"
 #include "types/sensorTypes.h"
 #include <cstdint>
@@ -41,3 +44,4 @@ private:
   NASA_Duo m_nmea183Bus;
   SensorActivation m_sensorActivation;
 };
+#endif

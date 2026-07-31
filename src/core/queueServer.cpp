@@ -1,24 +1,22 @@
 #include "core/queueServer.h"
-#include "core/telemetryHub.h"
-#include "types/inputHandleTypes.h"
-#include "types/loggingTypes.h"
-#include "types/sensorTypes.h"
+#include "config/nmeaConfig.h"
+#include "drivers/gpsTypes.h"
+#include "telemetry/runtimeTypes.h"
+#include "protocol/internalMessageProtocol.h"
+#include "telemetry/telemetryLogMessage.h"
 
 BaseType_t QueueServer::init()
 {
-  gpsDataQueue_ = xQueueCreate(1, sizeof(gpsDriverData_t));
-  gpsRuntimeLogQueue_ = xQueueCreate(1, sizeof(RuntimeLog_t));
+  dataQueue_ = xQueueCreate(5, sizeof(TelemetryMessage));
+  runtimeLogQueue_ = xQueueCreate(5, sizeof(RuntimeLogMessage));
+  errorQueue_ = xQueueCreate(10, sizeof(ErrorMessage));
 
-  // TODO Size of Error und Runtime Structs unbekannt
-  gpsErrorQueue_ = xQueueCreate(1, sizeof(uint16_t));
   gpsNMEAQueue_ = xQueueCreate(NmeaConfig::queue_depth, NmeaConfig::max_sentence_len);
 
-  telemetryLogMessageQueue_ = xQueueCreate(1, sizeof(TelemetryLogMessage));
+  telemetryLogMessageQueue_ = xQueueCreate(1, sizeof(AccumulatedLogMessage));
 
-  inputHandlerDataQueue_ = xQueueCreate(5, sizeof(InputHandleData_t));
-  inputHandlerRuntimeLogQueue_ = xQueueCreate(1, sizeof(RuntimeLog_t));
 
-  if (gpsDataQueue_ != nullptr && gpsRuntimeLogQueue_ != nullptr && gpsErrorQueue_ != nullptr &&
+  if (dataQueue_ != nullptr && runtimeLogQueue_ != nullptr && errorQueue_ != nullptr &&
       gpsNMEAQueue_ != nullptr && telemetryLogMessageQueue_ != nullptr)
   {
     return pdPASS;
@@ -29,12 +27,12 @@ BaseType_t QueueServer::init()
   }
 };
 
-QueueBundle_t QueueServer::get_gps_bundle() const
+QueueBundle_t QueueServer::get_telemetry_bundle() const
 {
   return {
-      .data = gpsDataQueue_,
-      .runtime_log = gpsRuntimeLogQueue_,
-      .error = gpsErrorQueue_,
+      .telemetry_msg = dataQueue_,
+      .runtime_log = runtimeLogQueue_,
+      .error = errorQueue_,
   };
 }
 
@@ -46,9 +44,4 @@ QueueHandle_t QueueServer::get_nmea_handle() const
 QueueHandle_t QueueServer::get_telemetry_log_handle() const
 {
   return telemetryLogMessageQueue_;
-};
-
-QueueBundle_t QueueServer::get_input_handle() const
-{
-  return {.data = inputHandlerDataQueue_, .runtime_log = inputHandlerRuntimeLogQueue_, .error = inputErrorQueue_};
 };

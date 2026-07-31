@@ -6,8 +6,8 @@
 #include <sys/un.h>
 
 /**
- * Consumes Messages with NavigationSnapshot payloads which contains
- * - forwarding to displayProgram
+ * Consumes a AccumulatedLogMessage by forwarding the complete message to the
+ * monitor. A future native logger can consume the same message unchanged.
  * - FUTURE write to logfile
  *
  * @param [in] fd_display
@@ -19,7 +19,7 @@
  * @param [in] msg
  * 		Ptr to message to be consumed
  */
-void consume_nav_msg(int fd, sockaddr_un* addr, Message<NavigationSnapshot>* msg);
+void consume_telemetry_log_msg(int fd, sockaddr_un* addr, const Message<AccumulatedLogMessage>* msg);
 
 /**
  * Consumes Messages with NmeaSentences payloads which contains
@@ -35,4 +35,4 @@ void consume_nav_msg(int fd, sockaddr_un* addr, Message<NavigationSnapshot>* msg
  *		Ptr to message to be consumed
  */
 void consume_nmea_msg(int file_descriptor, sockaddr_in* addr,
-                      Message<NmeaSentences>* sentences_ptr);
+                      const Message<NmeaSentences>* sentences_ptr);

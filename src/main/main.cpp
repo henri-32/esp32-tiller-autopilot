@@ -13,7 +13,7 @@ extern "C" void app_main()
 
   static UartDriver uartDriver{};
   static QueueServer qServer{};
-  static GpsDriver gpsDriver{&qServer};
+  static GpsDriver gpsDriver{&qServer, &uartDriver};
 
   static TelemetryHub tHub{&qServer};
 
@@ -22,30 +22,39 @@ extern "C" void app_main()
 
   static CoreSteeringController csc{&qServer};
 
-  while (true)
+  constexpr TickType_t initialization_retry_delay = pdMS_TO_TICKS(1000);
+
+  // Initialize dependencies in order. Once a component succeeds, only the next
+  // component is retried, so already running tasks and installed drivers are
+  // never initialized a second time.
+  while (qServer.init() != pdPASS)
   {
-    // Trys to initialize the system until success
-    if (uartDriver.init() != ESP_OK)
-    {
-      continue;
-    }
+    vTaskDelay(initialization_retry_delay);
+  }
 
-    if (logger.init() != pdPASS)
-    {
-      continue;
-    }
+  while (uartDriver.init() != ESP_OK)
+  {
+    vTaskDelay(initialization_retry_delay);
+  }
 
-    if (gpsDriver.init() != ESP_OK)
-    {
-      continue;
-    }
+  while (gpsDriver.init() != ESP_OK)
+  {
+    vTaskDelay(initialization_retry_delay);
+  }
 
-    if (inputHandler.init() != pdPASS)
-    {
-      continue;
-    }
+  while (tHub.init() != pdPASS)
+  {
+    vTaskDelay(initialization_retry_delay);
+  }
 
-	break;
+  while (logger.init() != pdPASS)
+  {
+    vTaskDelay(initialization_retry_delay);
+  }
+
+  while (inputHandler.init() != ESP_OK)
+  {
+    vTaskDelay(initialization_retry_delay);
   }
 
   vTaskDelete(nullptr);

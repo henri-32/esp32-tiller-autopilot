@@ -1,11 +1,12 @@
 #pragma once
 #include "config/gps_hwconfig.h"
+#include "core/freertosTypes.h"
 #include "core/queueServer.h"
+#include "drivers/gpsTypes.h"
+#include "drivers/uartDriver.h"
 #include "esp_err.h"
-#include "types/systemServiceTypes.h"
-#include "types/sensorTypes.h"
+#include "protocol/internalMessageProtocol.h"
 #include <new>
-
 
 class IGpsDriver
 //{{{
@@ -20,24 +21,12 @@ class GpsDriver : public IGpsDriver
 //{{{
 {
 public:
-  explicit GpsDriver(const QueueServer* const qServer)
-  //{{{
+  explicit GpsDriver(const QueueServer* const qServer, UartDriver* const uartDriver)
+      //{{{
+      : id_{ModuleID::GPS}, qServer_(qServer), uartDriver_(uartDriver), runtimeLogMessage_{id_}
   {
-    // structs are allocated in the freeRTOS heap
-    qServer_ = qServer;
-    uart_data_ = static_cast<uint8_t*>(pvPortMalloc(GpsConfig::RX_buffer));
+    uart_data_ = static_cast<uint8_t*>(pvPortMalloc(1024));
     sentence_ = static_cast<char*>(pvPortMalloc(GpsConfig::max_sentence_len));
-
-    void* telMem = pvPortMalloc(sizeof(Telemetry<gpsDriverData_t>));
-    if (telMem != nullptr)
-    {
-      gpsTelemetry_ = new (telMem) Telemetry<gpsDriverData_t>{};
-    }
-    void* contextMem = pvPortMalloc(sizeof(task_context));
-    if (contextMem != nullptr)
-    {
-      context_ = new (contextMem) task_context{};
-    }
   }
   //}}}
 
@@ -53,37 +42,29 @@ public:
     {
       vPortFree(sentence_);
     }
-
-    if (gpsTelemetry_ != nullptr)
-    {
-      gpsTelemetry_->~Telemetry<gpsDriverData_t>();
-      vPortFree(gpsTelemetry_);
-    }
   }
   //}}}
 
-  /*init() configures the uart communication related to gps_hwconfig.h,
-   * and returns ESP_FAIL or ESP_OK depending on success of the initialisation*/
   esp_err_t init() override;
 
-  /*fill_data() reads the uart data, parses them and fills the gps::data struct with
-   * parsed and structured values of the Gps*/
-  void fill_data();
+  void fill_payload();
 
-  Telemetry<gpsDriverData_t>* gpsTelemetry_;
-  task_context* context_;
+  QueueBundle_t queueBundle_;
+  gpsDriverData_t module_payload_;
+  ModuleID id_;
 
 private:
   void consume_uart_data();
   void consume_byte(char byte);
   void consume_sentence(const char* sentence);
 
-  const QueueServer* qServer_{};
+  const QueueServer* qServer_;
+  const UartDriver* uartDriver_;
   QueueHandle_t nmea_handle_;
-  const char* TAG = "GpsDriver";
+  RuntimeLogMessage runtimeLogMessage_;
   uint8_t* uart_data_;
   char* sentence_;
-  uint16_t bytes_read_ = 0;
+  size_t bytes_read_ = 0;
   uint16_t sentence_len_ = 0;
   bool sentence_compl_ = true;
 };
