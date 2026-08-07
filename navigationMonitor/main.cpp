@@ -1,6 +1,5 @@
 #include "cobs-c/cobs.h"
 #include "protocol/autopilotWireProtocol.h"
-#include "socket_handling.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Window.H>
@@ -251,14 +250,39 @@ void send_ap_input(const int fd, sockaddr_un* addr, socklen_t len, InputHandleDa
     std::perror("send input to gateway");
     return;
   }
+  printf("%d \n", data->target_course);
 };
 
 int main()
 {
+  const char* display_socket_path = "/tmp/autopilot.sock";
+  const char* gateway_socket_path = "/tmp/autopilot-gateway.sock";
+  unlink(display_socket_path);
+
+  const int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+  if (fd < 0)
+  {
+    std::perror("socket");
+    return 1;
+  }
+  sockaddr_un local_addr{};
+  local_addr.sun_family = AF_UNIX;
+
+  std::strncpy(local_addr.sun_path, display_socket_path, sizeof(local_addr.sun_path) - 1);
+
+  if (bind(fd, reinterpret_cast<sockaddr*>(&local_addr), sizeof(local_addr)) < 0)
+  {
+    std::perror("bind");
+    close(fd);
+    return 1;
+  }
+
   fltk_handle handle = fltk_setup();
   Fl::add_handler(keyboard_handler);
 
-  socket_context s_context = get_socket_context();
+  sockaddr_un gateway_addr{};
+  gateway_addr.sun_family = AF_UNIX;
+  std::strncpy(gateway_addr.sun_path, gateway_socket_path, sizeof(gateway_addr.sun_path) - 1);
 
   char buffer[2048];
 
@@ -268,13 +292,12 @@ int main()
     if (ihData_changed)
     {
       refresh_target_box(handle);
-      send_ap_input(s_context.local_fd, &s_context.gateway_addr, sizeof(s_context.gateway_addr), &ihData, &handle);
+      send_ap_input(fd, &gateway_addr, sizeof(gateway_addr), &ihData, &handle);
     }
     ihData_changed = false;
 
-
     const ssize_t received =
-        recvfrom(s_context.local_fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT, nullptr, nullptr);
+        recvfrom(fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT, nullptr, nullptr);
     if (received < 0)
     {
       if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
@@ -284,5 +307,6 @@ int main()
     process_datagram(buffer, received, handle);
   }
 
-  cleanup_sockets(s_context);
+  close(fd);
+  unlink(display_socket_path);
 }

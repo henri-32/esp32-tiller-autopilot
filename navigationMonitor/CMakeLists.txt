@@ -11,7 +11,8 @@ add_subdirectory(
 )
 
 add_executable(navigationMonitor 
-	navigationMonitor.cpp
+	main.cpp
+	socket_handling.cpp
 	../lib/cobs-c/cobs.c
 )
 

@@ -9,10 +9,10 @@ void vGpsTask(void* pvParameters)
 {
   TickType_t xLastWakeTime = xTaskGetTickCount();
   const TickType_t xPeriod = pdMS_TO_TICKS(500);
+  GpsDriver* driver = static_cast<GpsDriver*>(pvParameters);
 
   while (true)
   {
-    GpsDriver* driver = static_cast<GpsDriver*>(pvParameters);
 
     driver->fill_payload();
 
@@ -56,9 +56,9 @@ void GpsDriver::fill_payload()
     return;
   }
 
-//TODO remove ardcoded buffer size here and in construcor of GpsDriver
-  bytes_read_ =
-      uartDriver_->read(UartInterface::GPS, uart_data_, 1024, pdMS_TO_TICKS(50));
+  // TODO remove hardcoded buffer size here and in construcor of GpsDriver
+  bytes_read_ = uartDriver_->read(UartInterface::GPS, uart_data_, 1024, pdMS_TO_TICKS(50));
+
   consume_uart_data();
 };
 //}}}
@@ -121,7 +121,6 @@ void GpsDriver::consume_sentence(const char* sentence)
   };
 };
 //}}}
-
 
 void GpsDriver::consume_uart_data()
 //{{{

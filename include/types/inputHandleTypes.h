@@ -7,5 +7,5 @@
 struct InputHandleData_t
 {
   bool steering_engaged = false;
-  uint16_t target_course = 0;
+  int16_t target_course = 0;
 };
