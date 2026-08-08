@@ -1,5 +1,6 @@
 #include "cobs-c/cobs.h"
 #include "protocol/autopilotWireProtocol.h"
+#include "socket_handling.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Window.H>
@@ -17,7 +18,6 @@ using std::string;
 
 // TODO Propably should not be global
 static InputHandleData_t ihData{};
-static bool ihData_changed = false;
 static bool ihData_synced = false;
 
 struct fltk_handle
@@ -40,9 +40,74 @@ Fl_Box* make_box(int x, int y, int w, int h)
   return box;
 }
 
+void refresh_target_box(fltk_handle handle)
+{
+  char text[30];
+  if (ihData_synced)
+  {
+    std::snprintf(text, sizeof(text), "TARGET: %d deg \n", ihData.target_course);
+  }
+  else
+  {
+    std::snprintf(text, sizeof(text), "TARGET: %d deg sync \n", ihData.target_course);
+  }
+  handle.target_cog_box->copy_label(text);
+  handle.target_cog_box->redraw();
+}
+
+struct WindowContext
+{
+};
+
+class Window : public Fl_Window
+{
+public:
+  Window(int x, int y, const char* name) : Fl_Window(x, y, name) {};
+
+  void set_handle(fltk_handle handle)
+  {
+    handle_ = handle;
+  }
+
+  int handle(int event) override
+  {
+
+    if (event != FL_KEYDOWN && event != FL_SHORTCUT)
+    {
+      return Fl_Window::handle(event);
+    }
+
+    if (Fl::event_key() == '+')
+    {
+      if (++ihData.target_course >= 360)
+      {
+        ihData.target_course %= 360;
+      }
+      ihData_synced = false;
+      refresh_target_box(handle_);
+      return 1;
+    }
+    else if (Fl::event_key() == '-')
+    {
+      if (--ihData.target_course < 0)
+      {
+        ihData.target_course += 360;
+      }
+      ihData_synced = false;
+      refresh_target_box(handle_);
+      return 1;
+    }
+    return Fl_Window::handle(event);
+  };
+
+private:
+  fltk_handle handle_{};
+  WindowContext ctx_;
+};
+
 fltk_handle fltk_setup()
 {
-  static Fl_Window* window = new Fl_Window(900, 250, "Autopilot source data");
+  static Window* window = new Window(900, 250, "Autopilot source data");
   constexpr int margin = 15;
   constexpr int gap = 10;
   constexpr int width = 280;
@@ -57,13 +122,16 @@ fltk_handle fltk_setup()
   auto* longitude = box(1, 1);
 
   window->end();
+
+  fltk_handle handle{.window = window,
+                     .sog_box = sog,
+                     .cog_box = cog,
+                     .target_cog_box = target_cog,
+                     .latitude_box = latitude,
+                     .longitude_box = longitude};
+  window->set_handle(handle);
   window->show();
-  return {.window = window,
-          .sog_box = sog,
-          .cog_box = cog,
-          .target_cog_box = target_cog,
-          .latitude_box = latitude,
-          .longitude_box = longitude};
+  return handle;
 };
 
 void format_coordinate_for_display(char* text, std::size_t text_size, const char* label,
@@ -87,22 +155,8 @@ void format_coordinate_for_display(char* text, std::size_t text_size, const char
                 decimal_minutes, hemisphere);
 }
 
-void refresh_target_box(fltk_handle handle)
-{
-  char text[30];
-  if (ihData_synced)
-  {
-    std::snprintf(text, sizeof(text), "TARGET: %d deg \n", ihData.target_course);
-  }
-  else
-  {
-    std::snprintf(text, sizeof(text), "TARGET: %d deg sync \n", ihData.target_course);
-  }
-  handle.target_cog_box->copy_label(text);
-  handle.target_cog_box->redraw();
-}
-
 void process_AccumulatedLogMessage(const void* data, uint16_t size, fltk_handle handle)
+//{{{
 {
   const Message<AccumulatedLogMessage> msg = mp_read_AccumulatedLogMessage_from_buffer(data, size);
   if (msg.header.type != static_cast<uint8_t>(PayloadType::AccumulatedLogMessage))
@@ -177,8 +231,10 @@ void process_AccumulatedLogMessage(const void* data, uint16_t size, fltk_handle 
   //================================ Print Target Box =========================================
   refresh_target_box(handle);
 }
+//}}}
 
 void process_datagram(const void* data, uint16_t size, fltk_handle handle)
+//{{{
 {
   if (data == nullptr || size == 0)
   {
@@ -203,110 +259,78 @@ void process_datagram(const void* data, uint16_t size, fltk_handle handle)
     break;
   }
 }
+//}}}
 
-int keyboard_handler(int event)
+struct cb_datagram_ready_ctx
 {
-
-  if (event != FL_KEYDOWN && event != FL_SHORTCUT)
-  {
-    return 0;
-  }
-  if (Fl::event_key() == '+')
-  {
-    if (++ihData.target_course >= 360)
-    {
-      ihData.target_course %= 360;
-    }
-    ihData_changed = true;
-    return 1;
-  }
-  else if (Fl::event_key() == '-')
-  {
-    if (--ihData.target_course < 0)
-    {
-      ihData.target_course += 360;
-    }
-    ihData_changed = true;
-    return 1;
-  }
-  return 0;
+  fltk_handle fl_handle;
 };
 
-void send_ap_input(const int fd, sockaddr_un* addr, socklen_t len, InputHandleData_t* data,
-                   fltk_handle* handle)
+void cb_datagram_ready(int fd, void* pvParameters)
+//{{{
 {
-  Message<InputHandleData_t> msg{data};
-  uint8_t msg_buffer[MessageOffsets::payload + InputHandlePayloadOffsets::payload_length];
-  const uint16_t msg_size =
-      mp_write_InputHandleMessage_to_bytes(msg_buffer, sizeof(msg_buffer), &msg);
-  if (msg_size == 0)
-  {
-    return;
-  }
-
-  if (sendto(fd, msg_buffer, msg_size, MSG_DONTWAIT, reinterpret_cast<const sockaddr*>(addr), len) <
-      0)
-  {
-    std::perror("send input to gateway");
-    return;
-  }
-  printf("%d \n", data->target_course);
-};
-
-int main()
-{
-  const char* display_socket_path = "/tmp/autopilot.sock";
-  const char* gateway_socket_path = "/tmp/autopilot-gateway.sock";
-  unlink(display_socket_path);
-
-  const int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
-  if (fd < 0)
-  {
-    std::perror("socket");
-    return 1;
-  }
-  sockaddr_un local_addr{};
-  local_addr.sun_family = AF_UNIX;
-
-  std::strncpy(local_addr.sun_path, display_socket_path, sizeof(local_addr.sun_path) - 1);
-
-  if (bind(fd, reinterpret_cast<sockaddr*>(&local_addr), sizeof(local_addr)) < 0)
-  {
-    std::perror("bind");
-    close(fd);
-    return 1;
-  }
-
-  fltk_handle handle = fltk_setup();
-  Fl::add_handler(keyboard_handler);
-
-  sockaddr_un gateway_addr{};
-  gateway_addr.sun_family = AF_UNIX;
-  std::strncpy(gateway_addr.sun_path, gateway_socket_path, sizeof(gateway_addr.sun_path) - 1);
+  cb_datagram_ready_ctx* context = static_cast<cb_datagram_ready_ctx*>(pvParameters);
 
   char buffer[2048];
 
-  while (handle.window->shown())
+  const ssize_t received = recvfrom(fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT, nullptr, nullptr);
+  if (received > 0)
   {
-    Fl::wait(0.01);
-    if (ihData_changed)
-    {
-      refresh_target_box(handle);
-      send_ap_input(fd, &gateway_addr, sizeof(gateway_addr), &ihData, &handle);
-    }
-    ihData_changed = false;
+    process_datagram(buffer, received, context->fl_handle);
+  }
+  else
+  {
+    perror("receive Datagram");
+  }
+}
+//}}}
 
-    const ssize_t received =
-        recvfrom(fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT, nullptr, nullptr);
-    if (received < 0)
+struct send_ap_input_ctx
+{
+  socket_context s_ctx;
+  InputHandleData_t* ihData;
+};
+
+void send_ap_input(void* context)
+{
+  send_ap_input_ctx* ctx = static_cast<send_ap_input_ctx*>(context);
+
+  Message<InputHandleData_t> msg{ctx->ihData};
+
+  uint8_t msg_buffer[MessageOffsets::payload + InputHandlePayloadOffsets::payload_length];
+  const uint16_t msg_size =
+      mp_write_InputHandleMessage_to_bytes(msg_buffer, sizeof(msg_buffer), &msg);
+
+  if (msg_size > 0)
+  {
+    if (sendto(ctx->s_ctx.local_fd, msg_buffer, msg_size, MSG_DONTWAIT,
+               reinterpret_cast<const sockaddr*>(&ctx->s_ctx.gateway_addr),
+               ctx->s_ctx.gateway_addr_len) < 0)
     {
-      if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
-        continue;
-      break;
+      perror("send input to gateway");
     }
-    process_datagram(buffer, received, handle);
   }
 
-  close(fd);
-  unlink(display_socket_path);
+  Fl::repeat_timeout(0.5, send_ap_input, context);
+}
+//==============================================================================
+int main()
+{
+  fltk_handle fl_handle = fltk_setup();
+  socket_context s_context = get_socket_context();
+  if (s_context.success == false)
+  {
+    return 1;
+  }
+
+  cb_datagram_ready_ctx dgram_context{.fl_handle = fl_handle};
+  send_ap_input_ctx send_ctx{.s_ctx = s_context, .ihData = &ihData};
+
+  Fl::add_fd(s_context.local_fd, FL_READ, cb_datagram_ready, &dgram_context);
+  Fl::add_timeout(0.5, send_ap_input, &send_ctx);
+
+  int ret = Fl::run();
+
+  cleanup_sockets(s_context);
+  return ret;
 }

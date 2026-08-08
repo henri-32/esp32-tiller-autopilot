@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <termios.h>
@@ -230,6 +231,12 @@ int main(int argc, char** argv)
   display_addr.sun_family = AF_UNIX;
   std::strncpy(display_addr.sun_path, "/tmp/autopilot.sock", sizeof(display_addr.sun_path) - 1);
 
+  // Configure polling of file descriptors
+  pollfd fds[]{
+      {.fd = ap_display_unix_socket_fd, .events = POLLIN, .revents = 0},
+      {.fd = serialFd, .events = POLLIN, .revents = 0},
+  };
+
   std::vector<uint8_t> msg_encoded;
   std::vector<uint8_t> msg_decoded;
 
@@ -238,53 +245,82 @@ int main(int argc, char** argv)
   while (true)
 
   {
-    forward_inputData_to_ap(ap_display_unix_socket_fd, serialFd);
+    constexpr uint8_t poll_errors = POLLERR | POLLHUP | POLLNVAL;
 
-    // Read serial data into the receive buffer.
-    uint8_t read_buffer[256];
-    ssize_t n = read(serialFd, &read_buffer, sizeof(read_buffer));
-    if (n <= 0)
+    const int result = poll(fds, 2, -1);
+    if (result < 0)
     {
-      if (errno == EAGAIN || errno == EWOULDBLOCK)
+      if (errno == EINTR)
       {
         continue;
       }
-      perror("read serial");
+      perror("poll");
       break;
     }
 
-    // Split the stream into zero-delimited COBS frames.
-    for (int i = 0; i < n; ++i)
+    if (fds[0].revents & poll_errors)
     {
-      const uint8_t byte = read_buffer[i];
+      perror("gateway socket poll");
+    }
 
-      if (byte != 0x00)
+    else if (fds[0].revents & POLLIN)
+    {
+      forward_inputData_to_ap(ap_display_unix_socket_fd, serialFd);
+    }
+
+    if (fds[1].revents & poll_errors)
+    {
+      perror("ap display socket poll");
+    }
+
+    else if (fds[1].revents & POLLIN)
+    {
+      // Read serial data into the receive buffer.
+      uint8_t read_buffer[256];
+      ssize_t n = read(serialFd, &read_buffer, sizeof(read_buffer));
+      if (n <= 0)
       {
-        msg_encoded.push_back(byte);
-        continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+          continue;
+        }
+        perror("read serial");
+        break;
       }
 
-      if (msg_encoded.empty())
+      // Split the stream into zero-delimited COBS frames.
+      for (int i = 0; i < n; ++i)
       {
-        continue;
-      }
+        const uint8_t byte = read_buffer[i];
 
-      msg_decoded.resize(msg_encoded.size());
-      cobs_decode_result dec_res = cobs_decode(msg_decoded.data(), msg_decoded.size(),
-                                               msg_encoded.data(), msg_encoded.size());
+        if (byte != 0x00)
+        {
+          msg_encoded.push_back(byte);
+          continue;
+        }
 
-      if (dec_res.status != COBS_DECODE_OK)
-      {
-        msg_decoded.clear();
+        if (msg_encoded.empty())
+        {
+          continue;
+        }
+
+        msg_decoded.resize(msg_encoded.size());
+        cobs_decode_result dec_res = cobs_decode(msg_decoded.data(), msg_decoded.size(),
+                                                 msg_encoded.data(), msg_encoded.size());
+
+        if (dec_res.status != COBS_DECODE_OK)
+        {
+          msg_decoded.clear();
+          msg_encoded.clear();
+          continue;
+        }
+
+        route_mp_msg(nmea_udp_fd, nmea_udp_dest, ap_display_unix_socket_fd, display_addr,
+                     msg_decoded.data(), dec_res.out_len);
+
         msg_encoded.clear();
-        continue;
+        msg_decoded.clear();
       }
-
-      route_mp_msg(nmea_udp_fd, nmea_udp_dest, ap_display_unix_socket_fd, display_addr,
-                   msg_decoded.data(), dec_res.out_len);
-
-      msg_encoded.clear();
-      msg_decoded.clear();
     }
   }
   close(nmea_udp_fd);

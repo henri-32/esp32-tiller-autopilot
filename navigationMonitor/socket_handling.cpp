@@ -37,6 +37,7 @@ const socket_context get_socket_context()
   context.gateway_addr.sun_family = AF_UNIX;
   strncpy(context.gateway_addr.sun_path, gateway_socket_path,
           sizeof(context.gateway_addr.sun_path) - 1);
+  context.gateway_addr_len =sizeof(sockaddr_un);
 
   context.success = true;
   return context;

@@ -64,7 +64,7 @@ private:
   RuntimeLogMessage runtimeLogMessage_;
   uint8_t* uart_data_;
   char* sentence_;
-  size_t bytes_read_ = 0;
+  ssize_t bytes_read_ = 0;
   uint16_t sentence_len_ = 0;
   bool sentence_compl_ = true;
 };
