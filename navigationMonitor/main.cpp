@@ -4,11 +4,9 @@
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Window.H>
-#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <iostream>
 #include <string>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -16,21 +14,9 @@
 
 using std::string;
 
-// TODO Propably should not be global
-static InputHandleData_t ihData{};
-static bool ihData_synced = false;
-
-struct fltk_handle
-{
-  Fl_Window* window;
-  Fl_Box* sog_box;
-  Fl_Box* cog_box;
-  Fl_Box* target_cog_box;
-  Fl_Box* latitude_box;
-  Fl_Box* longitude_box;
-};
-
+// Creates a consistently styled value box for the monitor grid.
 Fl_Box* make_box(int x, int y, int w, int h)
+//{{{
 {
   auto* box = new Fl_Box(x, y, w, h, "Waiting for source data");
   box->box(FL_UP_BOX);
@@ -39,37 +25,32 @@ Fl_Box* make_box(int x, int y, int w, int h)
   box->labeltype(FL_NORMAL_LABEL);
   return box;
 }
+//}}}
 
-void refresh_target_box(fltk_handle handle)
-{
-  char text[30];
-  if (ihData_synced)
-  {
-    std::snprintf(text, sizeof(text), "TARGET: %d deg \n", ihData.target_course);
-  }
-  else
-  {
-    std::snprintf(text, sizeof(text), "TARGET: %d deg sync \n", ihData.target_course);
-  }
-  handle.target_cog_box->copy_label(text);
-  handle.target_cog_box->redraw();
-}
-
+//===================================================================== MAIN WINDOW ==============================================================
+// Shared state read and updated by the UI and socket callbacks.
 struct WindowContext
+//{{{
 {
+  AccumulatedLogMessage ALM;
+  InputHandleData_t ihData{};
+  bool ihData_synced = false;
 };
-
+//}}}
 class Window : public Fl_Window
+//{{{
 {
 public:
-  Window(int x, int y, const char* name) : Fl_Window(x, y, name) {};
-
-  void set_handle(fltk_handle handle)
+  // Builds the window around externally owned application state.
+  Window(int x, int y, const char* name, WindowContext* context)
+      : Fl_Window(x, y, name), ctx_(context)
   {
-    handle_ = handle;
-  }
+    make_boxes();
+  };
 
+  // Handles keyboard input for changing the target course.
   int handle(int event) override
+  //{{{
   {
 
     if (event != FL_KEYDOWN && event != FL_SHORTCUT)
@@ -79,64 +60,135 @@ public:
 
     if (Fl::event_key() == '+')
     {
-      if (++ihData.target_course >= 360)
+      if (++ctx_->ihData.target_course >= 360)
       {
-        ihData.target_course %= 360;
+        ctx_->ihData.target_course %= 360;
       }
-      ihData_synced = false;
-      refresh_target_box(handle_);
+      ctx_->ihData_synced = false;
+      refresh_target_course_box();
       return 1;
     }
     else if (Fl::event_key() == '-')
     {
-      if (--ihData.target_course < 0)
+      if (--ctx_->ihData.target_course < 0)
       {
-        ihData.target_course += 360;
+        ctx_->ihData.target_course += 360;
       }
-      ihData_synced = false;
-      refresh_target_box(handle_);
+      ctx_->ihData_synced = false;
+      refresh_target_course_box();
       return 1;
     }
     return Fl_Window::handle(event);
   };
+  //}}}
+
+  // Refreshes all telemetry boxes from the current window context.
+  void display_AccumulatedLogMessage_values()
+  //{{{
+  {
+    AccumulatedLogMessage msg = ctx_->ALM;
+
+    const auto snapshot = msg.snapshot;
+    const auto sog = msg.snapshot.gps_sog_kts;
+    const auto cog = msg.snapshot.gps_cog_dg;
+
+    //================================ Check if ihData is synced to autopilot ================
+    if (ctx_->ihData.steering_engaged == snapshot.steering_engaged &&
+        ctx_->ihData.target_course == snapshot.target_course)
+    {
+      ctx_->ihData_synced = true;
+    }
+    else
+    {
+      ctx_->ihData_synced = false;
+    }
+
+    char text[128];
+
+    //================================ Print SOG Box =========================================
+    if (sog.valid)
+    {
+      std::snprintf(text, sizeof(text), "SOG: %.1f kts", sog.value);
+    }
+    else
+    {
+      std::snprintf(text, sizeof(text), "SOG: invalid");
+    }
+    sog_box_->copy_label(text);
+    sog_box_->redraw();
+
+    //================================ Print COG Box =========================================
+    if (cog.valid)
+    {
+      std::snprintf(text, sizeof(text), "COG: %d deg", cog.value);
+    }
+    else
+    {
+      std::snprintf(text, sizeof(text), "COG: invalid");
+    }
+    cog_box_->copy_label(text);
+    cog_box_->redraw();
+
+    //================================ Print LAT/LON Box =========================================
+    if (msg.error.validFix)
+    {
+      format_coordinate_for_display(text, sizeof(text), "LAT", snapshot.gps_lat, 2, 'N', 'S');
+    }
+    else
+    {
+      std::snprintf(text, sizeof(text), "LAT: invalid");
+    }
+    latitude_box_->copy_label(text);
+    latitude_box_->redraw();
+
+    if (msg.error.validFix)
+    {
+      format_coordinate_for_display(text, sizeof(text), "LON", snapshot.gps_lon, 3, 'E', 'W');
+    }
+    else
+    {
+      std::snprintf(text, sizeof(text), "LON: invalid");
+    }
+    longitude_box_->copy_label(text);
+    longitude_box_->redraw();
+
+    //================================ Print Target Box =========================================
+    refresh_target_course_box();
+  }
+  //}}}
 
 private:
-  fltk_handle handle_{};
-  WindowContext ctx_;
-};
+  // Creates and arranges the monitor's value boxes.
+  void make_boxes()
+  //{{{
+  {
+    static auto box = [&](int col, int row)
+    {
+      return make_box(margin_ + col * (width_ + gap_), margin_ + row * (height_ + gap_), width_,
+                      height_);
+    };
 
-fltk_handle fltk_setup()
-{
-  static Window* window = new Window(900, 250, "Autopilot source data");
-  constexpr int margin = 15;
-  constexpr int gap = 10;
-  constexpr int width = 280;
-  constexpr int height = 60;
-  auto box = [&](int col, int row)
-  { return make_box(margin + col * (width + gap), margin + row * (height + gap), width, height); };
+    sog_box_ = box(0, 0);
+    cog_box_ = box(1, 0);
+    target_box_ = box(2, 0);
+    latitude_box_ = box(0, 1);
+    longitude_box_ = box(1, 1);
 
-  auto* sog = box(0, 0);
-  auto* cog = box(1, 0);
-  auto* target_cog = box(2, 0);
-  auto* latitude = box(0, 1);
-  auto* longitude = box(1, 1);
+    add(sog_box_);
+    add(cog_box_);
+    add(target_box_);
+    add(latitude_box_);
+    add(longitude_box_);
 
-  window->end();
+    show();
+  }
+  //}}}
 
-  fltk_handle handle{.window = window,
-                     .sog_box = sog,
-                     .cog_box = cog,
-                     .target_cog_box = target_cog,
-                     .latitude_box = latitude,
-                     .longitude_box = longitude};
-  window->set_handle(handle);
-  window->show();
-  return handle;
-};
-
-void format_coordinate_for_display(char* text, std::size_t text_size, const char* label,
-                                   float decimal_degrees, int degree_width,
-                                   char positive_hemisphere, char negative_hemisphere)
+  // Formats decimal degrees as degrees and minutes with a hemisphere.
+  void format_coordinate_for_display(char* text, std::size_t text_size, const char* label,
+                                     float decimal_degrees, int degree_width,
+                                     char positive_hemisphere, char negative_hemisphere)
+//{{{
 {
   const double absolute_degrees = std::fabs(static_cast<double>(decimal_degrees));
   int degrees = static_cast<int>(absolute_degrees);
@@ -154,129 +206,99 @@ void format_coordinate_for_display(char* text, std::size_t text_size, const char
   std::snprintf(text, text_size, "%s: %0*d° %06.3f' %c", label, degree_width, degrees,
                 decimal_minutes, hemisphere);
 }
-
-void process_AccumulatedLogMessage(const void* data, uint16_t size, fltk_handle handle)
-//{{{
-{
-  const Message<AccumulatedLogMessage> msg = mp_read_AccumulatedLogMessage_from_buffer(data, size);
-  if (msg.header.type != static_cast<uint8_t>(PayloadType::AccumulatedLogMessage))
-  {
-    return;
-  }
-
-  const auto snapshot = msg.payload.snapshot;
-  const auto sog = msg.payload.snapshot.gps_sog_kts;
-  const auto cog = msg.payload.snapshot.gps_cog_dg;
-
-  //================================ Check if ihData is synced to autopilot ================
-  if (ihData.steering_engaged == snapshot.steering_engaged &&
-      ihData.target_course == snapshot.target_course)
-  {
-    ihData_synced = true;
-  }
-  else
-  {
-    ihData_synced = false;
-  }
-
-  char text[128];
-
-  //================================ Print SOG Box =========================================
-  if (sog.valid)
-  {
-    std::snprintf(text, sizeof(text), "SOG: %.1f kts", sog.value);
-  }
-  else
-  {
-    std::snprintf(text, sizeof(text), "SOG: invalid");
-  }
-  handle.sog_box->copy_label(text);
-  handle.sog_box->redraw();
-
-  //================================ Print COG Box =========================================
-  if (cog.valid)
-  {
-    std::snprintf(text, sizeof(text), "COG: %d deg", cog.value);
-  }
-  else
-  {
-    std::snprintf(text, sizeof(text), "COG: invalid");
-  }
-  handle.cog_box->copy_label(text);
-  handle.cog_box->redraw();
-
-  //================================ Print LAT/LON Box =========================================
-  if (msg.payload.error.validFix)
-  {
-    format_coordinate_for_display(text, sizeof(text), "LAT", snapshot.gps_lat, 2, 'N', 'S');
-  }
-  else
-  {
-    std::snprintf(text, sizeof(text), "LAT: invalid");
-  }
-  handle.latitude_box->copy_label(text);
-  handle.latitude_box->redraw();
-
-  if (msg.payload.error.validFix)
-  {
-    format_coordinate_for_display(text, sizeof(text), "LON", snapshot.gps_lon, 3, 'E', 'W');
-  }
-  else
-  {
-    std::snprintf(text, sizeof(text), "LON: invalid");
-  }
-  handle.longitude_box->copy_label(text);
-  handle.longitude_box->redraw();
-
-  //================================ Print Target Box =========================================
-  refresh_target_box(handle);
-}
 //}}}
+  // Updates the target-course box to reflect the current synchronization state.
+  void refresh_target_course_box()
+  //{{{
+  {
+    char text[30];
+    if (ctx_->ihData_synced)
+    {
+      std::snprintf(text, sizeof(text), "TARGET: %d deg \n", ctx_->ihData.target_course);
+    }
+    else
+    {
+      std::snprintf(text, sizeof(text), "TARGET: %d deg sync \n", ctx_->ihData.target_course);
+    }
+    target_box_->copy_label(text);
+    target_box_->redraw();
+  }
+  //}}}
 
-void process_datagram(const void* data, uint16_t size, fltk_handle handle)
+  WindowContext* ctx_;
+  static constexpr int margin_ = 15;
+  static constexpr int gap_ = 10;
+  static constexpr int width_ = 280;
+  static constexpr int height_ = 60;
+
+  Fl_Box* sog_box_;
+  Fl_Box* cog_box_;
+  Fl_Box* target_box_;
+  Fl_Box* latitude_box_;
+  Fl_Box* longitude_box_;
+};
+//}}}
+//====================================================================================================================================================
+
+
+
+// Decodes an accumulated-log datagram and stores its payload.
+bool encode_and_store_datagram(const void* data, uint16_t size,
+                               AccumulatedLogMessage* msg_destination)
 //{{{
 {
   if (data == nullptr || size == 0)
   {
-    return;
+    return false;
   }
 
   std::vector<uint8_t> decoded(size);
   const cobs_decode_result decode_result = cobs_decode(decoded.data(), decoded.size(), data, size);
   if (decode_result.status != COBS_DECODE_OK || decode_result.out_len < MessageOffsets::payload)
   {
-    return;
+    return false;
   }
 
   switch (decoded[MessageOffsets::type])
   {
   case static_cast<uint8_t>(PayloadType::AccumulatedLogMessage):
-    process_AccumulatedLogMessage(decoded.data(), static_cast<uint16_t>(decode_result.out_len),
-                                  handle);
+  {
+    Message<AccumulatedLogMessage> msg =
+        mp_read_AccumulatedLogMessage_from_buffer(decoded.data(), decode_result.out_len);
+    *msg_destination = msg.payload;
+    return true;
     break;
+  }
 
   default:
+    return false;
     break;
   }
 }
 //}}}
 
 struct cb_datagram_ready_ctx
+//{{{
 {
-  fltk_handle fl_handle;
+  Window* window;
+  AccumulatedLogMessage* msg_destination;
 };
-
+//}}}
+// Receives one datagram, updates the shared state, and refreshes the window.
 void cb_datagram_ready(int fd, void* pvParameters)
 //{{{
 {
-  cb_datagram_ready_ctx* context = static_cast<cb_datagram_ready_ctx*>(pvParameters);
+  cb_datagram_ready_ctx* ctx = static_cast<cb_datagram_ready_ctx*>(pvParameters);
+  char dgram_buffer[2048];
 
-  char buffer[2048];
-
-  const ssize_t received = recvfrom(fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT, nullptr, nullptr);
+  const ssize_t received =
+      recvfrom(fd, dgram_buffer, sizeof(dgram_buffer) - 1, MSG_DONTWAIT, nullptr, nullptr);
   if (received > 0)
   {
-    process_datagram(buffer, received, context->fl_handle);
+    if (encode_and_store_datagram(dgram_buffer, received, ctx->msg_destination))
+    {
+      ctx->window->display_AccumulatedLogMessage_values();
+    }
   }
   else
   {
@@ -286,12 +308,15 @@ void cb_datagram_ready(int fd, void* pvParameters)
 //}}}
 
 struct send_ap_input_ctx
+//{{{
 {
   socket_context s_ctx;
   InputHandleData_t* ihData;
 };
-
+//}}}
+// Sends the current autopilot input and schedules the next transmission.
 void send_ap_input(void* context)
+//{{{
 {
   send_ap_input_ctx* ctx = static_cast<send_ap_input_ctx*>(context);
 
@@ -313,18 +338,25 @@ void send_ap_input(void* context)
 
   Fl::repeat_timeout(0.5, send_ap_input, context);
 }
+//}}}
 //==============================================================================
+
+// Initializes the UI and socket callbacks, then starts the FLTK event loop.
 int main()
+//{{{
 {
-  fltk_handle fl_handle = fltk_setup();
+  WindowContext wdw_ctx{};
+
+  Window* window = new Window(900, 250, "Navigation Monitor", &wdw_ctx);
   socket_context s_context = get_socket_context();
   if (s_context.success == false)
   {
     return 1;
   }
 
-  cb_datagram_ready_ctx dgram_context{.fl_handle = fl_handle};
-  send_ap_input_ctx send_ctx{.s_ctx = s_context, .ihData = &ihData};
+  cb_datagram_ready_ctx dgram_context{.window = window, .msg_destination = &wdw_ctx.ALM};
+
+  send_ap_input_ctx send_ctx{.s_ctx = s_context, .ihData = &wdw_ctx.ihData};
 
   Fl::add_fd(s_context.local_fd, FL_READ, cb_datagram_ready, &dgram_context);
   Fl::add_timeout(0.5, send_ap_input, &send_ctx);
@@ -334,3 +366,4 @@ int main()
   cleanup_sockets(s_context);
   return ret;
 }
+//}}}

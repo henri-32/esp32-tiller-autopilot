@@ -18,6 +18,7 @@ index/
 
 # Build / Tooling
 build/
+build-debug/
 esp/build/
 esp/sdkconfig 
 esp/sdkconfig.old

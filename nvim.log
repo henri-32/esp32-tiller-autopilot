@@ -1,0 +1,1 @@
+WRN 2026-08-08T14:11:59.453 c/nvim-main.sock server_start:197: Failed to start server: operation not permitted: /run/user/1000/nvim.2.0
