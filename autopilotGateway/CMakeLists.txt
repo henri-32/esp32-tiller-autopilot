@@ -3,8 +3,9 @@ cmake_minimum_required(VERSION 4.0)
 project(autopilotGateway C CXX)
 
 add_executable(autopilotGateway  
-	autopilotGateway.cpp
+	main.cpp
 	consume_messages.cpp
+	communication.cpp
 )
 
 add_library(cobs STATIC

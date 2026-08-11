@@ -19,7 +19,7 @@
  * @param [in] msg
  * 		Ptr to message to be consumed
  */
-void consume_telemetry_log_msg(int fd, sockaddr_un* addr, const Message<AccumulatedLogMessage>* msg);
+void Route_AccumulatedLogMessage(int fd, sockaddr_un* addr, const Message<AccumulatedLogMessage>* msg);
 
 /**
  * Consumes Messages with NmeaSentences payloads which contains

@@ -135,6 +135,10 @@ int main(int argc, char** argv)
 //{{{
 {
   CommunicationContext commCtx = getCommContext(argc, argv);
+  if (!commCtx.success)
+  {
+    return -1;
+  }
 
   // Configure polling of file descriptors
   pollfd fds[]{
@@ -142,6 +146,9 @@ int main(int argc, char** argv)
       {.fd = commCtx.serialFd, .events = POLLIN, .revents = 0},
   };
 
+  constexpr uint8_t poll_errors = POLLERR | POLLHUP | POLLNVAL;
+
+  // Used data buffers
   std::vector<uint8_t> msg_encoded;
   std::vector<uint8_t> msg_decoded;
 
@@ -150,7 +157,6 @@ int main(int argc, char** argv)
   while (true)
 
   {
-    constexpr uint8_t poll_errors = POLLERR | POLLHUP | POLLNVAL;
 
     const int result = poll(fds, 2, -1);
     if (result < 0)
@@ -228,6 +234,6 @@ int main(int argc, char** argv)
       }
     }
   }
-	clean_communication_ressources(commCtx);
+  clean_communication_ressources(commCtx);
 }
 //}}}

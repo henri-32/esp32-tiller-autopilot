@@ -22,4 +22,18 @@ struct AccumulatedLogMessage
   TelemetryRuntimeLog runtime_log;
 };
 
+namespace AML
+{
+inline const char* to_string(bool validFix)
+{
+  if (validFix)
+  {
+    return "valid";
+  }
+  else
+  {
+    return "invalid";
+  }
+}
 
+} // namespace AML

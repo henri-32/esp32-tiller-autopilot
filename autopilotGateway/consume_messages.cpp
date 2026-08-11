@@ -1,6 +1,7 @@
 #include "consume_messages.h"
 #include "cobs-c/cobs.h"
 #include "protocol/autopilotWireProtocol.h"
+#include "log_raw.h"
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -8,10 +9,12 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-void consume_telemetry_log_msg(int fd_display, sockaddr_un* display_addr,
+void Route_AccumulatedLogMessage(int fd_display, sockaddr_un* display_addr,
                                const Message<AccumulatedLogMessage>* msg)
 //{{{
 {
+  log_raw_from_ALM(msg->payload);
+
   uint8_t raw_msg[MessageOffsets::payload + AccumulatedLogMessagePayloadOffsets::payload_length];
   const uint16_t size = mp_write_AccumulatedLogMessage_to_bytes(raw_msg, sizeof(raw_msg), msg);
   if (size == 0)

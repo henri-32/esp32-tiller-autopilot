@@ -29,3 +29,49 @@ struct NavigationSnapshot_t
   NavigationSource lead_source = NavigationSource::Compass;
   bool steering_engaged = false;
 };
+
+namespace navigationTypes
+{
+inline const char* to_string(NavigationSource src)
+{
+  switch (src)
+  {
+  case NavigationSource::Compass:
+  {
+    return "Compass";
+  }
+  break;
+
+  case NavigationSource::Gps:
+  {
+    return "Gps";
+  }
+  break;
+
+  case NavigationSource::Wind:
+  {
+    return "Wind";
+  }
+  break;
+
+  default:
+  {
+    return "";
+    break;
+  }
+  }
+}
+
+inline const char* to_string(bool engaged)
+{
+  if (engaged)
+  {
+    return "engaged";
+  }
+
+  else
+  {
+    return "disengaged";
+  }
+}
+} // namespace navigationTypes
