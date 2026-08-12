@@ -1,4 +1,4 @@
-#include "consume_messages.h"
+#include "route_messages.h"
 #include "cobs-c/cobs.h"
 #include "protocol/autopilotWireProtocol.h"
 #include "log_raw.h"
@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-void Route_AccumulatedLogMessage(int fd_display, sockaddr_un* display_addr,
+void route_AccumulatedLogMessage(int fd_display, sockaddr_un* display_addr,
                                const Message<AccumulatedLogMessage>* msg)
 //{{{
 {
@@ -39,7 +39,7 @@ void Route_AccumulatedLogMessage(int fd_display, sockaddr_un* display_addr,
 };
 //}}}
 
-void consume_nmea_msg(int fd_opencpn, sockaddr_in* opencpn_addr, const Message<NmeaSentences>* msg)
+void route_raw_NMEA_stream(int fd_opencpn, sockaddr_in* opencpn_addr, const Message<NmeaSentences>* msg)
 //{{{
 {
   for (int i = 0; i < msg->payload.sentence_count; ++i)

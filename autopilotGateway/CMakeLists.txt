@@ -4,7 +4,7 @@ project(autopilotGateway C CXX)
 
 add_executable(autopilotGateway  
 	main.cpp
-	consume_messages.cpp
+	route_messages.cpp
 	communication.cpp
 )
 

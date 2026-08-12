@@ -12,7 +12,7 @@
 
 #include "cobs-c/cobs.h"
 #include "communication.h"
-#include "consume_messages.h"
+#include "route_messages.h"
 #include "protocol/autopilotWireProtocol.h"
 
 /**
@@ -108,7 +108,7 @@ void route_mp_msg(int fd_opencpn, sockaddr_in opencpn_addr, int fd_display,
           mp_read_AccumulatedLogMessage_from_buffer(msg_buf, static_cast<uint16_t>(msg_len));
       if (msg.header.type == static_cast<uint8_t>(PayloadType::AccumulatedLogMessage))
       {
-        Route_AccumulatedLogMessage(fd_display, &display_addr, &msg);
+        route_AccumulatedLogMessage(fd_display, &display_addr, &msg);
       }
     }
     break;
@@ -120,7 +120,7 @@ void route_mp_msg(int fd_opencpn, sockaddr_in opencpn_addr, int fd_display,
           mp_read_NmeaMessage_from_buffer(msg_buf, static_cast<uint16_t>(msg_len));
       if (msg.header.type == static_cast<uint8_t>(PayloadType::NmeaSentences))
       {
-        consume_nmea_msg(fd_opencpn, &opencpn_addr, &msg);
+        route_raw_NMEA_stream(fd_opencpn, &opencpn_addr, &msg);
       }
     }
     break;

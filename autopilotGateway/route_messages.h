@@ -19,7 +19,7 @@
  * @param [in] msg
  * 		Ptr to message to be consumed
  */
-void Route_AccumulatedLogMessage(int fd, sockaddr_un* addr, const Message<AccumulatedLogMessage>* msg);
+void route_AccumulatedLogMessage(int fd, sockaddr_un* addr, const Message<AccumulatedLogMessage>* msg);
 
 /**
  * Consumes Messages with NmeaSentences payloads which contains
@@ -34,5 +34,5 @@ void Route_AccumulatedLogMessage(int fd, sockaddr_un* addr, const Message<Accumu
  * @param [in] msg
  *		Ptr to message to be consumed
  */
-void consume_nmea_msg(int file_descriptor, sockaddr_in* addr,
+void route_raw_NMEA_stream(int file_descriptor, sockaddr_in* addr,
                       const Message<NmeaSentences>* sentences_ptr);
